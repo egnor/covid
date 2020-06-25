@@ -8,7 +8,7 @@ import requests_cache
 # Reusable command line arguments for log fetching.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data caching')
-argument_group.add_argument('--cache_name', default='http_cache')
+argument_group.add_argument('--cache_name', default='cache')
 argument_group.add_argument('--cache_backend', default='sqlite')
 argument_group.add_argument('--cache_seconds', type=float, default=3600.0)
 

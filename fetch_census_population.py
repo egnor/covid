@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
-# Module to retrieve data from covidtracking.com.
+# Module to retrieve Census population data.
 # (Can also be run as a standalone program for testing.)
 
-import io
+import json
 import pandas
 import requests
 
 
+URL_BASE = 'https://api.census.gov/data/2019/pep/population'
+API_KEY = 'c0e3aa89dc3a4a7f3be500700f83c292e5556024'
+
+
 def get_states(session=None):
-    """Returns a pandas.DataFrame of state-level data from covidtracking."""
+    """Returns a pandas.DataFrame of state-level population data."""
 
     if not session: session = requests.Session()
-    response = session.get(
-        'https://covidtracking.com/api/v1/states/daily.csv',
-        stream=True)
+    response = session.get(f'{URL_BASE}?get=NAME,POP&for=state:*&key={API_KEY}')
     response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text))
-    data.date = pandas.to_datetime(data.date, format='%Y%m%d')
-    return data    
+
+    json_data = json.loads(response.text)
+    data = pandas.DataFrame(json_data[1:], columns=json_data[0])
+    data.set_index('state', inplace=True)
+    data.sort_index(inplace=True)
+    return data
 
 
 if __name__ == '__main__':
