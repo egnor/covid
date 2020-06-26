@@ -8,8 +8,11 @@ requests = "*"
 requests-cache = "*"
 pandas = "*"
 us = "*"
+matplotlib = "*"
 
 [dev-packages]
+autopep8 = "*"
+ipython = "*"
 
 [requires]
 python_version = "3.8"

@@ -10,12 +10,24 @@ import requests
 def get_states(session=None):
     """Returns a pandas.DataFrame of state-level data from covidtracking."""
 
-    if not session: session = requests.Session()
+    if not session:
+        session = requests.Session()
     response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
     response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text))
-    data.date = pandas.to_datetime(data.date, format='%Y%m%d')
-    return data    
+    data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})
+
+    def to_datetime(s, format):
+        if '%Y' not in format:
+            s, format = ('2020 ' + s, '%Y ' + format)
+        return pandas.to_datetime(
+            s, format=format).dt.tz_localize('US/Eastern')
+
+    data.date = to_datetime(data.date, format='%Y%m%d')
+    data.lastUpdateEt = to_datetime(data.lastUpdateEt, '%m/%d/%Y %H:%M')
+    data.dateModified = pandas.to_datetime(data.dateModified)
+    data.checkTimeEt = to_datetime(data.checkTimeEt, '%m/%d %H:%M')
+    data.dateChecked = pandas.to_datetime(data.dateChecked)
+    return data
 
 
 if __name__ == '__main__':
@@ -30,3 +42,6 @@ if __name__ == '__main__':
 
     states = get_states(session=cache_policy.new_session(args))
     print(states)
+    print()
+    print('Sample record:')
+    print(states.iloc[len(states) // 2])
