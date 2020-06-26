@@ -19,10 +19,8 @@ import fetch_census_population
 import fetch_covid_tracking
 
 
-MetricData = collections.namedtuple('MetricData', 'name dates raw mean7')
-
 RegionData = collections.namedtuple(
-    'RegionData', 'name population mortality metrics')
+    'RegionData', 'name population metrics')
 
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -51,38 +49,46 @@ for fips, covid in covid_states.groupby(by='fips'):
     except KeyError:
         continue
 
-    def metric(name, color, date, raw, capita):
+    def name_with_capita(name, capita):
+        def number(n):
+            return numpy.format_float_positional(n, precision=3, trim='-')
+        return (
+            f'{name} / {number(capita / 1000000)}Mp' if capita >= 1000000 else
+            f'{name} / {number(capita / 1000)}Kp' if capita >= 10000 else
+            f'{name} / {number(capita)}p')
+
+    def trend(name, color, date, raw, capita):
         nonzero_ilocs, = (raw.values > 0).nonzero()
         first_iloc = nonzero_ilocs[0] + 1 if len(nonzero_ilocs) else len(raw)
+        date = date[first_iloc:]
+        per_cap = raw[first_iloc:] * capita / census.POP
 
-        date = date.iloc[first_iloc:]
-        raw = raw.iloc[first_iloc:] * capita / census.POP
-        frame = pandas.DataFrame(
-            data=dict(date=date, raw=raw, mean7=raw.rolling(7).mean()))
+        frame = pandas.DataFrame(dict(
+            date=date, raw=per_cap, value=per_cap.rolling(7).mean()))
         frame.set_index('date', inplace=True)
-
-        def format(n):
-            return numpy.format_float_positional(n, precision=3, trim='-')
+        frame.name = name_with_capita(name, capita)
         frame.color = color
-        frame.name = (
-            f'{name} / {format(capita / 1000000)}Mp' if capita >= 1000000 else
-            f'{name} / {format(capita / 1000)}Kp' if capita >= 10000 else
-            f'{name} / {format(capita)}p')
+        return frame
+
+    def threshold(name, color, v, capita):
+        frame = pandas.DataFrame(dict(value=[v * capita / census.POP]))
+        frame.name = name_with_capita(name, capita)
+        frame.color = color
         return frame
 
     cov = covid.sort_values(by='date')
     d = cov.date
     metrics = [
-        metric('tests', 'tab:green', d, cov.totalTestResultsIncrease, 1e4),
-        metric('cases', 'tab:blue', d, cov.positiveIncrease, 1e5),
-        metric('hosp admit', 'tab:orange', d, cov.hospitalizedIncrease, 25e4),
-        metric('hosp current', 'tab:pink', d, cov.hospitalizedCurrently, 25e3),
-        metric('deaths', 'tab:red', d, cov.deathIncrease, 1e6),
+        trend('tests', 'tab:green', d, cov.totalTestResultsIncrease, 1e4),
+        trend('cases', 'tab:blue', d, cov.positiveIncrease, 1e5),
+        trend('hosp admit', 'tab:orange', d, cov.hospitalizedIncrease, 25e4),
+        trend('hosp current', 'tab:pink', d, cov.hospitalizedCurrently, 25e3),
+        trend('deaths', 'tab:red', d, cov.deathIncrease, 1e6),
+        threshold('baseline deaths', 'black', mortality.Deaths / 365, 1e6),
     ]
 
     regions.append(RegionData(
-        name=census.NAME, population=census.POP, mortality=mortality.Deaths,
-        metrics=metrics))
+        name=census.NAME, population=census.POP, metrics=metrics))
 
 if not regions:
     print('*** No data to plot!', file=sys.stderr)
@@ -91,7 +97,7 @@ if not regions:
 print('Plotting data...')
 
 ymaxes = [
-    max(10, 1.2 * max(m.mean7.max() for m in r.metrics))
+    max(10, 1.2 * max(m.value.max() for m in r.metrics))
     for r in regions]
 
 heights = [0.08 * ym + 2 for ym in ymaxes]
@@ -103,23 +109,24 @@ figure, all_axes = matplotlib.pyplot.subplots(
 start_date = pandas.to_datetime('2020-03-01')
 
 end_date = max(
-    m.index.max()
-    for r in regions
-    for m in r.metrics
-    if m.index.notna().any()) + pandas.to_timedelta(1, unit='days')
+    m.index.max() for r in regions for m in r.metrics
+    if m.index.name == 'date') + pandas.to_timedelta(1, unit='days')
 
 for region, axes, ymax in zip(regions, all_axes, ymaxes):
     print(f'Plotting {region.name}...')
     axes, = axes
 
     for i, m in enumerate(region.metrics):
-        if m.raw.notna().any():
-            axes.plot(m.index, m.raw, color=m.color, alpha=0.5, lw=1)
-            axes.plot(m.index, m.mean7, color=m.color, label=m.name, lw=2)
+        if m.index.name == 'date':
+            if 'raw' in m.columns and m.raw.any():
+                axes.plot(m.index, m.raw, color=m.color, alpha=0.5, lw=1)
+            if 'value' in m.columns and m.value.any():
+                axes.plot(m.index, m.value, color=m.color, label=m.name, lw=2)
 
-    axes.axhline(
-        region.mortality * 1e6 / region.population / 365,
-        label='baseline deaths / 1Mp', color='black', linestyle='--', alpha=0.5)
+        else:
+            axes.hlines(
+                m.value, xmin=start_date, xmax=end_date,
+                label=m.name, color=m.color, linestyle='--', alpha=0.5)
 
     axes.set_title(
         region.name, position=(0.5, 0.5), ha='center', va='center',
@@ -136,7 +143,7 @@ for region, axes, ymax in zip(regions, all_axes, ymaxes):
     axes.xaxis.set_major_formatter(month_formatter)
     axes.xaxis.set_minor_locator(week_locator)
     axes.xaxis.set_tick_params(which='major', labelbottom=True)
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
 print('Writing plot...')
