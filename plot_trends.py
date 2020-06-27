@@ -12,7 +12,9 @@ import os
 import pandas
 import signal
 import sys
+import urllib.parse
 import us
+import yattag
 
 import cache_policy
 import fetch_cdc_mortality
@@ -20,8 +22,9 @@ import fetch_census_population
 import fetch_covid_tracking
 
 
-RegionData = collections.namedtuple(
-    'RegionData', 'name population metrics')
+RegionData = collections.namedtuple('RegionData', 'name population metrics')
+
+PlotData = collections.namedtuple('PlotData', 'region image_url thumb_url')
 
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -96,7 +99,6 @@ if not regions:
     sys.exit(1)
 
 print('Making plots...')
-
 os.makedirs(args.output_dir, exist_ok=True)
 
 min_date = pandas.to_datetime('2020-03-01')
@@ -104,11 +106,16 @@ max_date = max(
     m.index.max() for r in regions for m in r.metrics
     if m.index.name == 'date') + pandas.to_timedelta(1, unit='days')
 
+plots = []
 for region in regions:
     print(f'Plotting {region.name}...')
     figure = matplotlib.figure.Figure(figsize=(8, 8))
-    axes = figure.add_subplot()
+    figure.add_artist(matplotlib.text.Text(
+        0.5, 0.5, region.name,
+        ha='center', va='center', wrap=True,
+        fontsize=65, fontweight='bold', alpha=0.25))
 
+    axes = figure.add_subplot()
     for i, m in enumerate(region.metrics):
         if m.index.name == 'date':
             if 'raw' in m.columns and m.raw.any():
@@ -120,24 +127,44 @@ for region in regions:
                 m.value, xmin=min_date, xmax=max_date,
                 label=m.name, color=m.color, linestyle='--', alpha=0.5)
 
-    axes.set_title(
-        region.name, position=(0.5, 0.5), ha='center', va='center',
-        fontsize=40, fontweight='bold', alpha=0.25)
-    axes.legend(loc='upper left')
     axes.grid(color='g', alpha=0.2)
     axes.set_xlim(min_date, max_date)
     axes.set_ylim(0, 50)
 
     month_locator = matplotlib.dates.MonthLocator()
-    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
     week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
     axes.xaxis.set_major_locator(month_locator)
-    axes.xaxis.set_major_formatter(month_formatter)
     axes.xaxis.set_minor_locator(week_locator)
     axes.xaxis.set_tick_params(which='major', labelbottom=True)
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-    figure.set_tight_layout(True)
 
-    base_path = f'{args.output_dir}/{region.name.replace("/", ":")}'
-    figure.savefig(f'{base_path}.png', bbox_inches='tight')
+    file_base = region.name.lower().replace(' ', '_').replace('/', '.')
+    plot = PlotData(
+        region=region, 
+        image_url=f'{urllib.parse.quote(file_base)}_full.png',
+        thumb_url=f'{urllib.parse.quote(file_base)}_thumb.png')
+    plots.append(plot)
+
+    axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    figure.set_tight_layout(True)
+    figure.savefig(f'{args.output_dir}/{file_base}_thumb.png', dpi=50)
+
+    axes.legend(loc='upper left')
+    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
+    axes.xaxis.set_major_formatter(month_formatter)
+    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    figure.savefig(f'{args.output_dir}/{file_base}_full.png', dpi=200)
+
+doc, tag, text, line = yattag.Doc().ttl()
+with tag('html'):
+    with tag('head'):
+        line('title', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
+    with tag('body'):
+        line('h1', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
+        for plot in plots:
+            with tag('a', href=plot.image_url):
+                doc.stag('img', width=200, height=200, src=plot.thumb_url)
+
+open(f'{args.output_dir}/index.html', 'w').write(doc.getvalue())

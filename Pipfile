@@ -9,6 +9,7 @@ requests-cache = "*"
 pandas = "*"
 us = "*"
 matplotlib = "*"
+yattag = "*"
 
 [dev-packages]
 autopep8 = "*"
