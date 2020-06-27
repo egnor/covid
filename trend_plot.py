@@ -8,6 +8,7 @@ import matplotlib.lines
 import matplotlib.pyplot
 import matplotlib.ticker
 import numpy
+import os
 import pandas
 import signal
 import sys
@@ -26,7 +27,7 @@ RegionData = collections.namedtuple(
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
 parser.add_argument('--state', nargs='*')
-parser.add_argument('--output_file', default='trends.pdf')
+parser.add_argument('--output_dir', default='trends_out')
 
 args = parser.parse_args()
 select_fips = [us.states.lookup(n).fips for n in args.state or []]
@@ -94,27 +95,19 @@ if not regions:
     print('*** No data to plot!', file=sys.stderr)
     sys.exit(1)
 
-print('Plotting data...')
+print('Making plots...')
 
-ymaxes = [
-    max(10, 1.2 * max(m.value.max() for m in r.metrics))
-    for r in regions]
+os.makedirs(args.output_dir, exist_ok=True)
 
-heights = [0.08 * ym + 2 for ym in ymaxes]
-figure, all_axes = matplotlib.pyplot.subplots(
-    nrows=len(regions), ncols=1, sharex=True, squeeze=False,
-    gridspec_kw=dict(height_ratios=heights),
-    figsize=(8, sum(heights)))
-
-start_date = pandas.to_datetime('2020-03-01')
-
-end_date = max(
+min_date = pandas.to_datetime('2020-03-01')
+max_date = max(
     m.index.max() for r in regions for m in r.metrics
     if m.index.name == 'date') + pandas.to_timedelta(1, unit='days')
 
-for region, axes, ymax in zip(regions, all_axes, ymaxes):
+for region in regions:
     print(f'Plotting {region.name}...')
-    axes, = axes
+    figure = matplotlib.figure.Figure(figsize=(8, 8))
+    axes = figure.add_subplot()
 
     for i, m in enumerate(region.metrics):
         if m.index.name == 'date':
@@ -122,10 +115,9 @@ for region, axes, ymax in zip(regions, all_axes, ymaxes):
                 axes.plot(m.index, m.raw, color=m.color, alpha=0.5, lw=1)
             if 'value' in m.columns and m.value.any():
                 axes.plot(m.index, m.value, color=m.color, label=m.name, lw=2)
-
         else:
             axes.hlines(
-                m.value, xmin=start_date, xmax=end_date,
+                m.value, xmin=min_date, xmax=max_date,
                 label=m.name, color=m.color, linestyle='--', alpha=0.5)
 
     axes.set_title(
@@ -133,8 +125,8 @@ for region, axes, ymax in zip(regions, all_axes, ymaxes):
         fontsize=40, fontweight='bold', alpha=0.25)
     axes.legend(loc='upper left')
     axes.grid(color='g', alpha=0.2)
-    axes.set_xlim(start_date, end_date)
-    axes.set_ylim(0, ymax)
+    axes.set_xlim(min_date, max_date)
+    axes.set_ylim(0, 50)
 
     month_locator = matplotlib.dates.MonthLocator()
     month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
@@ -145,8 +137,7 @@ for region, axes, ymax in zip(regions, all_axes, ymaxes):
     axes.xaxis.set_tick_params(which='major', labelbottom=True)
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+    figure.set_tight_layout(True)
 
-print('Writing plot...')
-figure.tight_layout(pad=2)
-figure.savefig(args.output_file, bbox_inches='tight')
-print(f'Wrote plot: {args.output_file}')
+    base_path = f'{args.output_dir}/{region.name.replace("/", ":")}'
+    figure.savefig(f'{base_path}.png', bbox_inches='tight')
