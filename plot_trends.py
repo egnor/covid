@@ -153,7 +153,6 @@ for region in regions:
     axes.xaxis.set_major_formatter(month_formatter)
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-    # TODO - use Roboto instead of default font for consistency
     figure.add_artist(matplotlib.text.Text(
         0.5, 0.5, region.name,
         ha='center', va='center', wrap=True,
@@ -162,11 +161,11 @@ for region in regions:
 
 stylesheet_url = 'style.css'
 open(f'{args.output_dir}/{stylesheet_url}', 'w').write('''
-body {font-family: 'Roboto', sans;}
+body {font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans;}
 .thumb {display: inline-block; position: relative;}
 .thumb .thumb_label {
     position: absolute; top: 18px; width: 100%; text-align: center;
-    font-size: 24px; font-weight: 900;
+    font-size: 22px; font-weight: 900;
     color: black; opacity: 0.5;
 }
 ''')
@@ -176,8 +175,6 @@ with tag('html'):
     with tag('head'):
         line('title', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
         doc.stag('link', rel='stylesheet', href=stylesheet_url)
-        doc.stag('link', rel='stylesheet',
-                 href='https://fonts.googleapis.com/css?family=Roboto')
     with tag('body'):
         line('h1', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
         for plot in plots:
