@@ -1,6 +1,3 @@
 __pycache__/
 *_out/
-*.csv
-*.pdf
-*.png
 *.sqlite
