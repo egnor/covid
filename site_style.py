@@ -15,7 +15,8 @@ def write_icon_files(output_dir):
         for from_name, to_path in (
             ('favicon.ico', out_path / 'favicon.ico'),
             ('favicon-16x16.png', out_path / 'icons' / 'favicon-16x16.png'),
-            ('favicon-32x32.png', out_path / 'icons' / 'favicon-32x32.png')):
+            ('favicon-32x32.png', out_path / 'icons' / 'favicon-32x32.png'),
+        ):
             with zip_file.open(from_name) as read_file:
                 with open(to_path, 'wb') as write_file:
                     write_file.write(read_file.read())
