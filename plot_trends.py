@@ -11,6 +11,7 @@ import numpy
 import os
 import pandas
 import signal
+import site_style
 import sys
 import urllib.parse
 import us
@@ -21,7 +22,7 @@ import fetch_cdc_mortality
 import fetch_census_population
 import fetch_covid_tracking
 
-MetricData = collections.namedtuple('MetricData', 'name color frame')
+MetricData = collections.namedtuple('MetricData', 'name color size frame')
 
 RegionData = collections.namedtuple('RegionData', 'name population metrics')
 
@@ -62,7 +63,7 @@ for fips, covid in covid_states.groupby(by='fips'):
             f'{name} / {number(capita / 1000)}Kp' if capita >= 10000 else
             f'{name} / {number(capita)}p')
 
-    def trend(name, color, date, raw, capita):
+    def var(name, color, size, date, raw, capita):
         nonzero_ilocs, = (raw.values > 0).nonzero()
         first_iloc = nonzero_ilocs[0] + 1 if len(nonzero_ilocs) else len(raw)
         date = date[first_iloc:]
@@ -71,21 +72,21 @@ for fips, covid in covid_states.groupby(by='fips'):
         frame = pandas.DataFrame(dict(
             date=date, raw=per_cap, value=per_cap.rolling(7).mean()))
         frame.set_index('date', inplace=True)
-        return MetricData(name_with_capita(name, capita), color, frame)
+        return MetricData(name_with_capita(name, capita), color, size, frame)
 
-    def threshold(name, color, v, capita):
+    def threshold(name, color, size, v, capita):
         frame = pandas.DataFrame(dict(value=[v * capita / census.POP]))
-        return MetricData(name_with_capita(name, capita), color, frame)
+        return MetricData(name_with_capita(name, capita), color, size, frame)
 
     cov = covid.sort_values(by='date')
     d = cov.date
     metrics = [
-        trend('tests', 'tab:green', d, cov.totalTestResultsIncrease, 1e4),
-        trend('cases', 'tab:blue', d, cov.positiveIncrease, 1e5),
-        trend('hosp admit', 'tab:orange', d, cov.hospitalizedIncrease, 25e4),
-        trend('hosp current', 'tab:pink', d, cov.hospitalizedCurrently, 25e3),
-        trend('deaths', 'tab:red', d, cov.deathIncrease, 1e6),
-        threshold('baseline deaths', 'black', mortality.Deaths / 365, 1e6),
+        var('tests', 'tab:green', 2, d, cov.totalTestResultsIncrease, 1e4),
+        var('positives', 'tab:blue', 3, d, cov.positiveIncrease, 1e5),
+        var('hosp admit', 'tab:orange', 2, d, cov.hospitalizedIncrease, 25e4),
+        var('hosp current', 'tab:pink', 2, d, cov.hospitalizedCurrently, 25e3),
+        var('deaths', 'tab:red', 3, d, cov.deathIncrease, 1e6),
+        threshold('baseline deaths', 'black', 2, mortality.Deaths / 365, 1e6),
     ]
 
     regions.append(RegionData(
@@ -99,7 +100,7 @@ print('Making plots...')
 os.makedirs(args.output_dir, exist_ok=True)
 
 min_date = pandas.to_datetime('2020-03-01')
-max_date = pandas.to_timedelta(1, unit='days') + max(
+max_date = pandas.Timedelta(days=1) + max(
     m.frame.index.max() for r in regions for m in r.metrics
     if pandas.api.types.is_datetime64_any_dtype(m.frame.index))
 
@@ -109,6 +110,9 @@ for region in regions:
     figure = matplotlib.figure.Figure(figsize=(8, 8))
 
     axes = figure.add_subplot()
+    axes.axvspan(max_date - pandas.Timedelta(weeks=2), max_date,
+                 color='k', alpha=0.07, label='last 2 weeks')
+
     for i, m in enumerate(region.metrics):
         if pandas.api.types.is_datetime64_any_dtype(m.frame.index):
             if 'raw' in m.frame.columns and m.frame.raw.any():
@@ -116,13 +120,13 @@ for region in regions:
                           color=m.color, alpha=0.5, lw=1)
             if 'value' in m.frame.columns and m.frame.value.any():
                 axes.plot(m.frame.index, m.frame.value,
-                          color=m.color, label=m.name, lw=2)
+                          color=m.color, lw=m.size, label=m.name)
         else:
             axes.hlines(
-                m.frame.value, xmin=min_date, xmax=max_date,
-                label=m.name, color=m.color, linestyle='--', alpha=0.5)
+                m.frame.value, xmin=min_date, xmax=max_date, label=m.name,
+                color=m.color, lw=m.size, linestyle='--', alpha=0.5)
 
-    axes.grid(color='g', alpha=0.2)
+    axes.grid(color='k', alpha=0.2)
     axes.set_xlim(min_date, max_date)
     axes.set_ylim(0, 50)
 
@@ -136,7 +140,7 @@ for region in regions:
 
     file_base = region.name.lower().replace(' ', '_').replace('/', '.')
     plot = PlotData(
-        region=region, 
+        region=region,
         image_url=f'{urllib.parse.quote(file_base)}_full.png',
         thumb_url=f'{urllib.parse.quote(file_base)}_thumb.png')
     plots.append(plot)
@@ -175,6 +179,7 @@ with tag('html'):
     with tag('head'):
         line('title', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
         doc.stag('link', rel='stylesheet', href=stylesheet_url)
+        site_style.add_icons_to_head(doc)
     with tag('body'):
         line('h1', f'COVID-19 trends ({max_date.strftime("%Y-%m-%d")})')
         for plot in plots:
@@ -182,4 +187,5 @@ with tag('html'):
                 doc.line('span', plot.region.name, klass='thumb_label')
                 doc.stag('img', width=200, height=200, src=plot.thumb_url)
 
+site_style.write_icon_files(args.output_dir)
 open(f'{args.output_dir}/index.html', 'w').write(doc.getvalue())
