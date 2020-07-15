@@ -3,6 +3,11 @@ name = "covid"
 version = "0.1.0"
 description = "COVID-19 data analysis"
 authors = ["Dan Egnor <egnor@ofb.net>"]
+packages = [{ include = "*.py" }]
+include = ["favicon_io.zip"]
+
+[tool.poetry.scripts]
+make_site = 'make_site:main'
 
 [tool.poetry.dependencies]
 python = "^3.8"

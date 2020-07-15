@@ -2,12 +2,14 @@
 # Common settings and defaults for requests_cache layer.
 
 import argparse
+import requests
 import requests_cache
 
 
 # Reusable command line arguments for log fetching.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data caching')
+argument_group.add_argument('--no_cache', action='store_true')
 argument_group.add_argument('--cache_name', default='cache')
 argument_group.add_argument('--cache_backend', default='sqlite')
 argument_group.add_argument('--cache_seconds', type=float, default=3600.0)
@@ -15,7 +17,8 @@ argument_group.add_argument('--cache_seconds', type=float, default=3600.0)
 
 def new_session(parsed_args):
     """Returns a new CachedSession per the supplied command line args."""
-    return requests_cache.core.CachedSession(
-        cache_name=parsed_args.cache_name,
-        backend=parsed_args.cache_backend,
-        expire_after=parsed_args.cache_seconds)
+    return (requests.Session() if parsed_args.no_cache else
+            requests_cache.core.CachedSession(
+                cache_name=parsed_args.cache_name,
+                backend=parsed_args.cache_backend,
+                expire_after=parsed_args.cache_seconds))
