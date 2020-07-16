@@ -53,7 +53,7 @@ for pip_args in (['wheel'], ['-r', req_path], [wheel_path]):
     print(f'=== (in venv) pip3 install {" ".join(str(a) for a in pip_args)}')
     subprocess.run(command, check=True, env=venv_environ)
 
-latest_venv_path = args.builds_dir / f'{project_name}-latest' 
+latest_venv_path = args.builds_dir / f'{project_name}-latest'
 print(f'=== symlink: {latest_venv_path} => {venv_name}')
 temp_path = pathlib.Path(tempfile.mktemp(dir=args.builds_dir))
 temp_path.symlink_to(venv_name, target_is_directory=True)
