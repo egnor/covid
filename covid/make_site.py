@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import collections
 import matplotlib.dates
@@ -11,16 +9,16 @@ import numpy
 import os
 import pandas
 import signal
-import site_style
 import sys
 import urllib.parse
 import us
 import yattag
 
-import cache_policy
-import fetch_cdc_mortality
-import fetch_census_population
-import fetch_covid_tracking
+from . import cache_policy
+from . import site_style
+from . import fetch_cdc_mortality
+from . import fetch_census_population
+from . import fetch_covid_tracking
 
 MetricData = collections.namedtuple('MetricData', 'name color size frame')
 
@@ -33,7 +31,7 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--state', nargs='*')
-    parser.add_argument('--output_dir', default='trends_out')
+    parser.add_argument('--output_dir', default='covid_site_out')
 
     args = parser.parse_args()
     select_fips = [us.states.lookup(n).fips for n in args.state or []]
