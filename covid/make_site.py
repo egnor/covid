@@ -31,7 +31,7 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--state', nargs='*')
-    parser.add_argument('--output_dir', default='covid_site_out')
+    parser.add_argument('--output_dir', default='site_out')
 
     args = parser.parse_args()
     select_fips = [us.states.lookup(n).fips for n in args.state or []]
@@ -104,9 +104,12 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     min_date = pandas.to_datetime('2020-03-01')
-    max_date = pandas.Timedelta(days=1) + max(
+
+    max_date = max(
         m.frame.index.max() for r in regions for m in r.metrics
         if pandas.api.types.is_datetime64_any_dtype(m.frame.index))
+
+    max_view_date = max_date + pandas.Timedelta(days=1)
 
     plots = []
     for region in regions:
@@ -114,7 +117,7 @@ def main():
         figure = matplotlib.figure.Figure(figsize=(8, 8))
 
         axes = figure.add_subplot()
-        axes.axvspan(max_date - pandas.Timedelta(weeks=2), max_date,
+        axes.axvspan(max_date - pandas.Timedelta(weeks=2), max_view_date,
                      color='k', alpha=0.07, label='last 2 weeks')
 
         for i, m in enumerate(region.metrics):
@@ -125,13 +128,16 @@ def main():
                 if 'value' in m.frame.columns and m.frame.value.any():
                     axes.plot(m.frame.index, m.frame.value,
                               color=m.color, lw=m.size, label=m.name)
+                    axes.scatter(m.frame.index[-1:], m.frame.value.iloc[-1:],
+                                 s=(m.size * 2) ** 2, c=m.color)
             else:
                 axes.hlines(
-                    m.frame.value, xmin=min_date, xmax=max_date, label=m.name,
-                    color=m.color, lw=m.size, linestyle='--', alpha=0.5)
+                    m.frame.value, xmin=min_date, xmax=max_view_date,
+                    label=m.name, color=m.color, lw=m.size, linestyle='--',
+                    alpha=0.5)
 
         axes.grid(color='k', alpha=0.2)
-        axes.set_xlim(min_date, max_date)
+        axes.set_xlim(min_date, max_view_date)
         axes.set_ylim(0, 50)
 
         month_locator = matplotlib.dates.MonthLocator()
