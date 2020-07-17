@@ -7,11 +7,9 @@ import pandas
 import requests
 
 
-def get_states(session=None):
+def get_states(session):
     """Returns a pandas.DataFrame of state-level data from covidtracking."""
 
-    if not session:
-        session = requests.Session()
     response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
     response.raise_for_status()
     data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})

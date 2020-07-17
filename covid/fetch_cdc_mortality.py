@@ -63,7 +63,7 @@ CANNED_DATA = '''
 '''
 
 
-def get_states(session=None):
+def get_states(session):
     """Returns a pandas.DataFrame of state-level mortality data."""
 
     data = pandas.read_csv(

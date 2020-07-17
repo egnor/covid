@@ -11,11 +11,9 @@ URL_BASE = 'https://api.census.gov/data/2019/pep/population'
 API_KEY = 'c0e3aa89dc3a4a7f3be500700f83c292e5556024'
 
 
-def get_states(session=None):
+def get_states(session):
     """Returns a pandas.DataFrame of state-level population data."""
 
-    if not session:
-        session = requests.Session()
     response = session.get(
         f'{URL_BASE}?get=NAME,POP&for=state:*&key={API_KEY}')
     response.raise_for_status()

@@ -3,34 +3,50 @@
 # (Can also be run as a standalone program for testing.)
 
 import io
+import json
 import pandas
 import requests
+import urllib.parse
 
 
 API_KEY = 'AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw'
-CUSP_DOCID = '1zu9qEWI8PsOI_i8nI_S29HDGHlIp2lfVMsGxpQ5tvAQ'
+DOC_ID = '1zu9qEWI8PsOI_i8nI_S29HDGHlIp2lfVMsGxpQ5tvAQ'
 
-def get_states(session=None):
-    """Returns a pandas.DataFrame of state-level data from covidtracking."""
 
-    if not session:
-        session = requests.Session()
-    response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
-    response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})
+def get_states(session):
+    """Returns a pandas.DataFrame of state policy actions."""
 
-    def to_datetime(s, format):
-        if '%Y' not in format:
-            s, format = ('2020 ' + s, '%Y ' + format)
-        return pandas.to_datetime(
-            s, format=format).dt.tz_localize('US/Eastern')
+    # Fetch document metadata, including a list of sheet tabs.
+    doc_url = f'https://sheets.googleapis.com/v4/spreadsheets/{DOC_ID}'
+    doc_response = session.get(f'{doc_url}?key={urllib.parse.quote(API_KEY)}')
+    doc_response.raise_for_status()
+    doc_json = doc_response.json()
+    tab_titles = [s['properties']['title'] for s in doc_json['sheets']]
 
-    data.date = to_datetime(data.date, format='%Y%m%d')
-    data.lastUpdateEt = to_datetime(data.lastUpdateEt, '%m/%d/%Y %H:%M')
-    data.dateModified = pandas.to_datetime(data.dateModified)
-    data.checkTimeEt = to_datetime(data.checkTimeEt, '%m/%d %H:%M')
-    data.dateChecked = pandas.to_datetime(data.dateChecked)
-    return data
+    fetch_params = {'key': API_KEY, 'ranges': ','.join(tab_titles[:2])}
+    fetch_query = urllib.parse.urlencode(fetch_params)
+    fetch_response = session.get(
+        f'{doc_url}/values:batchGet?key={urllib.parse.quote(API_KEY)}' +
+        '&valueRenderOption=UNFORMATTED_VALUE' +
+        '&dateTimeRenderOption=FORMATTED_STRING' +
+        ''.join(f'&ranges={urllib.parse.quote(t)}' for t in tab_titles))
+    fetch_response.raise_for_status()
+    fetch_json = fetch_response.json()
+
+    for tab_json in fetch_json['valueRanges']:
+        # Skip tabs with general info or odd formatting (Racial Disparities)
+        tab_title = tab_json['range'].split('!')[0].strip("'")
+        if tab_title in ('Information', 'Racial Disparities', 'Notes/Details'):
+            continue
+
+        tab_values = tab_json['values']
+        header = tab_values[0]
+        if header[:3] != ['State', 'State Abbreviation', 'State FIPS Code']:
+            raise ValueError(
+                f'Unexpected columns in "{tab_title}": '
+                f'"{header[0]}", "{header[1]}", "{header[2]}"')
+
+    return None
 
 
 if __name__ == '__main__':
@@ -45,6 +61,3 @@ if __name__ == '__main__':
 
     states = get_states(session=cache_policy.new_session(args))
     print(states)
-    print()
-    print('Sample record:')
-    print(states.iloc[len(states) // 2])
