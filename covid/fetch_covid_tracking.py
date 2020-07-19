@@ -14,11 +14,11 @@ def get_states(session):
     response.raise_for_status()
     data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})
 
-    def to_datetime(s, format):
+    def to_datetime(series, format):
         if '%Y' not in format:
-            s, format = ('2020 ' + s, '%Y ' + format)
-        return pandas.to_datetime(
-            s, format=format).dt.tz_localize('US/Eastern')
+            series, format = ('2020 ' + series, '%Y ' + format)
+        parsed = pandas.to_datetime(series, format=format)
+        return parsed.dt.tz_localize('US/Eastern')
 
     data.date = to_datetime(data.date, format='%Y%m%d')
     data.lastUpdateEt = to_datetime(data.lastUpdateEt, '%m/%d/%Y %H:%M')
