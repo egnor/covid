@@ -62,7 +62,7 @@ def get_states(session):
         rows = tab_values[1:52]
         for i, r in enumerate(rows):
             if (not all(isinstance(*vt) for vt in zip(r[:3], (str, str, int)))
-                or not r[1].isupper() or len(r[1]) != 2):
+                    or not r[1].isupper() or len(r[1]) != 2):
                 raise ValueError(
                     f'Unexpected data in "{tab_title}" row {i + 2}: {r[:3]}')
 
@@ -74,19 +74,19 @@ def get_states(session):
 
             # Hacks for data glitches!
             if ('incarcerated' in area_norm and 'attorney visits' in norm and
-                rows[42][c] == 1):
+                    rows[42][c] == 1):
                 rows[42][c] = '3/12/2020'
 
             if ('masks' in area_norm and 'legal enforcement' in norm and
-                rows[18][c] == 'f'):
+                    rows[18][c] == 'f'):
                 rows[18][c] = 0
 
-            ctype=(
+            ctype = (
                 bool if all(r[c] in (0, 1) for r in rows) else
                 pandas.Timestamp if all(
                     r[c] == 0 or '/' in str(r[c]) for r in rows) else int)
 
-            emoji=(
+            emoji = (
                 '🚨' if 'state of emergency' in norm else
                 '🏠' if 'stay at home' in norm else
                 '⏲️' if 'quarantine' in norm else
@@ -165,7 +165,6 @@ def get_states(session):
                         last_detail[cdef.name] = (cdef.ctype)(value)
                     except ValueError as e:
                         raise ValueError(f'Bad "{cdef.name}" @ row {r}') from e
-                    
 
     frame = pandas.DataFrame.from_dict(out_data)
     return frame

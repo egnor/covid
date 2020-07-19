@@ -19,12 +19,19 @@ from . import site_style
 from . import fetch_cdc_mortality
 from . import fetch_census_population
 from . import fetch_covid_tracking
+from . import fetch_state_policy
 
-MetricData = collections.namedtuple('MetricData', 'name color size frame')
+MetricData = collections.namedtuple(
+    'MetricData', 'name color width frame')
 
-RegionData = collections.namedtuple('RegionData', 'name population metrics')
+DayData = collections.namedtuple(
+    'PolicyData', 'date significance emojis events')
 
-PlotData = collections.namedtuple('PlotData', 'region image_url thumb_url')
+RegionData = collections.namedtuple(
+    'RegionData', 'name population metrics days')
+
+PlotData = collections.namedtuple(
+    'PlotData', 'region image_url thumb_url')
 
 
 def main():
@@ -41,6 +48,8 @@ def main():
     covid_states = fetch_covid_tracking.get_states(session=session)
     census_states = fetch_census_population.get_states(session=session)
     mortality_states = fetch_cdc_mortality.get_states(session=session)
+    policy_states = fetch_state_policy.get_states(session=session)
+    policy_by_state = policy_states.groupby('state_fips')
 
     print('Merging data...')
     regions = []
@@ -62,7 +71,7 @@ def main():
                 f'{name} / {number(cap / 1000)}Kp' if cap >= 10000 else
                 f'{name} / {number(cap)}p')
 
-        def trend(name, color, size, date, raw, capita):
+        def trend(name, color, width, date, raw, capita):
             nonzero_is, = (raw.values > 0).nonzero()
             first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
             date = date[first_i:]
@@ -71,11 +80,11 @@ def main():
             frame = pandas.DataFrame(dict(
                 date=date, raw=per_cap, value=per_cap.rolling(7).mean()))
             frame.set_index('date', inplace=True)
-            return MetricData(format_name(name, capita), color, size, frame)
+            return MetricData(format_name(name, capita), color, width, frame)
 
-        def threshold(name, color, size, v, capita):
+        def threshold(name, color, width, v, capita):
             frame = pandas.DataFrame(dict(value=[v * capita / census.POP]))
-            return MetricData(format_name(name, capita), color, size, frame)
+            return MetricData(format_name(name, capita), color, width, frame)
 
         covid = covid.sort_values(by='date')
         metrics = [
@@ -93,8 +102,14 @@ def main():
                       mortality.Deaths / 365, 1e6),
         ]
 
+        days = []
+        state_events = policy_by_state.get_group(fips)
+        for date, date_events in state_events.groupby('date'):
+            pass
+
         regions.append(RegionData(
-            name=census.NAME, population=census.POP, metrics=metrics))
+            name=census.NAME, population=census.POP,
+            metrics=metrics, days=days))
 
     if not regions:
         print('*** No data to plot!', file=sys.stderr)
@@ -111,6 +126,7 @@ def main():
 
     max_view_date = max_date + pandas.Timedelta(days=1)
 
+    matplotlib.use('module://mplcairo.base')
     plots = []
     for region in regions:
         print(f'Plotting {region.name}...')
@@ -127,13 +143,13 @@ def main():
                               color=m.color, alpha=0.5, lw=1)
                 if 'value' in m.frame.columns and m.frame.value.any():
                     axes.plot(m.frame.index, m.frame.value,
-                              color=m.color, lw=m.size, label=m.name)
+                              color=m.color, lw=m.width, label=m.name)
                     axes.scatter(m.frame.index[-1:], m.frame.value.iloc[-1:],
-                                 s=(m.size * 2) ** 2, c=m.color)
+                                 s=(m.width * 2) ** 2, c=m.color)
             else:
                 axes.hlines(
                     m.frame.value, xmin=min_date, xmax=max_view_date,
-                    label=m.name, color=m.color, lw=m.size, linestyle='--',
+                    label=m.name, color=m.color, lw=m.width, linestyle='--',
                     alpha=0.5)
 
         axes.grid(color='k', alpha=0.2)
