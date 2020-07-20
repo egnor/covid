@@ -1,13 +1,16 @@
+import matplotlib
+matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
+
 import argparse
 import collections
 import matplotlib.dates
 import matplotlib.figure
-import matplotlib.lines
 import matplotlib.pyplot
 import matplotlib.ticker
 import numpy
 import os
 import pandas
+import pathlib
 import signal
 import sys
 import urllib.parse
@@ -15,17 +18,18 @@ import us
 import yattag
 
 from . import cache_policy
-from . import site_style
 from . import fetch_cdc_mortality
 from . import fetch_census_population
 from . import fetch_covid_tracking
 from . import fetch_state_policy
+from . import site_style
+
 
 MetricData = collections.namedtuple(
     'MetricData', 'name color width frame')
 
 DayData = collections.namedtuple(
-    'PolicyData', 'date significance emojis events')
+    'PolicyData', 'date color width emojis events')
 
 RegionData = collections.namedtuple(
     'RegionData', 'name population metrics days')
@@ -105,7 +109,19 @@ def main():
         days = []
         state_events = policy_by_state.get_group(fips)
         for date, date_events in state_events.groupby('date'):
-            pass
+            min_sig = date_events.significance.min()
+            max_sig = date_events.significance.max()
+            max_abs = max(-min_sig, max_sig)
+            width = 2 if max_abs >= 2 else 0
+            color = ('tab:blue' if min_sig < -max_sig else
+                     'tab:orange' if max_sig > -min_sig else 'tab:gray')
+            emojis = []
+            for e in date_events.itertuples():
+                if abs(e.significance) >= 2 and e.emoji not in emojis:
+                    emojis.append(e.emoji)
+            days.append(DayData(
+                date=date, color=color, width=width, emojis=emojis,
+                events=date_events))
 
         regions.append(RegionData(
             name=census.NAME, population=census.POP,
@@ -115,7 +131,7 @@ def main():
         print('*** No data to plot!', file=sys.stderr)
         sys.exit(1)
 
-    print('Making plots...')
+    print(f'Making plots ({matplotlib.get_backend()})...')
     os.makedirs(args.output_dir, exist_ok=True)
 
     min_date = pandas.to_datetime('2020-03-01')
@@ -126,15 +142,27 @@ def main():
 
     max_view_date = max_date + pandas.Timedelta(days=1)
 
-    matplotlib.use('module://mplcairo.base')
+    emoji_font = pathlib.Path(
+        '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf')
+
     plots = []
     for region in regions:
         print(f'Plotting {region.name}...')
-        figure = matplotlib.figure.Figure(figsize=(8, 8))
+        figure = matplotlib.pyplot.figure(figsize=(8, 8))
 
         axes = figure.add_subplot()
         axes.axvspan(max_date - pandas.Timedelta(weeks=2), max_view_date,
                      color='k', alpha=0.07, label='last 2 weeks')
+
+        top_ticks, top_labels = [], []
+        for d in region.days:
+            if d.width > 0:
+                axes.axvline(
+                    d.date, color=d.color, lw=d.width, ls='--', alpha=0.7)
+            if d.emojis:
+                # For some reason "VARIANT SELECTOR-16" gives warnings.
+                top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
+                top_ticks.append(d.date)
 
         for i, m in enumerate(region.metrics):
             if pandas.api.types.is_datetime64_any_dtype(m.frame.index):
@@ -149,7 +177,7 @@ def main():
             else:
                 axes.hlines(
                     m.frame.value, xmin=min_date, xmax=max_view_date,
-                    label=m.name, color=m.color, lw=m.width, linestyle='--',
+                    label=m.name, color=m.color, lw=m.width, ls='--',
                     alpha=0.5)
 
         axes.grid(color='k', alpha=0.2)
@@ -182,12 +210,18 @@ def main():
         month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
         axes.xaxis.set_major_formatter(month_formatter)
         axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+        top = axes.secondary_xaxis('top')
+        top.set_xticks(top_ticks)
+        top.set_xticklabels(top_labels, font=emoji_font, fontsize=15)
 
         figure.add_artist(matplotlib.text.Text(
             0.5, 0.5, region.name,
             ha='center', va='center', wrap=True,
             fontsize=65, fontweight='bold', alpha=0.25))
         figure.savefig(f'{args.output_dir}/{file_base}_full.png', dpi=200)
+
+        # Explicit closure is required to reclaim memory.
+        matplotlib.pyplot.close(figure)
 
     stylesheet_url = 'style.css'
     open(f'{args.output_dir}/{stylesheet_url}', 'w').write('''
