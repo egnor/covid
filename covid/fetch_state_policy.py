@@ -98,7 +98,7 @@ def get_events(session):
                 '🏢' if 'businesses' in norm else
                 '🛍️' if 'retail' in norm else
                 '🍾' if 'alcohol' in norm else
-                '🍽' if ('restaurants' in norm or 'dining' in norm) else
+                '🍝' if ('restaurants' in norm or 'dining' in norm) else
                 '🏋️' if 'gyms' in norm else
                 '📽️' if 'movie theaters' in norm else
                 '🍻' if 'bars' in norm else
