@@ -45,6 +45,7 @@ def compute_regions(session, select_states):
 
     print('Merging data...')
     update_date = covid_states.date.max()
+    policy_events['abs_score'] = policy_events.score.abs()
     events_by_state = policy_events.groupby('state_fips')
 
     regions = []
@@ -82,12 +83,12 @@ def compute_regions(session, select_states):
 
         days = []
         state_events = events_by_state.get_group(fips)
-        for date, events in state_events.groupby('date'):
+        for date, es in state_events.groupby('date'):
+            events = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
             smin, smax = events.score.min(), events.score.max()
             score = 0 if smin == -smax else smin if smin < -smax else smax
-            emojis = list(sorted(set(
-                e.emoji for e in events.itertuples()
-                if e.score == score)))
+            emojis = list(dict.fromkeys(
+                e.emoji for e in events.itertuples() if abs(e.score) >= 2))
             days.append(region_data.DayData(
                 date=date, score=score, emojis=emojis, events=events))
 
@@ -139,7 +140,7 @@ def make_plot(region, site_dir):
             color=color, lw=2, alpha=0.7, zorder=1, transform=(
                 figure.dpi_scale_trans +
                 matplotlib.transforms.ScaledTranslation(
-                    matplotlib.dates.date2num(d.date), 0.95,
+                    matplotlib.dates.date2num(d.date), 0.97,
                     axes.get_xaxis_transform()))))
 
     legend_handles.append(matplotlib.lines.Line2D(
@@ -154,9 +155,9 @@ def make_plot(region, site_dir):
         region.date - pandas.Timedelta(weeks=2), max_date,
         color='k', alpha=0.07, zorder=0, label='last 2 weeks'))
 
-    axes.grid(c='k', alpha=0.2)
+    axes.grid(c='k', alpha=0.1)
     axes.set_xlim(min_date, max_date)
-    axes.set_ylim(0, 50)
+    axes.set_ylim(0, 55)
 
     month_locator = matplotlib.dates.MonthLocator()
     week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
@@ -173,11 +174,13 @@ def make_plot(region, site_dir):
     figure.savefig(urls.file(site_dir, urls.region_thumb(region)), dpi=50)
 
     # Full version
+    axes.set_frame_on(False)
     axes.legend(handles=legend_handles, loc='upper left')
     month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
     axes.xaxis.set_major_formatter(month_formatter)
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     top = axes.secondary_xaxis('top')
+    top.set_frame_on(False)
     top.set_xticks(top_ticks)
     top.set_xticklabels(
         top_labels, font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf',
@@ -226,13 +229,13 @@ def make_region_page(region, site_dir):
 
         tags.h2('Events')
         with tags.div(cls='events'):
-            def score_tag(s):
-                return f'score_{"plus" if s > 0 else "minus"}{abs(s)}'
+            def score_css(s):
+                return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
             for day in (d for d in region.days if d.score):
                 date = day.date.strftime('%Y-%m-%d')
-                tags.div(date, cls=f'event_date {score_tag(day.score)}')
+                tags.div(date, cls=f'event_date {score_css(day.score)}')
                 for event in (e for e in day.events.itertuples() if e.score):
-                    score = score_tag(event.score)
+                    score = score_css(event.score)
                     tags.div(event.emoji, cls=f'event_emoji {score}')
                     tags.div(event.policy, cls=f'event_policy {score}')
 

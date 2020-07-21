@@ -17,8 +17,8 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans; }
     font-family: Noto Color Emoji;
 }
 
-.event_policy.score_plus2, .event_policy.score_minus2 { font-weight: bold; }
-.event_policy.score_minus1, .event_policy.score_minus2 { color: #4E79A7; }
-.event_policy.score_plus1, .event_policy.score_plus2 { color: #F28E2B; }
+.event_policy.score_2, .event_policy.score_3 { font-weight: bold; }
+.event_policy.event_close { color: #4E79A7; }
+.event_policy.event_open  { color: #F28E2B; }
 
 .attribution { font-style: italic; }
