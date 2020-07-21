@@ -3,6 +3,7 @@
 # (Can also be run as a standalone program for testing.)
 
 import io
+
 import pandas
 
 
@@ -74,6 +75,10 @@ def get_states(session):
     data.drop('Notes', axis='columns', inplace=True)
     data.set_index('State Code', inplace=True)
     return data
+
+
+def attribution():
+    return {'https://wonder.cdc.gov/': 'CDC WONDER'}
 
 
 if __name__ == '__main__':

@@ -59,6 +59,14 @@ six = "*"
 
 [[package]]
 category = "main"
+description = "Dominate is a Python library for creating and manipulating HTML documents using an elegant DOM API."
+name = "dominate"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+version = "2.5.1"
+
+[[package]]
+category = "main"
 description = "Internationalized Domain Names in Applications (IDNA)"
 name = "idna"
 optional = false
@@ -271,16 +279,8 @@ version = "0.34.2"
 [package.extras]
 test = ["pytest (>=3.0.0)", "pytest-cov"]
 
-[[package]]
-category = "main"
-description = "Generate HTML or XML in a pythonic way. Pure python alternative to web template engines.Can fill HTML forms with default values and error messages."
-name = "yattag"
-optional = false
-python-versions = "*"
-version = "1.13.2"
-
 [metadata]
-content-hash = "7d3374d921b4e3cd15150e11f5e0104a920c51c53447841f9466fe7c86ffff1d"
+content-hash = "b7fd26b3bf9731e475edc047c6468e255c708cb9350e1e40a1664978c8a6139d"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -302,6 +302,10 @@ chardet = [
 cycler = [
     {file = "cycler-0.10.0-py2.py3-none-any.whl", hash = "sha256:1d8a5ae1ff6c5cf9b93e8811e581232ad8920aeec647c37316ceac982b08cb2d"},
     {file = "cycler-0.10.0.tar.gz", hash = "sha256:cd7b2d1018258d7247a71425e9f26463dfb444d411c39569972f4ce586b0c9d8"},
+]
+dominate = [
+    {file = "dominate-2.5.1-py2.py3-none-any.whl", hash = "sha256:22636ad28200e75fa9e751f0511aaeb9f0b630044ed8ccbd89c27acdf3dda7a1"},
+    {file = "dominate-2.5.1.tar.gz", hash = "sha256:9b05481605ea8c0afd0a98c0156a9fb78d9c406368d66b3e6fedf36920fb9d78"},
 ]
 idna = [
     {file = "idna-2.10-py2.py3-none-any.whl", hash = "sha256:b97d804b1e9b523befed77c48dacec60e6dcb0b5391d57af6a65a312a90648c0"},
@@ -502,7 +506,4 @@ us = [
 wheel = [
     {file = "wheel-0.34.2-py2.py3-none-any.whl", hash = "sha256:df277cb51e61359aba502208d680f90c0493adec6f0e848af94948778aed386e"},
     {file = "wheel-0.34.2.tar.gz", hash = "sha256:8788e9155fe14f54164c1b9eb0a319d98ef02c160725587ad60f14ddc57b6f96"},
-]
-yattag = [
-    {file = "yattag-1.13.2.tar.gz", hash = "sha256:41c1182f81e69bc53d8763c5bb9d27f54ae05ce581ee4e41c7931cc2f2479262"},
 ]

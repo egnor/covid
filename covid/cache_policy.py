@@ -2,13 +2,14 @@
 # Common settings and defaults for requests_cache layer.
 
 import argparse
+import calendar
+import datetime
+import pathlib
+
 import cachecontrol
 import cachecontrol.caches.file_cache
 import cachecontrol.heuristics
-import calendar
-import datetime
 import email.utils
-import pathlib
 import requests
 
 

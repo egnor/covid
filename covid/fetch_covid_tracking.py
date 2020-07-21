@@ -3,6 +3,7 @@
 # (Can also be run as a standalone program for testing.)
 
 import io
+
 import pandas
 import requests
 
@@ -26,6 +27,10 @@ def get_states(session):
     data.checkTimeEt = to_datetime(data.checkTimeEt, '%m/%d %H:%M')
     data.dateChecked = pandas.to_datetime(data.dateChecked)
     return data
+
+
+def attribution():
+    return { 'https://covidtracking.com/': 'The COVID Tracking Project' }
 
 
 if __name__ == '__main__':

@@ -5,16 +5,17 @@
 import collections
 import io
 import json
+import urllib.parse
+
 import pandas
 import requests
-import urllib.parse
 
 
 API_KEY = 'AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw'
 DOC_ID = '1zu9qEWI8PsOI_i8nI_S29HDGHlIp2lfVMsGxpQ5tvAQ'
 
 
-def get_states(session):
+def get_events(session):
     """Returns a pandas.DataFrame of state policy actions."""
 
     # Fetch document metadata, including a list of sheet tabs.
@@ -118,7 +119,7 @@ def get_states(session):
                 '')
 
             sig = (
-                -1 if 'state of emergency' == norm else
+                -2 if 'state of emergency' == norm else
                 -2 if 'closed k-12 schools' in norm else
                 -2 if 'closed restaurants' in norm else
                 -2 if 'closed non-essential businesses' in norm else
@@ -166,8 +167,15 @@ def get_states(session):
                     except ValueError as e:
                         raise ValueError(f'Bad "{cdef.name}" @ row {r}') from e
 
-    frame = pandas.DataFrame.from_dict(out_data)
+    frame = pandas.DataFrame(out_data)
     return frame
+
+
+def attribution():
+    return {
+        'https://tinyurl.com/statepolicies':
+        'COVID-19 US State Policy Database'
+    }
 
 
 if __name__ == '__main__':
@@ -181,8 +189,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     args = parser.parse_args()
 
-    states = get_states(session=cache_policy.new_session(args))
-    for state, state_events in states.groupby('state_name'):
+    events = get_events(session=cache_policy.new_session(args))
+    for state, state_events in events.groupby('state_name'):
         print(f'{state}:')
         for date, date_events in state_events.groupby('date'):
             print(date.strftime('  %Y-%m-%d'))

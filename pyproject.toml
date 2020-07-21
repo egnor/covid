@@ -13,9 +13,9 @@ requests = "^2.24.0"
 pandas = "^1.0.5"
 us = "^2.0.2"
 matplotlib = "^3.3"
-yattag = "^1.13.2"
 cachecontrol = {extras = ["filecache"], version = "^0.12.6"}
 mplcairo = "^0.3"
+dominate = "^2.5.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"

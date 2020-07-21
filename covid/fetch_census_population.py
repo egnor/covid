@@ -3,6 +3,7 @@
 # (Can also be run as a standalone program for testing.)
 
 import json
+
 import pandas
 import requests
 
@@ -24,6 +25,13 @@ def get_states(session):
     data.set_index('state', inplace=True)
     data.sort_index(inplace=True)
     return data
+
+
+def attribution():
+    return {
+        'https://www.census.gov/data/developers/data-sets/popest-popproj.html':
+        'US Census PEP'
+    }
 
 
 if __name__ == '__main__':

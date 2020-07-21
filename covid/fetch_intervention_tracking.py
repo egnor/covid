@@ -4,6 +4,7 @@
 
 import collections
 import io
+
 import numpy
 import pandas
 import requests
