@@ -21,7 +21,7 @@ def write_style_files(site_dir):
                     write_file.write(read_file.read())
 
     # Copy style files directly from the source directory.
-    for name in ('style.css', ):
+    for name in ('style.css', 'NotoColorEmoji.ttf'):
         with open(source_dir / name, 'rb') as read_file:
             with open(urls.file(site_dir, name), 'wb') as write_file:
                 write_file.write(read_file.read())
@@ -29,6 +29,16 @@ def write_style_files(site_dir):
 
 def add_head_style(this_urlpath=''):
     """Adds <link> tags for style files, assuming <head> context."""
+
+    tags.meta(name='viewport', content='width=device-width, initial-scale=1.0')
+
+    emoji = urls.link(this_urlpath, 'NotoColorEmoji.ttf')
+    tags.style(f'''
+        @font-face {{
+            font-family: 'Noto Color Emoji';
+            src: local('Noto Color Emoji'), url({emoji}) format("truetype");'
+        }}
+    ''')
 
     tags.link(rel='icon', type='image/png', sizes='32x32',
               href=urls.link(this_urlpath, 'favicon-32x32.png'))

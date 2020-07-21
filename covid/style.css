@@ -1,7 +1,18 @@
-body {font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans;}
-.thumb {display: inline-block; position: relative;}
+body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans; }
+
+.thumb { display: inline-block; position: relative; }
 .thumb .thumb_label {
     position: absolute; top: 18px; width: 100%; text-align: center;
     font-size: 22px; font-weight: 900;
     color: black; opacity: 0.5;
+}
+
+.plot { max-width: 100%; }
+
+.events { display: grid; justify-content: start; gap: 0.2em 0.5em; }
+.event_date { grid-column: 1; }
+.event_policy { grid-column: 3; }
+.event_emoji {
+    grid-column: 2; justify-self: center;
+    font-family: Noto Color Emoji;
 }

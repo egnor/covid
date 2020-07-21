@@ -16,7 +16,7 @@ import matplotlib.ticker
 import numpy
 import pandas
 import us
-from dominate import tags
+from dominate import tags, util
 
 from . import cache_policy
 from . import fetch_cdc_mortality
@@ -193,6 +193,55 @@ def make_plot(region, site_dir):
     matplotlib.pyplot.close(figure)
 
 
+def make_home(regions, site_dir):
+    date = max(r.date for r in regions)
+    title = f'US COVID-19 trends ({date.strftime("%Y-%m-%d")})'
+    doc = dominate.document(title=title)
+    doc_url = urls.index_page()
+    with doc.head:
+        style.add_head_style(doc_url)
+
+    with doc.body:
+        tags.h1(title)
+        for r in regions:
+            with tags.a(cls='thumb',
+                        href=urls.link(doc_url, urls.region_page(r))):
+                tags.span(r.name, cls='thumb_label')
+                tags.img(width=200, height=200,
+                         src=urls.link(doc_url, urls.region_thumb(r)))
+
+    with open(urls.file(site_dir, doc_url), 'w') as doc_file:
+        doc_file.write(doc.render())
+
+
+def make_region_page(region, site_dir):
+    title = f'{region.name} COVID-19 ({region.date.strftime("%Y-%m-%d")})'
+    doc = dominate.document(title=title)
+    doc_url = urls.region_page(region)
+    with doc.head:
+        style.add_head_style(doc_url)
+
+    with doc.body:
+        tags.img(cls='plot', src=urls.link(doc_url, urls.region_plot(region)))
+
+        tags.h2('Events')
+        with tags.div(cls='events'):
+            for day in (d for d in region.days if d.significance != 0):
+                tags.div(day.date.strftime('%Y-%m-%d'), cls='event_date')
+                for event in (e for e in day.events.itertuples()
+                              if e.significance != 0):
+                    tags.div(event.emoji, cls='event_emoji')
+                    tags.div(event.policy, cls='event_policy')
+
+        with tags.p('Sources: '):
+            for i, (url, text) in enumerate(region.attribution.items()):
+                util.text(', ') if i > 0 else None
+                tags.a(text, href=url)
+
+    with open(urls.file(site_dir, doc_url), 'w') as doc_file:
+        doc_file.write(doc.render())
+
+
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
@@ -210,29 +259,11 @@ def main():
     print(f'Making plots in {args.site_dir}...')
     for region in regions:
         make_plot(region, args.site_dir)
+        make_region_page(region, args.site_dir)
 
     print(f'Writing HTML in {args.site_dir}...')
     style.write_style_files(args.site_dir)
-
-    home_url = urls.home_page()
-    title = f'COVID-19 trends ({regions[0].date.strftime("%Y-%m-%d")})'
-    doc = dominate.document(title=title)
-    doc_url = urls.home_page()
-
-    with doc.head:
-        style.add_head_style(doc_url)
-
-    with doc.body:
-        tags.h1(title)
-        for r in regions:
-            with tags.a(cls='thumb',
-                        href=urls.link(doc_url, urls.region_plot(r))):
-                tags.span(r.name, cls='thumb_label')
-                tags.img(width=200, height=200,
-                         src=urls.link(doc_url, urls.region_thumb(r)))
-
-    with open(urls.file(args.site_dir, doc_url), 'w') as doc_file:
-        doc_file.write(doc.render())
+    make_home(regions, args.site_dir)
 
 
 if __name__ == '__main__':
