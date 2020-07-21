@@ -269,7 +269,7 @@ version = "2.0.2"
 jellyfish = "0.6.1"
 
 [[package]]
-category = "main"
+category = "dev"
 description = "A built-package format for Python"
 name = "wheel"
 optional = false
@@ -280,7 +280,7 @@ version = "0.34.2"
 test = ["pytest (>=3.0.0)", "pytest-cov"]
 
 [metadata]
-content-hash = "6808130226eba15648a12cea77631d341ac45678bcac2d99ee5780fdee686239"
+content-hash = "b7fd26b3bf9731e475edc047c6468e255c708cb9350e1e40a1664978c8a6139d"
 python-versions = "^3.8"
 
 [metadata.files]
