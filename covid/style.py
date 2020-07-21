@@ -30,6 +30,7 @@ def write_style_files(site_dir):
 def add_head_style(this_urlpath=''):
     """Adds <link> tags for style files, assuming <head> context."""
 
+    tags.meta(charset='utf-8')
     tags.meta(name='viewport', content='width=device-width, initial-scale=1.0')
 
     emoji = urls.link(this_urlpath, 'NotoColorEmoji.ttf')
