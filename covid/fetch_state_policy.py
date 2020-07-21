@@ -43,13 +43,13 @@ def get_events(session):
         'policy_area': [],
         'policy': [],
         'policy_detail': [],
-        'significance': [],
+        'score': [],
         'emoji': []
     }
 
     for tab_json in fetch_json['valueRanges']:
         # Skip tabs with general info or odd formatting (Racial Disparities)
-        tab_title = tab_json['range'].split('!')[0].strip("'")
+        tab_title = tab_json['range'].split('!')[0].strip("'").strip()
         if tab_title in ('Information', 'Racial Disparities', 'Notes/Details'):
             continue
 
@@ -67,11 +67,11 @@ def get_events(session):
                 raise ValueError(
                     f'Unexpected data in "{tab_title}" row {i + 2}: {r[:3]}')
 
-        ColDef = collections.namedtuple('ColDef', 'index name ctype emoji sig')
+        Col = collections.namedtuple('Col', 'index name ctype emoji score')
         coldefs = []
         for c in range(3, len(header)):
-            name = header[c]
-            area_norm, norm = tab_title.lower().strip(), name.lower().strip()
+            name = header[c].strip()
+            area_norm, norm = tab_title.lower(), name.lower()
 
             # Hacks for data glitches!
             if ('incarcerated' in area_norm and 'attorney visits' in norm and
@@ -118,7 +118,7 @@ def get_events(session):
                 '👮' if 'prisons' in norm else
                 '')
 
-            sig = (
+            score = (
                 -2 if 'state of emergency' == norm else
                 -2 if 'closed k-12 schools' in norm else
                 -2 if 'closed restaurants' in norm else
@@ -138,8 +138,11 @@ def get_events(session):
                 -1 if 'incarcerated' in area_norm else
                 0)
 
-            coldefs.append(ColDef(
-                index=c, name=name, ctype=ctype, emoji=emoji, sig=sig))
+            if name[:5].lower() == 'date ':
+                name = name[5:6].upper() + name[6:]
+
+            coldefs.append(Col(
+                index=c, name=name, ctype=ctype, emoji=emoji, score=score))
 
         for r, row in enumerate(rows):
             last_detail = {}
@@ -158,7 +161,7 @@ def get_events(session):
                     out_data['policy_area'].append(tab_title)
                     out_data['policy'].append(cdef.name)
                     out_data['policy_detail'].append(last_detail)
-                    out_data['significance'].append(cdef.sig)
+                    out_data['score'].append(cdef.score)
                     out_data['emoji'].append(cdef.emoji)
 
                 else:
@@ -197,8 +200,8 @@ if __name__ == '__main__':
             for area, area_events in date_events.groupby('policy_area'):
                 print(f'    {area}')
                 for e in area_events.itertuples():
-                    sig = ['⬇️ ', '🔹', '▪️ ', '🔸', '⏫'][e.significance + 2]
-                    text = ' '.join(x for x in [sig, e.emoji, e.policy] if x)
+                    score = ['⬇️ ', '🔹', '▪️ ', '🔸', '⏫'][e.score + 2]
+                    text = ' '.join(x for x in [score, e.emoji, e.policy] if x)
                     print(textwrap.TextWrapper(
                         initial_indent='     ',
                         subsequent_indent='         ',

@@ -83,13 +83,13 @@ def compute_regions(session, select_states):
         days = []
         state_events = events_by_state.get_group(fips)
         for date, events in state_events.groupby('date'):
-            min_s, max_s = events.significance.min(), events.significance.max()
-            sig = 0 if min_s == -max_s else min_s if min_s < -max_s else max_s
+            smin, smax = events.score.min(), events.score.max()
+            score = 0 if smin == -smax else smin if smin < -smax else smax
             emojis = list(sorted(set(
                 e.emoji for e in events.itertuples()
-                if e.significance == sig)))
+                if e.score == score)))
             days.append(region_data.DayData(
-                date=date, significance=sig, emojis=emojis, events=events))
+                date=date, score=score, emojis=emojis, events=events))
 
         state = us.states.lookup(fips)
         regions.append(region_data.RegionData(
@@ -127,15 +127,15 @@ def make_plot(region, site_dir):
                 c=m.color, alpha=alpha, lw=width, ls=style))
 
     top_ticks, top_labels = [], []
-    for d in (d for d in region.days if abs(d.significance) >= 2):
+    for d in (d for d in region.days if abs(d.score) >= 2):
         # For some reason "VARIANT SELECTOR-16" gives warnings.
         top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
         top_ticks.append(d.date)
-        color = 'tab:orange' if d.significance > 0 else 'tab:blue'
+        color = 'tab:orange' if d.score > 0 else 'tab:blue'
         axes.axvline(d.date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
         axes.add_line(matplotlib.lines.Line2D(
             [-0.05, 0, 0.05],
-            [v if d.significance > 0 else -v for v in [-.03, 0.07, -.03]],
+            [v if d.score > 0 else -v for v in [-.03, 0.07, -.03]],
             color=color, lw=2, alpha=0.7, zorder=1, transform=(
                 figure.dpi_scale_trans +
                 matplotlib.transforms.ScaledTranslation(
@@ -226,14 +226,17 @@ def make_region_page(region, site_dir):
 
         tags.h2('Events')
         with tags.div(cls='events'):
-            for day in (d for d in region.days if d.significance != 0):
-                tags.div(day.date.strftime('%Y-%m-%d'), cls='event_date')
-                for event in (e for e in day.events.itertuples()
-                              if e.significance != 0):
-                    tags.div(event.emoji, cls='event_emoji')
-                    tags.div(event.policy, cls='event_policy')
+            def score_tag(s):
+                return f'score_{"plus" if s > 0 else "minus"}{abs(s)}'
+            for day in (d for d in region.days if d.score):
+                date = day.date.strftime('%Y-%m-%d')
+                tags.div(date, cls=f'event_date {score_tag(day.score)}')
+                for event in (e for e in day.events.itertuples() if e.score):
+                    score = score_tag(event.score)
+                    tags.div(event.emoji, cls=f'event_emoji {score}')
+                    tags.div(event.policy, cls=f'event_policy {score}')
 
-        with tags.p('Sources: '):
+        with tags.p('Sources: ', cls='attribution'):
             for i, (url, text) in enumerate(region.attribution.items()):
                 util.text(', ') if i > 0 else None
                 tags.a(text, href=url)

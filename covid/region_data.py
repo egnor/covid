@@ -10,7 +10,7 @@ MetricData = collections.namedtuple(
     'MetricData', 'name color importance frame')
 
 DayData = collections.namedtuple(
-    'PolicyData', 'date significance emojis events')
+    'PolicyData', 'date score emojis events')
 
 RegionData = collections.namedtuple(
     'RegionData', 'id name population metrics days date attribution')
