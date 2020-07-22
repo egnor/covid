@@ -118,15 +118,19 @@ def get_events(session):
 
             score = (
                 -2 if 'state of emergency' == norm else
+                -1 if 'begin to re-close' in norm else
                 -2 if 'closed k-12 schools' in norm else
                 -2 if 'closed non-essential businesses' in norm else
                 -2 if 'closed restaurants' in norm else
                 -2 if 'close indoor dining' in norm else
+                -2 if 'closed bars' in norm else
+                -2 if 'close bars' in norm else
                 -1 if 'physical distance closures' in area_norm else
                 -3 if 'stay at home' in area_norm else
                 +3 if ('stay at home' in norm and 'reopen' in area_norm) else
                 +2 if 'reopen businesses' in norm else
                 +2 if 'reopen restaurants' in norm else
+                +2 if 'reopen bars' in norm else
                 +2 if 'reopen non-essential retail' in norm else
                 +1 if 'reopening' in area_norm else
                 -1 if 're-close' in norm else

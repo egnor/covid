@@ -15,12 +15,16 @@ def region_page(region):
     return region_prefix(region) + index_page()
 
 
-def region_plot(region):
+def covid_plot(region):
     return region_prefix(region) + 'plot.png'
 
 
-def region_thumb(region):
+def covid_plot_thumb(region):
     return region_prefix(region) + 'thumb.png'
+
+
+def mobility_plot(region):
+    return region_prefix(region) + 'mobility.png'
 
 
 def link(from_urlpath, to_urlpath):
