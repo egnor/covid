@@ -101,17 +101,39 @@ def compute_regions(session, select_states):
     return regions
 
 
+def setup_plot(region, axes):
+    min_date = pandas.to_datetime('2020-03-01')
+    max_date = region.date + pandas.Timedelta(days=1)
+    axes.set_xlim(min_date, max_date)
+    axes.grid(c='k', alpha=0.1)
+
+    week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
+    month_locator = matplotlib.dates.MonthLocator()
+    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
+    month_formatter.offset_formats[1] = ''  # Don't bother with year '2020'.
+
+    axes.xaxis.set_minor_locator(week_locator)
+    axes.xaxis.set_major_locator(month_locator)
+    axes.xaxis.set_major_formatter(month_formatter)
+    axes.xaxis.set_tick_params(which='major', labelbottom=True)
+
+    return [axes.axvspan(
+        region.date - pandas.Timedelta(weeks=2), max_date,
+        color='k', alpha=0.07, zorder=0, label='last 2 weeks')]
+
+
 def make_plot(region, site_dir):
     print(f'Plotting {region.name}...')
     matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
 
     figure = matplotlib.pyplot.figure(figsize=(8, 8))
     axes = figure.add_subplot()
+
+    axes.set_ylim(0, 55)
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+
     legend_handles = []
-
-    min_date = pandas.to_datetime('2020-03-01')
-    max_date = region.date + pandas.Timedelta(days=1)
-
     for i, m in enumerate(region.metrics):
         width = 4 if m.importance >= 1 else 2
         style = '-' if m.importance >= 0 else '--'
@@ -134,50 +156,27 @@ def make_plot(region, site_dir):
         top_ticks.append(d.date)
         color = 'tab:orange' if d.score > 0 else 'tab:blue'
         axes.axvline(d.date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
-        axes.add_line(matplotlib.lines.Line2D(
-            [-0.05, 0, 0.05],
-            [v if d.score > 0 else -v for v in [-.03, 0.07, -.03]],
-            color=color, lw=2, alpha=0.7, zorder=1, transform=(
-                figure.dpi_scale_trans +
-                matplotlib.transforms.ScaledTranslation(
-                    matplotlib.dates.date2num(d.date), 0.97,
-                    axes.get_xaxis_transform()))))
 
     legend_handles.append(matplotlib.lines.Line2D(
         [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
-        label='mitigation orders'))
+        label='mitigation changes'))
 
     legend_handles.append(matplotlib.lines.Line2D(
         [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
-        label='reopening orders'))
+        label='relaxation changes'))
 
-    legend_handles.append(axes.axvspan(
-        region.date - pandas.Timedelta(weeks=2), max_date,
-        color='k', alpha=0.07, zorder=0, label='last 2 weeks'))
+    legend_handles.extend(setup_plot(region, axes))
 
-    axes.grid(c='k', alpha=0.1)
-    axes.set_xlim(min_date, max_date)
-    axes.set_ylim(0, 55)
-
-    month_locator = matplotlib.dates.MonthLocator()
-    week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
-    axes.xaxis.set_major_locator(month_locator)
-    axes.xaxis.set_minor_locator(week_locator)
-    axes.xaxis.set_tick_params(which='major', labelbottom=True)
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-
-    # Thumbnail version
+    # Thumbnail version - save and remove the axis tick labels 
+    x_formatter = axes.xaxis.get_major_formatter()
     axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     figure.set_tight_layout(True)
     figure.savefig(urls.file(site_dir, urls.region_thumb(region)), dpi=50)
 
-    # Full version
-    axes.set_frame_on(False)
+    # Full version - restore and install axis tick labels and legend
     axes.legend(handles=legend_handles, loc='upper left')
-    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
-    axes.xaxis.set_major_formatter(month_formatter)
+    axes.xaxis.set_major_formatter(x_formatter)
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     top = axes.secondary_xaxis('top')
     top.set_frame_on(False)
@@ -189,7 +188,8 @@ def make_plot(region, site_dir):
     figure.add_artist(matplotlib.text.Text(
         0.5, 0.5, region.name,
         ha='center', va='center', wrap=True,
-        fontsize=65, fontweight='bold', alpha=0.25))
+        fontsize=65, fontweight='bold', alpha=0.2))
+
     figure.savefig(urls.file(site_dir, urls.region_plot(region)), dpi=200)
 
     # Explicit closure is required to reclaim memory.
@@ -227,7 +227,12 @@ def make_region_page(region, site_dir):
     with doc.body:
         tags.img(cls='plot', src=urls.link(doc_url, urls.region_plot(region)))
 
-        tags.h2('Events')
+        with tags.h2():
+            tags.span('Mitigation', cls='event_close')
+            util.text(' and ')
+            tags.span('Relaxation', cls='event_open')
+            util.text(' Changes')
+
         with tags.div(cls='events'):
             def score_css(s):
                 return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
@@ -249,7 +254,7 @@ def make_region_page(region, site_dir):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--state', nargs='*')
     parser.add_argument('--site_dir', type=pathlib.Path,

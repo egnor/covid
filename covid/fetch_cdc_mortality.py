@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Module to retrieve mortality data from the CDC WONDER database.
 # (Can also be run as a standalone program for testing.)
 
@@ -83,13 +82,9 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import signal
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    args = parser.parse_args()
-
-    states = get_states(session=cache_policy.new_session(args))
+    states = get_states(session=cache_policy.new_session(parser.parse_args()))
     print(states)

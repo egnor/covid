@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Module to get COVID-19 US State Policy Database (tinyurl.com/statepolicies)
 # (Can also be run as a standalone program for testing.)
 
@@ -8,7 +7,6 @@ import json
 import urllib.parse
 
 import pandas
-import requests
 
 
 API_KEY = 'AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw'
@@ -184,16 +182,12 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import signal
     import textwrap
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    args = parser.parse_args()
-
-    events = get_events(session=cache_policy.new_session(args))
+    events = get_events(session=cache_policy.new_session(parser.parse_args()))
     for state, state_events in events.groupby('state_name'):
         print(f'{state}:')
         for date, date_events in state_events.groupby('date'):
