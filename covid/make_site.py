@@ -62,6 +62,7 @@ def plot_covid_metrics(axes, covid_metrics):
     """Plots COVID case-related metrics. Returns a list of legend artists."""
 
     axes.set_ylim(0, 55)
+    axes.set_ylabel('number per capita')
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
@@ -86,10 +87,11 @@ def plot_covid_metrics(axes, covid_metrics):
 
 
 def plot_mobility_metrics(axes, mobility_metrics):
-    axes.set_ylim(-70, 30)
+    axes.set_ylim(-80, 140)
+    axes.set_ylabel('% change from baseline')
     axes.axhline(c='black', lw=1)  # Zero line.
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
     legend_artists = []
@@ -228,6 +230,8 @@ def make_region_page(region, site_dir):
     setup_plot_xaxis(thumb_axes, region.date)
     plot_covid_metrics(thumb_axes, region.covid_metrics)
     plot_daily_events(thumb_axes, region.daily_events, with_emoji=False)
+    thumb_axes.set_xlabel(None)
+    thumb_axes.set_ylabel(None)
     thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     figure.savefig(urls.file(site_dir, urls.covid_plot_thumb(region)), dpi=50)
