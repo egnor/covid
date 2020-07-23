@@ -1,2 +1,3 @@
-# covid
-COVID-19 data analysis
+# egnor/covid
+
+The code that generates the [plague.wtf](https://plague.wtf/) web site.

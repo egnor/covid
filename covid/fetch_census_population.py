@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
 # Module to retrieve Census population data.
 # (Can also be run as a standalone program for testing.)
 
 import json
 
 import pandas
-import requests
 
 
 URL_BASE = 'https://api.census.gov/data/2019/pep/population'
@@ -22,6 +20,7 @@ def get_states(session):
     json_data = json.loads(response.text)
     data = pandas.DataFrame(json_data[1:], columns=json_data[0])
     data.POP = data.POP.astype(int)
+    data.state = data.state.astype(int)
     data.set_index('state', inplace=True)
     data.sort_index(inplace=True)
     return data
@@ -36,13 +35,9 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import signal
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    args = parser.parse_args()
-
-    states = get_states(session=cache_policy.new_session(args))
+    states = get_states(session=cache_policy.new_session(parser.parse_args()))
     print(states)

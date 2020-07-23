@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Module to retrieve data from the HIT-Covid project
 # (https://akuko.io/post/covid-intervention-tracking).
 
@@ -7,7 +6,6 @@ import io
 
 import numpy
 import pandas
-import requests
 
 
 def get_data(session):
@@ -18,16 +16,14 @@ def get_data(session):
         '/data/hit-covid-longdata.csv')
     response.raise_for_status()
     data = pandas.read_csv(
-        io.StringIO(
-            response.text),
+        io.StringIO(response.text),
         index_col='unique_id',
-        parse_dates=[
-            'entry_time',
-            'date_of_update'],
+        parse_dates=['entry_time', 'date_of_update'],
         dtype={
             'usa_county_code': 'Int64',
             'size': 'Int64',
-            'duration': 'Int64'})
+            'duration': 'Int64',
+        })
 
     # Use '' for missing string values for consistent typing & groupby().
     for col, dtype in data.dtypes.items():
@@ -59,12 +55,10 @@ def get_data(session):
 
 if __name__ == '__main__':
     import argparse
-    import signal
     import textwrap
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--region', nargs='*')
     args = parser.parse_args()

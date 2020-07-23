@@ -8,15 +8,18 @@ def index_page():
 
 
 def region_prefix(region):
-    return region.id.replace(' ', '_').replace('/', '_').lower() + '/'
+    return region.short_name.replace(' ', '_').replace('/', '_').lower() + '/'
+
 
 def region_page(region):
     return region_prefix(region) + index_page()
 
-def region_plot(region):
+
+def covid_plot(region):
     return region_prefix(region) + 'plot.png'
 
-def region_thumb(region):
+
+def covid_plot_thumb(region):
     return region_prefix(region) + 'thumb.png'
 
 

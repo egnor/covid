@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
 # Module to retrieve data from covidtracking.com.
 # (Can also be run as a standalone program for testing.)
 
 import io
 
 import pandas
-import requests
 
 
 def get_states(session):
@@ -13,7 +11,7 @@ def get_states(session):
 
     response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
     response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})
+    data = pandas.read_csv(io.StringIO(response.text))
 
     def to_datetime(series, format):
         if '%Y' not in format:
@@ -30,21 +28,17 @@ def get_states(session):
 
 
 def attribution():
-    return { 'https://covidtracking.com/': 'The COVID Tracking Project' }
+    return {'https://covidtracking.com/': 'The COVID Tracking Project'}
 
 
 if __name__ == '__main__':
     import argparse
-    import signal
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    args = parser.parse_args()
-
-    states = get_states(session=cache_policy.new_session(args))
-    print(states)
+    states = get_states(session=cache_policy.new_session(parser.parse_args()))
+    print(states.dtypes)
     print()
     print('Sample record:')
     print(states.iloc[len(states) // 2])

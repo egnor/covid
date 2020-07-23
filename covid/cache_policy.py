@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Common settings and defaults for requests_cache layer.
 
 import argparse

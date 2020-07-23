@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Module to get COVID-19 US State Policy Database (tinyurl.com/statepolicies)
 # (Can also be run as a standalone program for testing.)
 
@@ -8,7 +7,6 @@ import json
 import urllib.parse
 
 import pandas
-import requests
 
 
 API_KEY = 'AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw'
@@ -98,7 +96,7 @@ def get_events(session):
                 '🏢' if 'businesses' in norm else
                 '🛍️' if 'retail' in norm else
                 '🍾' if 'alcohol' in norm else
-                '🍽' if ('restaurants' in norm or 'dining' in norm) else
+                '🍝' if ('restaurants' in norm or 'dining' in norm) else
                 '🏋️' if 'gyms' in norm else
                 '📽️' if 'movie theaters' in norm else
                 '🍻' if 'bars' in norm else
@@ -126,10 +124,13 @@ def get_events(session):
                 -2 if 'closed k-12 schools' in norm else
                 -2 if 'closed non-essential businesses' in norm else
                 -2 if 'closed restaurants' in norm else
+                -2 if 'close indoor dining' in norm else
                 -2 if 'closed bars' in norm else
+                -2 if 'close bars' in norm else
                 -1 if 'physical distance closures' in area_norm else
                 +2 if 'reopen businesses' in norm else
                 +2 if 'reopen restaurants' in norm else
+                +2 if 'reopen bars' in norm else
                 +2 if 'reopen non-essential retail' in norm else
                 +1 if 'reopening' in area_norm else
                 -2 if 're-close indoor dining' in norm else
@@ -160,7 +161,7 @@ def get_events(session):
                     date = value.replace('already in effect', '').strip()
                     out_data['state_name'].append(row[0])
                     out_data['state_abbrev'].append(row[1])
-                    out_data['state_fips'].append(f'{row[2]:02d}')
+                    out_data['state_fips'].append(row[2])
                     out_data['date'].append(pandas.Timestamp(date))
                     out_data['policy_area'].append(tab_title)
                     out_data['policy'].append(cdef.name)
@@ -187,16 +188,12 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import signal
     import textwrap
 
     import cache_policy
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    args = parser.parse_args()
-
-    events = get_events(session=cache_policy.new_session(args))
+    events = get_events(session=cache_policy.new_session(parser.parse_args()))
     for state, state_events in events.groupby('state_name'):
         print(f'{state}:')
         for date, date_events in state_events.groupby('date'):
