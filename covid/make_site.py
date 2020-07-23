@@ -87,23 +87,24 @@ def plot_covid_metrics(axes, covid_metrics):
 
 
 def plot_mobility_metrics(axes, mobility_metrics):
-    axes.set_ylim(-80, 140)
-    axes.set_ylabel('% change from baseline')
-    axes.axhline(c='black', lw=1)  # Zero line.
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
+    axes.set_ylim(0, 250)
+    axes.set_ylabel('% of same weekday in January')
+    axes.axhline(100, c='black', lw=1)  # Identity line.
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
     legend_artists = []
     for i, m in enumerate(mobility_metrics):
         if 'raw' in m.frame.columns and m.frame.raw.any():
-            axes.plot(m.frame.index, m.frame.raw, c=m.color, alpha=0.5, lw=1)
+            axes.plot(
+                m.frame.index, m.frame.raw + 100, c=m.color, alpha=0.5, lw=1)
         if 'value' in m.frame.columns and m.frame.value.any():
             week_ago = m.frame.index[-1] - pandas.Timedelta(days=7)
             older, newer = m.frame.loc[:week_ago], m.frame.loc[week_ago:]
             legend_artists.extend(axes.plot(
-                older.index, older.value, label=m.name, c=m.color, lw=2))
-            axes.plot(newer.index, newer.value, c=m.color, lw=2, ls=':')
+                older.index, older.value + 100, label=m.name, c=m.color, lw=2))
+            axes.plot(newer.index, newer.value + 100, c=m.color, lw=2, ls=':')
 
     return legend_artists
 

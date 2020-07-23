@@ -132,7 +132,7 @@ def get_regions(session, select_states):
                 name='transit stations', color='tab:purple', date=mob.date,
                 raw=mob[f'transit_stations_{pcfb}']),
             _mobility_trend(
-                name='businesses', color='tab:red', date=mob.date,
+                name='workplaces', color='tab:red', date=mob.date,
                 raw=mob[f'workplaces_{pcfb}']),
             _mobility_trend(
                 name='residential', color='tab:gray', date=mob.date,
