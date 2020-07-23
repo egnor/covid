@@ -8,7 +8,7 @@ def index_page():
 
 
 def region_prefix(region):
-    return region.id.replace(' ', '_').replace('/', '_').lower() + '/'
+    return region.short_name.replace(' ', '_').replace('/', '_').lower() + '/'
 
 
 def region_page(region):
@@ -21,10 +21,6 @@ def covid_plot(region):
 
 def covid_plot_thumb(region):
     return region_prefix(region) + 'thumb.png'
-
-
-def mobility_plot(region):
-    return region_prefix(region) + 'mobility.png'
 
 
 def link(from_urlpath, to_urlpath):

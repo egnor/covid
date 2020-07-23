@@ -66,9 +66,7 @@ CANNED_DATA = '''
 def get_states(session):
     """Returns a pandas.DataFrame of state-level mortality data."""
 
-    data = pandas.read_csv(
-        io.StringIO(CANNED_DATA), sep='\t',
-        dtype={'State Code': str})
+    data = pandas.read_csv(io.StringIO(CANNED_DATA), sep='\t')
 
     data = data[data['State Code'].notna()]
     data.drop('Notes', axis='columns', inplace=True)

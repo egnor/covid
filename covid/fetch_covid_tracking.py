@@ -11,7 +11,7 @@ def get_states(session):
 
     response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
     response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text), dtype={'fips': str})
+    data = pandas.read_csv(io.StringIO(response.text))
 
     def to_datetime(series, format):
         if '%Y' not in format:

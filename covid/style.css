@@ -7,7 +7,7 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
     color: black; opacity: 0.5;
 }
 
-.plot { width: 100%; max-width: 50em; }
+.plot { width: 100%; max-width: 60em; }
 
 .events { 
     display: grid; gap: 0.2em 0.5em;

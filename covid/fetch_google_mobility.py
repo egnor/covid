@@ -4,6 +4,7 @@
 import io
 
 import pandas
+import us.states
 
 
 def get_mobility(session):
@@ -15,14 +16,17 @@ def get_mobility(session):
     data = pandas.read_csv(
         io.StringIO(response.text),
         parse_dates=['date'],
-        dtype={'sub_region_2': str, 'census_fips_code': str})
+        dtype={'sub_region_2': str})
 
-    # Use '' for empty location fields for consistent typing & groupby().
-    # (Keep nan values for missing mobility data values.)
+    # Fill in missing state-level FIPS codes.
+    for state in us.states.STATES_AND_TERRITORIES:
+        mask = data.iso_3166_2_code.eq(f'US-{state.abbr}')
+        data.census_fips_code.mask(mask, int(state.fips), inplace=True)
+
+    # Use '' for empty string fields for consistent typing & groupby().
     data.sub_region_1.fillna('', inplace=True)
     data.sub_region_2.fillna('', inplace=True)
     data.iso_3166_2_code.fillna('', inplace=True)
-    data.census_fips_code.fillna('', inplace=True)
     return data
 
 
@@ -42,5 +46,8 @@ if __name__ == '__main__':
     data = get_mobility(cache_policy.new_session(parser.parse_args()))
     print(data.dtypes)
     print()
-    print('Sample record:')
+    print('Arbitrary record:')
     print(data.iloc[len(data) // 2])
+    print()
+    print('Last California record:')
+    print(data[data.census_fips_code.eq(6)].iloc[-1])

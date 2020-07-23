@@ -23,11 +23,13 @@ from . import style
 from . import urls
 
 
-def setup_plot(region, axes):
+def setup_plot_xaxis(axes, end_date, title=None, titlesize=65):
+    """Sets common X axis and plot style."""
+
     min_date = pandas.to_datetime('2020-03-01')
-    max_date = region.date + pandas.Timedelta(days=1)
+    max_date = end_date + pandas.Timedelta(days=1)
     axes.set_xlim(min_date, max_date)
-    axes.grid(c='k', alpha=0.1)
+    axes.grid(color='black', alpha=0.1)
 
     week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
     month_locator = matplotlib.dates.MonthLocator()
@@ -39,26 +41,36 @@ def setup_plot(region, axes):
     axes.xaxis.set_major_formatter(month_formatter)
     axes.xaxis.set_tick_params(which='major', labelbottom=True)
 
-    return [axes.axvspan(
-        region.date - pandas.Timedelta(weeks=2), max_date,
-        color='k', alpha=0.07, zorder=0, label='last 2 weeks')]
+    if title:
+        axes.text(
+            0.5, 0.5, title, transform=axes.transAxes,
+            ha='center', va='center', wrap=True,
+            fontsize=titlesize, fontweight='bold', alpha=0.2)
 
 
-def make_covid_plot(region, site_dir):
-    matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
+def add_plot_legend(axes, legend_artists):
+    """Adds a standard style plot legend using collected legend artists."""
 
-    figure = matplotlib.pyplot.figure(figsize=(8, 8))
-    axes = figure.add_subplot()
+    xmin, xmax = axes.get_xlim()
+    legend_artists.append(axes.axvspan(
+        xmax - 14, xmax, color='k', alpha=.07, zorder=0, label='last 2 weeks'))
+    axes.legend(
+        handles=legend_artists, loc='center left', bbox_to_anchor=(1, 0.5))
+
+
+def plot_covid_metrics(axes, covid_metrics):
+    """Plots COVID case-related metrics. Returns a list of legend artists."""
 
     axes.set_ylim(0, 55)
+    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
-    legend_handles = []
-    for i, m in enumerate(region.covid_metrics):
-        width = 4 if m.importance >= 1 else 2
-        style = '-' if m.importance >= 0 else '--'
-        alpha = 1.0 if m.importance >= 0 else 0.5
+    legend_artists = []
+    for i, m in enumerate(covid_metrics):
+        width = 4 if m.emphasis >= 1 else 2
+        style = '-' if m.emphasis >= 0 else '--'
+        alpha = 1.0 if m.emphasis >= 0 else 0.5
         if 'raw' in m.frame.columns and m.frame.raw.any():
             axes.plot(m.frame.index, m.frame.raw,
                       c=m.color, alpha=alpha * 0.5, lw=1, ls=style)
@@ -66,130 +78,69 @@ def make_covid_plot(region, site_dir):
             axes.scatter(m.frame.index[-1:], m.frame.value.iloc[-1:],
                          c=m.color, alpha=alpha,
                          s=(width * 2) ** 2, zorder=3)
-            legend_handles.extend(axes.plot(
+            legend_artists.extend(axes.plot(
                 m.frame.index, m.frame.value, label=m.name,
                 c=m.color, alpha=alpha, lw=width, ls=style))
 
-    top_ticks, top_labels = [], []
-    for d in (d for d in region.daily_events if abs(d.score) >= 2):
-        # For some reason "VARIANT SELECTOR-16" gives warnings.
-        top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
-        top_ticks.append(d.date)
-        color = 'tab:orange' if d.score > 0 else 'tab:blue'
-        axes.axvline(d.date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
-
-    legend_handles.append(matplotlib.lines.Line2D(
-        [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
-        label='mitigation changes'))
-
-    legend_handles.append(matplotlib.lines.Line2D(
-        [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
-        label='relaxation changes'))
-
-    legend_handles.extend(setup_plot(region, axes))
-
-    # Thumbnail version - save and remove the axis tick labels 
-    x_formatter = axes.xaxis.get_major_formatter()
-    axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.set_tight_layout(True)
-    figure.savefig(urls.file(site_dir, urls.covid_plot_thumb(region)), dpi=50)
-
-    # Full version - restore and install axis tick labels and legend
-    axes.legend(handles=legend_handles, loc='upper left')
-    axes.xaxis.set_major_formatter(x_formatter)
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    top = axes.secondary_xaxis('top')
-    top.set_frame_on(False)
-    top.set_xticks(top_ticks)
-    top.set_xticklabels(
-        top_labels, font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf',
-        fontsize=15, linespacing=1.1)
-
-    figure.add_artist(matplotlib.text.Text(
-        0.5, 0.5, region.name,
-        ha='center', va='center', wrap=True,
-        fontsize=65, fontweight='bold', alpha=0.2))
-
-    figure.savefig(urls.file(site_dir, urls.covid_plot(region)), dpi=200)
-
-    # Explicit closure is required to reclaim memory.
-    matplotlib.pyplot.close(figure)
+    return legend_artists
 
 
-def make_mobility_plot(region, site_dir):
-    figure = matplotlib.pyplot.figure(figsize=(8, 4))
-    axes = figure.add_subplot()
-
-    axes.set_ylim(50, 150)
+def plot_mobility_metrics(axes, mobility_metrics):
+    axes.set_ylim(-70, 30)
+    axes.axhline(c='black', lw=1)  # Zero line.
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-    # axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-    legend_handles = []
-    for i, m in enumerate(region.covid_metrics):
-        width = 4 if m.importance >= 1 else 2
-        style = '-' if m.importance >= 0 else '--'
-        alpha = 1.0 if m.importance >= 0 else 0.5
+    legend_artists = []
+    for i, m in enumerate(mobility_metrics):
         if 'raw' in m.frame.columns and m.frame.raw.any():
-            axes.plot(m.frame.index, m.frame.raw,
-                      c=m.color, alpha=alpha * 0.5, lw=1, ls=style)
+            axes.plot(m.frame.index, m.frame.raw, c=m.color, alpha=0.5, lw=1)
         if 'value' in m.frame.columns and m.frame.value.any():
-            axes.scatter(m.frame.index[-1:], m.frame.value.iloc[-1:],
-                         c=m.color, alpha=alpha,
-                         s=(width * 2) ** 2, zorder=3)
-            legend_handles.extend(axes.plot(
-                m.frame.index, m.frame.value, label=m.name,
-                c=m.color, alpha=alpha, lw=width, ls=style))
+            week_ago = m.frame.index[-1] - pandas.Timedelta(days=7)
+            older, newer = m.frame.loc[:week_ago], m.frame.loc[week_ago:]
+            legend_artists.extend(axes.plot(
+                older.index, older.value, label=m.name, c=m.color, lw=2))
+            axes.plot(newer.index, newer.value, c=m.color, lw=2, ls=':')
 
+    return legend_artists
+
+
+def plot_daily_events(axes, daily_events, with_emoji=True):
+    """Plots important policy changes. Returns a list of legend artists."""
+
+    legend_artists = []
     top_ticks, top_labels = [], []
-    for d in (d for d in region.daily_events if abs(d.score) >= 2):
-        # For some reason "VARIANT SELECTOR-16" gives warnings.
-        top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
-        top_ticks.append(d.date)
+    for d in (d for d in daily_events if abs(d.score) >= 2):
+        if with_emoji:
+            # For some reason "VARIANT SELECTOR-16" gives warnings.
+            top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
+            top_ticks.append(d.date)
+
         color = 'tab:orange' if d.score > 0 else 'tab:blue'
         axes.axvline(d.date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
 
-    legend_handles.append(matplotlib.lines.Line2D(
+    legend_artists.append(matplotlib.lines.Line2D(
         [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
         label='mitigation changes'))
 
-    legend_handles.append(matplotlib.lines.Line2D(
+    legend_artists.append(matplotlib.lines.Line2D(
         [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
         label='relaxation changes'))
 
-    legend_handles.extend(setup_plot(region, axes))
+    if top_ticks and top_labels:
+        top = axes.secondary_xaxis('top')
+        top.set_xticks(top_ticks)
+        top.set_xticklabels(
+            top_labels, fontdict=dict(fontsize=15), linespacing=1.1,
+            font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf')
 
-    # Thumbnail version - save and remove the axis tick labels 
-    x_formatter = axes.xaxis.get_major_formatter()
-    axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.set_tight_layout(True)
-    figure.savefig(urls.file(site_dir, urls.covid_plot_thumb(region)), dpi=50)
-
-    # Full version - restore and install axis tick labels and legend
-    axes.legend(handles=legend_handles, loc='upper left')
-    axes.xaxis.set_major_formatter(x_formatter)
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    top = axes.secondary_xaxis('top')
-    top.set_frame_on(False)
-    top.set_xticks(top_ticks)
-    top.set_xticklabels(
-        top_labels, font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf',
-        fontsize=15, linespacing=1.1)
-
-    figure.add_artist(matplotlib.text.Text(
-        0.5, 0.5, region.name,
-        ha='center', va='center', wrap=True,
-        fontsize=65, fontweight='bold', alpha=0.2))
-
-    figure.savefig(urls.file(site_dir, urls.covid_plot(region)), dpi=200)
-
-    # Explicit closure is required to reclaim memory.
-    matplotlib.pyplot.close(figure)
-
+    return legend_artists
 
 
 def make_home(regions, site_dir):
+    """Write site home with thumbnail links to lots of regions."""
+
     date = max(r.date for r in regions)
     title = f'US COVID-19 trends ({date.strftime("%Y-%m-%d")})'
     doc = dominate.document(title=title)
@@ -211,6 +162,9 @@ def make_home(regions, site_dir):
 
 
 def make_region_page(region, site_dir):
+    """Write region-specific page with various data shown."""
+
+    # Write HTML
     title = f'{region.name} COVID-19 ({region.date.strftime("%Y-%m-%d")})'
     doc = dominate.document(title=title)
     doc_url = urls.region_page(region)
@@ -245,6 +199,40 @@ def make_region_page(region, site_dir):
     with open(urls.file(site_dir, doc_url), 'w') as doc_file:
         doc_file.write(doc.render())
 
+    # Make plot image for page
+    figure = matplotlib.pyplot.figure(figsize=(10, 12), tight_layout=True)
+    covid_axes, mobility_axes = figure.subplots(
+        nrows=2, ncols=1, sharex=True, gridspec_kw=dict(height_ratios=[8, 4]))
+
+    setup_plot_xaxis(covid_axes, region.date, title=region.name)
+
+    add_plot_legend(
+        covid_axes,
+        plot_covid_metrics(covid_axes, region.covid_metrics) +
+        plot_daily_events(covid_axes, region.daily_events))
+
+    setup_plot_xaxis(mobility_axes, region.date,
+                     title=f'{region.short_name} mobility', titlesize=45)
+
+    add_plot_legend(
+        mobility_axes,
+        plot_mobility_metrics(mobility_axes, region.mobility_metrics) +
+        plot_daily_events(mobility_axes, region.daily_events, with_emoji=0))
+
+    figure.savefig(urls.file(site_dir, urls.covid_plot(region)), dpi=200)
+    matplotlib.pyplot.close(figure)  # Reclaim memory.
+
+    # Make thumbnail for index page
+    figure = matplotlib.pyplot.figure(figsize=(8, 8), tight_layout=True)
+    thumb_axes = figure.add_subplot()
+    setup_plot_xaxis(thumb_axes, region.date)
+    plot_covid_metrics(thumb_axes, region.covid_metrics)
+    plot_daily_events(thumb_axes, region.daily_events, with_emoji=False)
+    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    figure.savefig(urls.file(site_dir, urls.covid_plot_thumb(region)), dpi=50)
+    matplotlib.pyplot.close(figure)  # Reclaim memory.
+
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
@@ -261,15 +249,13 @@ def main():
         print('*** No data to plot!', file=sys.stderr)
         sys.exit(1)
 
-    print(f'Making plots in {args.site_dir}...')
-    for region in regions:
-        print(f'  {region.name}...')
-        make_covid_plot(region, args.site_dir)
-        make_region_page(region, args.site_dir)
-
-    print(f'Writing HTML in {args.site_dir}...')
+    print(f'Making pages in {args.site_dir}...')
+    matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
     style.write_style_files(args.site_dir)
     make_home(regions, args.site_dir)
+    for region in regions:
+        print(f'  {region.name}...')
+        make_region_page(region, args.site_dir)
 
 
 if __name__ == '__main__':

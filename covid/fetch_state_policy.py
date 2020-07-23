@@ -159,7 +159,7 @@ def get_events(session):
                     date = value.replace('already in effect', '').strip()
                     out_data['state_name'].append(row[0])
                     out_data['state_abbrev'].append(row[1])
-                    out_data['state_fips'].append(f'{row[2]:02d}')
+                    out_data['state_fips'].append(row[2])
                     out_data['date'].append(pandas.Timestamp(date))
                     out_data['policy_area'].append(tab_title)
                     out_data['policy'].append(cdef.name)

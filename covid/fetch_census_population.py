@@ -20,6 +20,7 @@ def get_states(session):
     json_data = json.loads(response.text)
     data = pandas.DataFrame(json_data[1:], columns=json_data[0])
     data.POP = data.POP.astype(int)
+    data.state = data.state.astype(int)
     data.set_index('state', inplace=True)
     data.sort_index(inplace=True)
     return data

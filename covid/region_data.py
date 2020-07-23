@@ -14,14 +14,14 @@ from . import fetch_state_policy
 
 
 Metric = collections.namedtuple(
-    'MetricData', 'name color importance frame')
+    'MetricData', 'name color emphasis frame')
 
 DailyEvents = collections.namedtuple(
     'PolicyData', 'date score emojis events')
 
 Region = collections.namedtuple(
     'RegionData',
-    'id name population date attribution '
+    'name short_name population date attribution '
     'covid_metrics mobility_metrics daily_events '
 )
 
@@ -35,8 +35,8 @@ def _name_per_capita(name, capita):
         f'{name} / {number(capita)}p')
 
 
-def _trend_per_capita(name, color, imp, date, raw, capita, pop):
-    nonzero_is, = (raw.values > 0).nonzero()
+def _trend_per_capita(name, color, em, date, raw, capita, pop):
+    nonzero_is, = (raw.values > 0).nonzero()  # Skip the first nonzero value.
     first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
     date = date[first_i:]
     per_cap = raw[first_i:] * capita / pop
@@ -44,20 +44,26 @@ def _trend_per_capita(name, color, imp, date, raw, capita, pop):
     f = pandas.DataFrame(dict(
         date=date, raw=per_cap, value=per_cap.rolling(7).mean()))
     f.set_index('date', inplace=True)
-    return Metric(_name_per_capita(name, capita), color, imp, f)
+    return Metric(_name_per_capita(name, capita), color, em, f)
 
 
-def _threshold_per_capita(name, color, imp, value, capita, pop):
+def _threshold_per_capita(name, color, em, value, capita, pop):
     f = pandas.DataFrame(dict(
         value=[value * capita / pop] * 2,
         date=[pandas.to_datetime('2020-01-01'),
               pandas.to_datetime('2020-12-31')]))
     f.set_index('date', inplace=True)
-    return Metric(_name_per_capita(name, capita), color, imp, f)
+    return Metric(_name_per_capita(name, capita), color, em, f)
+
+
+def _mobility_trend(name, color, date, raw):
+    f = pandas.DataFrame(dict(date=date, raw=raw, value=raw.rolling(7).mean()))
+    f.set_index('date', inplace=True)
+    return Metric(name, color, 1, f)
 
 
 def get_regions(session, select_states):
-    select_fips = [us.states.lookup(n).fips for n in select_states or []]
+    select_fips = [int(us.states.lookup(n).fips) for n in select_states or []]
 
     covid_states = fetch_covid_tracking.get_states(session=session)
     census_states = fetch_census_population.get_states(session=session)
@@ -90,52 +96,47 @@ def get_regions(session, select_states):
         covid = covid.sort_values(by='date')
         covid_metrics = [
             _trend_per_capita(
-                name='tests', color='tab:green', imp=0, date=covid.date,
+                name='tests', color='tab:green', em=0, date=covid.date,
                 raw=covid.totalTestResultsIncrease, capita=1e4, pop=census.POP),
             _trend_per_capita(
-                name='positives', color='tab:blue', imp=1, date=covid.date,
+                name='positives', color='tab:blue', em=1, date=covid.date,
                 raw=covid.positiveIncrease, capita=1e5, pop=census.POP),
             _trend_per_capita(
-                name='hosp admit', color='tab:orange', imp=0, date=covid.date,
+                name='hosp admit', color='tab:orange', em=0, date=covid.date,
                 raw=covid.hospitalizedIncrease, capita=25e4, pop=census.POP),
             _trend_per_capita(
-                name='hosp current', color='tab:pink', imp=0, date=covid.date,
+                name='hosp current', color='tab:pink', em=0, date=covid.date,
                 raw=covid.hospitalizedCurrently, capita=25e3, pop=census.POP),
             _trend_per_capita(
-                name='deaths', color='tab:red', imp=1, date=covid.date,
+                name='deaths', color='tab:red', em=1, date=covid.date,
                 raw=covid.deathIncrease, capita=1e6, pop=census.POP),
             _threshold_per_capita(
-                name='historical deaths', color='black', imp=-1,
-                raw=mortality.Deaths / 365, capita=1e6, pop=census.POP),
+                name='historical deaths', color='black', em=-1,
+                value=mortality.Deaths / 365, capita=1e6, pop=census.POP),
         ]
 
-        mob = mobility_data[mobility_data.census_fips_code == fips]
-        mob = mobility.sort_values(by='date')
+        mob = mobility_data[mobility_data.census_fips_code.eq(fips)]
+        mob = mob.sort_values(by='date')
+        pcfb = 'percent_change_from_baseline'  # common, long suffix
         mobility_metrics = [
-            Metric(name='retail / recreation', color='tab:orange',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.retail_and_recreation_percent_change_from_baseline))),
-            Metric(name='grocery / pharmacy', color='tab:blue',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.grocery_and_pharmacy_percent_change_from_baseline))),
-            Metric(name='parks', color='tab:green',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.parks_percent_change_from_baseline))),
-            Metric(name='transit stations', color='tab:pink',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.transit_stations_percent_change_from_baseline))),
-            Metric(name='workplaces', color='tab:red',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.workplaces_percent_change_from_baseline))),
-            Metric(name='residential', color='tab:brown',
-                   importance=1, frame=pandas.DataFrame(dict(
-                       date=mobility.date,
-                       value=mob.residential_percent_change_from_baseline))),
+            _mobility_trend(
+                name='retail / recreation', color='tab:orange', date=mob.date,
+                raw=mob[f'retail_and_recreation_{pcfb}']),
+            _mobility_trend(
+                name='grocery / pharmacy', color='tab:blue', date=mob.date,
+                raw=mob[f'grocery_and_pharmacy_{pcfb}']),
+            _mobility_trend(
+                name='parks', color='tab:green', date=mob.date,
+                raw=mob[f'parks_{pcfb}']),
+            _mobility_trend(
+                name='transit stations', color='tab:purple', date=mob.date,
+                raw=mob[f'transit_stations_{pcfb}']),
+            _mobility_trend(
+                name='businesses', color='tab:red', date=mob.date,
+                raw=mob[f'workplaces_{pcfb}']),
+            _mobility_trend(
+                name='residential', color='tab:gray', date=mob.date,
+                raw=mob[f'residential_{pcfb}']),
         ]
 
         daily_events = []
@@ -149,9 +150,9 @@ def get_regions(session, select_states):
             daily_events.append(DailyEvents(
                 date=date, score=score, emojis=emojis, events=events))
 
-        state = us.states.lookup(fips)
+        state = us.states.lookup(f'{fips:02d}')
         regions.append(Region(
-            id=state.abbr.lower(), name=state.name, date=update_date,
+            name=state.name, short_name=state.abbr, date=update_date,
             attribution=attribution, population=census.POP,
             covid_metrics=covid_metrics,
             mobility_metrics=mobility_metrics,
