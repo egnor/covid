@@ -17,6 +17,8 @@ import requests
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data caching')
 argument_group.add_argument(
+    '--no_cache', default=False, action='store_true')
+argument_group.add_argument(
     '--cache_dir', type=pathlib.Path,
     default=pathlib.Path.home() / 'http_cache')
 argument_group.add_argument(
@@ -39,7 +41,7 @@ class SimpleTimeHeuristic(cachecontrol.heuristics.BaseHeuristic):
 
 def new_session(parsed_args):
     """Returns a new CachedSession per the supplied command line args."""
-    return (requests.Session() if not parsed_args.cache_dir else
+    return (requests.Session() if parsed_args.no_cache else
             cachecontrol.CacheControl(
                 requests.Session(),
                 heuristic=SimpleTimeHeuristic(parsed_args.cache_time),
