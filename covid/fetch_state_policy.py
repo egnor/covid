@@ -80,6 +80,10 @@ def get_events(session):
                     rows[18][c] == 'f'):
                 rows[18][c] = 0
 
+            if ('healthcare' in area_norm and 'telehealth' in norm and
+                    rows[1][c] == '3/17/1010'):
+                rows[1][c] = '3/17/2020'
+
             ctype = (
                 bool if all(r[c] in (0, 1) for r in rows) else
                 pandas.Timestamp if all(
@@ -199,8 +203,8 @@ if __name__ == '__main__':
             for area, area_events in date_events.groupby('policy_area'):
                 print(f'    {area}')
                 for e in area_events.itertuples():
-                    score = ['⬇️ ', '🔹', '▪️ ', '🔸', '⏫'][e.score + 2]
-                    text = ' '.join(x for x in [score, e.emoji, e.policy] if x)
+                    s = ['⬇️ ', '🔷', '🔹', '▪️ ', '🔸', '🔶', '⏫'][e.score + 3]
+                    text = ' '.join(x for x in [s, e.emoji, e.policy] if x)
                     print(textwrap.TextWrapper(
                         initial_indent='     ',
                         subsequent_indent='         ',
