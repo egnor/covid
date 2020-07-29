@@ -63,7 +63,7 @@ def get_events(session):
             if (not all(isinstance(*vt) for vt in zip(r[:3], (str, str, int)))
                     or not r[1].isupper() or len(r[1]) != 2):
                 raise ValueError(
-                    f'Unexpected data in "{tab_title}" row {i + 2}: {r[:3]}')
+                    f'Unexpected data "{r[:3]}" in "{tab_title}" row {i + 2}')
 
         Col = collections.namedtuple('Col', 'index name ctype emoji score')
         coldefs = []
@@ -72,17 +72,9 @@ def get_events(session):
             area_norm, norm = tab_title.lower(), name.lower()
 
             # Hacks for data glitches!
-            if ('incarcerated' in area_norm and 'attorney visits' in norm and
-                    rows[42][c] == 1):
-                rows[42][c] = '3/12/2020'
-
-            if ('masks' in area_norm and 'legal enforcement' in norm and
-                    rows[18][c] == 'f'):
-                rows[18][c] = 0
-
-            if ('healthcare' in area_norm and 'telehealth' in norm and
-                    rows[1][c] == '3/17/1010'):
-                rows[1][c] = '3/17/2020'
+            # if ('healthcare' in area_norm and 'telehealth' in norm and
+            #         rows[7][c] == '1/0/1900'):
+            #     rows[7][c] = 0
 
             ctype = (
                 bool if all(r[c] in (0, 1) for r in rows) else
@@ -162,7 +154,17 @@ def get_events(session):
                     if value == 0:
                         continue
 
+                    # Codes for policies in effect pre-COVID.
                     date = value.replace('already in effect', '').strip()
+                    date = date.replace('1/0/1900', '1/1/2020')  # Sentinel.
+
+                    try:
+                        date = pandas.Timestamp(date)
+                    except ValueError:
+                        raise ValueError(
+                            f'Bad date "{date}" in "{tab_title}" / '
+                            f'"{cdef.name}" for {row[1]} (row {r + 2})')
+
                     out_data['state_name'].append(row[0])
                     out_data['state_abbrev'].append(row[1])
                     out_data['state_fips'].append(row[2])
@@ -176,8 +178,10 @@ def get_events(session):
                 else:
                     try:
                         last_detail[cdef.name] = (cdef.ctype)(value)
-                    except ValueError as e:
-                        raise ValueError(f'Bad "{cdef.name}" @ row {r}') from e
+                    except ValueError:
+                        raise ValueError(
+                            f'Bad value "{value}" in "{tab_title}" / '
+                            f'"{cdef.name}" for {row[1]} (row {r + 2})')
 
     frame = pandas.DataFrame(out_data)
     return frame
