@@ -45,11 +45,14 @@ def get_events(session):
         'emoji': []
     }
 
+    skip_tabs = [
+        'Information', 'Racial Disparities', 'Notes/Details', 'Codebook',
+    ]
+
     for tab_json in fetch_json['valueRanges']:
         # Skip tabs with general info or odd formatting (Racial Disparities)
         tab_title = tab_json['range'].split('!')[0].strip("'").strip()
-        if tab_title in (
-            'Information', 'Racial Disparities', 'Notes/Details', 'Codebook'):
+        if tab_title in skip_tabs:
             continue
 
         tab_values = tab_json['values']

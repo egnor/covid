@@ -16,7 +16,7 @@ def get_mobility(session):
     data = pandas.read_csv(
         io.StringIO(response.text),
         parse_dates=['date'],
-        dtype={'sub_region_2': str})
+        dtype={'sub_region_2': str, 'metro_area': str})
 
     # Fill in missing state-level FIPS codes.
     for state in us.states.STATES_AND_TERRITORIES:
@@ -39,7 +39,6 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-
     import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
