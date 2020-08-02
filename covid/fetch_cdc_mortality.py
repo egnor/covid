@@ -80,7 +80,7 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import cache_policy
+    from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     states = get_states(session=cache_policy.new_session(parser.parse_args()))

@@ -6,7 +6,7 @@ import zipfile
 
 from dominate import tags, util
 
-from . import urls
+from covid import urls
 
 
 def write_style_files(site_dir):

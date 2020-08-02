@@ -7,6 +7,7 @@ import json
 import urllib.parse
 
 import pandas
+import us
 
 
 API_KEY = 'AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw'
@@ -188,27 +189,27 @@ def get_events(session):
                             f'"{cdef.name}" for {row[1]} (row {r + 2})')
 
     frame = pandas.DataFrame(out_data)
+    frame.sort_values(by=['state_fips', 'date'], inplace=True)
+    frame.set_index(['state_fips', 'date'], inplace=True)
     return frame
 
 
 def attribution():
-    return {
-        'https://tinyurl.com/statepolicies':
-        'COVID-19 US State Policy Database'
-    }
+    return {'https://tinyurl.com/statepolicies':
+            'COVID-19 US State Policy Database'}
 
 
 if __name__ == '__main__':
     import argparse
     import textwrap
-
-    import cache_policy
+    from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     events = get_events(session=cache_policy.new_session(parser.parse_args()))
-    for state, state_events in events.groupby('state_name'):
-        print(f'{state}:')
-        for date, date_events in state_events.groupby('date'):
+    for state_fips, state_events in events.groupby(level='state_fips'):
+        state = us.states.lookup(f'{state_fips:02d}')
+        print(f'{state.name}:')
+        for date, date_events in state_events.groupby(level='date'):
             print(date.strftime('  %Y-%m-%d'))
             for area, area_events in date_events.groupby('policy_area'):
                 print(f'    {area}')

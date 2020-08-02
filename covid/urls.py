@@ -1,25 +1,30 @@
 # Shared definitions of file placement within the site
 
 import os
+import re
 
 
 def index_page():
     return 'index.html'
 
 
-def region_prefix(region):
-    return region.short_name.replace(' ', '_').replace('/', '_').lower() + '/'
+def region_prefix(region, _tr=str.maketrans(' /.', '___')):
+    return (
+        '' if not region else
+        '' if region.short_name.lower() == 'world' and not region.parent else
+        region_prefix(region.parent) +
+        re.sub(r'[\W]+', '_', region.short_name).strip('_').lower() + '/')
 
 
 def region_page(region):
     return region_prefix(region) + index_page()
 
 
-def covid_plot(region):
+def plot_image(region):
     return region_prefix(region) + 'plot.png'
 
 
-def covid_plot_thumb(region):
+def thumb_image(region):
     return region_prefix(region) + 'thumb.png'
 
 

@@ -17,6 +17,7 @@ def get_data(session):
     response.raise_for_status()
     data = pandas.read_csv(
         io.StringIO(response.text),
+        na_values=[''], keep_default_na=False,
         index_col='unique_id',
         parse_dates=['entry_time', 'date_of_update'],
         dtype={
@@ -56,8 +57,7 @@ def get_data(session):
 if __name__ == '__main__':
     import argparse
     import textwrap
-
-    import cache_policy
+    from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--region', nargs='*')

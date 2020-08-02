@@ -11,7 +11,9 @@ def get_states(session):
 
     response = session.get('https://covidtracking.com/api/v1/states/daily.csv')
     response.raise_for_status()
-    data = pandas.read_csv(io.StringIO(response.text))
+    data = pandas.read_csv(
+        io.StringIO(response.text),
+        na_values=[''], keep_default_na=False)
 
     def to_datetime(series, format):
         if '%Y' not in format:
@@ -24,6 +26,8 @@ def get_states(session):
     data.dateModified = pandas.to_datetime(data.dateModified)
     data.checkTimeEt = to_datetime(data.checkTimeEt, '%m/%d %H:%M')
     data.dateChecked = pandas.to_datetime(data.dateChecked)
+    data.sort_values(by=['fips', 'date'], inplace=True)
+    data.set_index(['fips', 'date'], inplace=True)
     return data
 
 
@@ -33,11 +37,11 @@ def attribution():
 
 if __name__ == '__main__':
     import argparse
-    import cache_policy
+    from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     states = get_states(session=cache_policy.new_session(parser.parse_args()))
     print(states.dtypes)
     print()
-    print('Sample record:')
+    print('Arbitrary record:')
     print(states.iloc[len(states) // 2])

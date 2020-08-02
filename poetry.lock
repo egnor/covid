@@ -185,6 +185,14 @@ version = "2.6.0"
 
 [[package]]
 category = "main"
+description = "ISO country, subdivision, language, currency and script definitions and their translations"
+name = "pycountry"
+optional = false
+python-versions = "*"
+version = "20.7.3"
+
+[[package]]
+category = "main"
 description = "Python parsing module"
 name = "pyparsing"
 optional = false
@@ -280,7 +288,8 @@ version = "0.34.2"
 test = ["pytest (>=3.0.0)", "pytest-cov"]
 
 [metadata]
-content-hash = "b7fd26b3bf9731e475edc047c6468e255c708cb9350e1e40a1664978c8a6139d"
+content-hash = "efaed9c85f8e5085505b83591eb340736ba9362b682b50d42cd1d6d2877025f8"
+lock-version = "1.0"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -474,6 +483,9 @@ pycairo = [
 pycodestyle = [
     {file = "pycodestyle-2.6.0-py2.py3-none-any.whl", hash = "sha256:2295e7b2f6b5bd100585ebcb1f616591b652db8a741695b3d8f5d28bdc934367"},
     {file = "pycodestyle-2.6.0.tar.gz", hash = "sha256:c58a7d2815e0e8d7972bf1803331fb0152f867bd89adf8a01dfd55085434192e"},
+]
+pycountry = [
+    {file = "pycountry-20.7.3.tar.gz", hash = "sha256:81084a53d3454344c0292deebc20fcd0a1488c136d4900312cbd465cf552cb42"},
 ]
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},

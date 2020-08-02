@@ -16,6 +16,7 @@ matplotlib = "^3.3"
 cachecontrol = {extras = ["filecache"], version = "^0.12.6"}
 mplcairo = "^0.3"
 dominate = "^2.5.1"
+pycountry = "^20.7.3"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"

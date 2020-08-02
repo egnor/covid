@@ -17,10 +17,10 @@ import numpy
 import pandas
 from dominate import tags, util
 
-from . import cache_policy
-from . import region_data
-from . import style
-from . import urls
+from covid import cache_policy
+from covid import combine_data
+from covid import style
+from covid import urls
 
 
 def setup_plot_xaxis(axes, end_date, title=None, titlesize=65):
@@ -68,7 +68,7 @@ def plot_covid_metrics(axes, covid_metrics):
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
     legend_artists = []
-    for i, m in enumerate(covid_metrics):
+    for i, (name, m) in enumerate(covid_metrics.items()):
         width = 4 if m.emphasis >= 1 else 2
         style = '-' if m.emphasis >= 0 else '--'
         alpha = 1.0 if m.emphasis >= 0 else 0.5
@@ -80,7 +80,7 @@ def plot_covid_metrics(axes, covid_metrics):
                          c=m.color, alpha=alpha,
                          s=(width * 2) ** 2, zorder=3)
             legend_artists.extend(axes.plot(
-                m.frame.index, m.frame.value, label=m.name,
+                m.frame.index, m.frame.value, label=name,
                 c=m.color, alpha=alpha, lw=width, ls=style))
 
     return legend_artists
@@ -95,7 +95,7 @@ def plot_mobility_metrics(axes, mobility_metrics):
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
     legend_artists = []
-    for i, m in enumerate(mobility_metrics):
+    for i, (name, m) in enumerate(mobility_metrics.items()):
         if 'raw' in m.frame.columns and m.frame.raw.any():
             axes.plot(
                 m.frame.index, m.frame.raw + 100, c=m.color, alpha=0.5, lw=1)
@@ -103,7 +103,7 @@ def plot_mobility_metrics(axes, mobility_metrics):
             week_ago = m.frame.index[-1] - pandas.Timedelta(days=7)
             older, newer = m.frame.loc[:week_ago], m.frame.loc[week_ago:]
             legend_artists.extend(axes.plot(
-                older.index, older.value + 100, label=m.name, c=m.color, lw=2))
+                older.index, older.value + 100, label=name, c=m.color, lw=2))
             axes.plot(newer.index, newer.value + 100, c=m.color, lw=2, ls=':')
 
     return legend_artists
@@ -144,8 +144,11 @@ def plot_daily_events(axes, daily_events, with_emoji=True):
 def make_home(regions, site_dir):
     """Write site home with thumbnail links to lots of regions."""
 
-    date = max(r.date for r in regions)
-    title = f'US COVID-19 trends ({date.strftime("%Y-%m-%d")})'
+    max_date = max(
+        max(m.frame.index.max() for m in r.covid_metrics.values())
+        for r in regions)
+
+    title = f'US COVID-19 trends ({max_date.strftime("%Y-%m-%d")})'
     doc = dominate.document(title=title)
     doc_url = urls.index_page()
     with doc.head:
@@ -158,7 +161,7 @@ def make_home(regions, site_dir):
                         href=urls.link(doc_url, urls.region_page(r))):
                 tags.span(r.name, cls='thumb_label')
                 tags.img(width=200, height=200,
-                         src=urls.link(doc_url, urls.covid_plot_thumb(r)))
+                         src=urls.link(doc_url, urls.thumb_image(r)))
 
     with open(urls.file(site_dir, doc_url), 'w') as doc_file:
         doc_file.write(doc.render())
@@ -168,14 +171,17 @@ def make_region_page(region, site_dir):
     """Write region-specific page with various data shown."""
 
     # Write HTML
-    title = f'{region.name} COVID-19 ({region.date.strftime("%Y-%m-%d")})'
+    max_date = max(m.frame.index.max() for m in region.covid_metrics.values())
+    title = f'{region.name} COVID-19 ({max_date.strftime("%Y-%m-%d")})'
     doc = dominate.document(title=title)
     doc_url = urls.region_page(region)
     with doc.head:
         style.add_head_style(doc_url)
 
     with doc.body:
-        tags.img(cls='plot', src=urls.link(doc_url, urls.covid_plot(region)))
+        tags.h1(title)
+
+        tags.img(cls='plot', src=urls.link(doc_url, urls.plot_image(region)))
 
         with tags.h2():
             tags.span('Mitigation', cls='event_close')
@@ -207,14 +213,15 @@ def make_region_page(region, site_dir):
     covid_axes, mobility_axes = figure.subplots(
         nrows=2, ncols=1, sharex=True, gridspec_kw=dict(height_ratios=[8, 4]))
 
-    setup_plot_xaxis(covid_axes, region.date, title=region.name)
+    setup_plot_xaxis(covid_axes, max_date, title=region.name)
 
     add_plot_legend(
         covid_axes,
         plot_covid_metrics(covid_axes, region.covid_metrics) +
+        plot_covid_metrics(covid_axes, region.baseline_metrics) +
         plot_daily_events(covid_axes, region.daily_events))
 
-    setup_plot_xaxis(mobility_axes, region.date,
+    setup_plot_xaxis(mobility_axes, max_date,
                      title=f'{region.short_name} mobility', titlesize=45)
 
     add_plot_legend(
@@ -222,34 +229,35 @@ def make_region_page(region, site_dir):
         plot_mobility_metrics(mobility_axes, region.mobility_metrics) +
         plot_daily_events(mobility_axes, region.daily_events, with_emoji=0))
 
-    figure.savefig(urls.file(site_dir, urls.covid_plot(region)), dpi=200)
+    figure.savefig(urls.file(site_dir, urls.plot_image(region)), dpi=200)
     matplotlib.pyplot.close(figure)  # Reclaim memory.
 
     # Make thumbnail for index page
     figure = matplotlib.pyplot.figure(figsize=(8, 8), tight_layout=True)
     thumb_axes = figure.add_subplot()
-    setup_plot_xaxis(thumb_axes, region.date)
+    setup_plot_xaxis(thumb_axes, max_date)
+    plot_covid_metrics(thumb_axes, region.baseline_metrics)
     plot_covid_metrics(thumb_axes, region.covid_metrics)
     plot_daily_events(thumb_axes, region.daily_events, with_emoji=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.savefig(urls.file(site_dir, urls.covid_plot_thumb(region)), dpi=50)
+    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
     matplotlib.pyplot.close(figure)  # Reclaim memory.
 
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument('--state', nargs='*')
+    parser.add_argument('--states', nargs='*')
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
     args = parser.parse_args()
 
     print('Reading data...')
     session = cache_policy.new_session(args)
-    regions = region_data.get_regions(session, args.state)
+    regions = combine_data.get_states(session, args.states)
     if not regions:
         print('*** No data to plot!', file=sys.stderr)
         sys.exit(1)
