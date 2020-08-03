@@ -167,8 +167,18 @@ def make_home(regions, site_dir):
         doc_file.write(doc.render())
 
 
-def make_region_page(region, site_dir):
-    """Write region-specific page with various data shown."""
+def make_region_tree(region, site_dir):
+    """Write region-specific page along with subregions."""
+
+    # Recurse for subregions.
+    for r in region.subregions.values():
+        make_region_tree(r, site_dir)
+
+    def get_nesting(r): return (get_nesting(
+        r.parent) if r.parent else []) + [r]
+    nesting = get_nesting(region)
+    print(f'Make: {" > ".join(r.short_name for r in nesting)}')
+    return
 
     # Write HTML
     max_date = max(m.frame.index.max() for m in region.covid_metrics.values())
@@ -250,25 +260,20 @@ def make_region_page(region, site_dir):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument('--states', nargs='*')
+    parser.add_argument('--filter_regex')
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
     args = parser.parse_args()
 
-    print('Reading data...')
-    session = cache_policy.new_session(args)
-    regions = combine_data.get_states(session, args.states)
-    if not regions:
-        print('*** No data to plot!', file=sys.stderr)
-        sys.exit(1)
+    print('Loading data...')
+    world = combine_data.get_world(
+        session=cache_policy.new_session(args),
+        filter_regex=args.filter_regex)
 
-    print(f'Making pages in {args.site_dir}...')
+    print(f'Generating pages in {args.site_dir}...')
     matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
     style.write_style_files(args.site_dir)
-    make_home(regions, args.site_dir)
-    for region in regions:
-        print(f'  {region.name}...')
-        make_region_page(region, args.site_dir)
+    make_region_tree(world, args.site_dir)
 
 
 if __name__ == '__main__':

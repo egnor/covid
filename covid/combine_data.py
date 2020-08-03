@@ -2,7 +2,7 @@
 # (Can also be run as a standalone program for testing.)
 
 import collections
-import dataclasses
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -30,6 +30,9 @@ DailyEvents = collections.namedtuple(
 class Region:
     name: str
     short_name: str
+    jhu_uid: Optional[int] = None
+    iso_code: Optional[str] = None
+    fips_code: Optional[int] = None
     population: Optional[int] = None
     parent: Optional['Region'] = field(default=None)
     subregions: dict = field(default_factory=dict, repr=False)
@@ -38,6 +41,95 @@ class Region:
     covid_metrics: dict = field(default_factory=dict, repr=False)
     mobility_metrics: dict = field(default_factory=dict, repr=False)
     daily_events: list = field(default_factory=list, repr=False)
+
+
+def _get_skeleton(session, filter_regex):
+    """Returns a region tree for the world with no metrics populated."""
+
+    world = Region(name='World', short_name='World')
+    filter_regex = filter_regex and re.compile(filter_regex, re.I)
+
+    def subregion(parent, key, name=None, short_name=None):
+        return (parent.subregions.get(key) or
+                parent.subregions.setdefault(key, Region(
+                    name=name or str(key),
+                    short_name=short_name or str(key),
+                    parent=parent)))
+
+    jhu_places = fetch_jhu_covid19.get_places(session)
+    for uid, place in jhu_places.items():
+        if not (place.Population > 0):
+            continue  # We require population data.
+
+        if place.Country_Region == 'US':
+            # US specific logic for FIPS, etc.
+            region = subregion(world, 'US', us.unitedstatesofamerica.name)
+            region.iso_code = 'US'
+            if place.Province_State:
+                s = us.states.lookup(place.Province_State, field='name')
+                if s:
+                    region = subregion(region, int(s.fips), s.name, s.abbr)
+                    region.fips_code = s.fips
+                else:
+                    region = subregion(region, place.Province_State)
+                if place.iso2 != 'US':
+                    region.iso2 = place.iso2
+            if place.Admin2:
+                if not place.Province_State:
+                    raise ValueError(f'Admin2 but no State in {place}')
+                region = subregion(
+                    region, place.FIPS or place.Admin2,
+                    place.Admin2, place.Admin2)
+                region.fips_code = place.FIPS
+
+        else:
+            # Generic non-US logic.
+            country = pycountry.countries.get(name=place.Country_Region)
+            if not country:
+                country = pycountry.countries.get(alpha_2=place.iso2)
+            if country:
+                region = subregion(
+                    world, country.alpha_2, country.name, country.alpha_2)
+                region.iso_code = country.alpha_2
+            elif place.Country_Region:
+                # Uncoded "countries" are usually cruise ships and such?
+                region = subregion(world, place.Country_Region)
+            else:
+                raise ValueError(f'No country in {place}')
+            if place.Province_State:
+                region = subregion(region, place.Province_State)
+                if country and place.iso2 != country.alpha_2:
+                    region.iso_code = place.iso2
+            if place.Admin2:
+                region = subregion(region, place.Admin2)
+
+        region.jhu_uid = uid
+        region.population = place.Population
+        region.attribution.update(fetch_jhu_covid19.attribution())
+
+    def filter_region_tree(region):
+        region.subregions = {
+            k: sub for k, sub in region.subregions.items()
+            if filter_region_tree(sub)
+        }
+        return (filter_regex.search(region.name) or
+                filter_regex.search(region.short_name) or
+                region.subregions)
+
+    if filter_regex and not filter_region_tree(world):
+        return world  # All filtered out, return only a stub world region.
+
+    # Compute population from subregions if not set at higher level.
+    def roll_up_population(region):
+        pop = sum(roll_up_population(r) for r in region.subregions.values())
+        if pandas.isna(region.population) or not (region.population > 0):
+            region.population = pop
+        if not (region.population > 0):
+            raise ValueError(f'No population for "{region.name}"')
+        return region.population
+
+    roll_up_population(world)
+    return world
 
 
 def _trend_frame(values):
@@ -54,94 +146,56 @@ def _threshold_frame(value):
               pandas.to_datetime('2020-12-31')])).set_index('date')
 
 
-def get_world(session):
-    world = Region(name='World', short_name='World')
+def get_world(session, filter_regex=None, verbose=False):
+    """Returns data organized into a tree rooted at a World region."""
+
+    vprint = lambda *a, **k: print(*a, **k) if verbose else None
+
+    vprint('Loading skeleton based on JHU place data...')
+    world = _get_skeleton(session, filter_regex)
+
+    # Index by various forms of ID for merging data in.
+    region_by_iso = {}
+    region_by_fips = {}
+    region_by_uid = {}
+    def index_region_tree(region):
+        if region.iso_code:
+            region_by_iso[region.iso_code] = region
+        if region.fips_code:
+            region_by_fips[region.fips_code] = region
+        if region.jhu_uid:
+            region_by_uid[region.jhu_uid] = region
+        for sub in region.subregions.values():
+            index_region_tree(sub)
+
+    index_region_tree(world)
 
     #
-    # Start with JHU data to lay out structure of subregions.
+    # Add COVID metrics from JHU.
     #
 
-    def subregion(parent, key, name=None, short_name=None):
-        return (parent.subregions.get(key) or
-                parent.subregions.setdefault(key, Region(
-                    name=name or str(key),
-                    short_name=short_name or str(key),
-                    parent=parent)))
-
-    alpha2_region = {}  # Includes codes like 'GG' and 'PR' for territories.
-    jhu_places = fetch_jhu_covid19.get_places(session)
+    # Populate the tree with JHU metrics.
+    vprint('Loading JHU COVID data...')
     jhu_data = fetch_jhu_covid19.get_data(session)
+    vprint('Merging JHU COVID data...')
     for uid, data in jhu_data.groupby(level='UID', sort=False):
-        place = jhu_places[uid]
-        if not (place.Population > 0):
-            continue  # We require population data.
-
-        if place.Country_Region == 'US':
-            # US specific logic for FIPS, etc.
-            region = subregion(world, 'US', us.unitedstatesofamerica.name)
-            if place.Province_State:
-                s = us.states.lookup(place.Province_State, field='name')
-                if s:
-                    region = subregion(region, int(s.fips), s.name, s.abbr)
-                else:
-                    region = subregion(region, place.Province_State)
-                if place.iso2 != 'US':
-                    alpha2_region[place.iso2] = region
-            if place.Admin2:
-                if not place.Province_State:
-                    raise ValueError(f'Admin2 but no State in {place}')
-                region = subregion(
-                    region, place.FIPS or place.Admin2,
-                    place.Admin2, place.Admin2)
-
-        else:
-            # Generic non-US logic.
-            country = pycountry.countries.get(name=place.Country_Region)
-            if not country:
-                country = pycountry.countries.get(alpha_2=place.iso2)
-            if country:
-                region = subregion(
-                    world, country.alpha_2, country.name, country.alpha_2)
-            elif place.Country_Region:
-                # Uncoded "countries" are usually cruise ships and such.
-                region = subregion(world, place.Country_Region)
-            else:
-                raise ValueError(f'No country in {place}')
-            if place.Province_State:
-                region = subregion(region, place.Province_State)
-                if country and place.iso2 != country.alpha_2:
-                    alpha2_region[place.iso2] = region
-            if place.Admin2:
-                region = subregion(region, place.Admin2)
+        region = region_by_uid.get(uid)
+        if not region:
+            continue  # Filtered out for one reason or another.
 
         # Convert total cases and deaths into daily cases and deaths.
         cases = data.total_cases.iloc[1:] - data.total_cases.values[:-1]
         deaths = data.total_deaths.iloc[1:] - data.total_deaths.values[:-1]
 
         data.reset_index(level='UID', drop=True, inplace=True)
-        region.population = place.Population
-        region.attribution.update(fetch_jhu_covid19.attribution())
         region.covid_metrics.update({
-            'positives / 100Kp': Metric('tab:blue', 1,
-                                        _trend_frame(cases * 1e5 / region.population)),
-            'deaths / 1Mp': Metric('tab:red', 1,
-                                   _trend_frame(deaths * 1e6 / region.population)),
+            'positives / 100Kp': Metric(
+                'tab:blue', 1,
+                _trend_frame(cases * 1e5 / region.population)),
+            'deaths / 1Mp': Metric(
+                'tab:red', 1,
+                _trend_frame(deaths * 1e6 / region.population)),
         })
-
-    # Also include "regular" alpha2 country codes in the shortcut map.
-    alpha2_region.update(world.subregions)
-
-    # Compute population from subregions if not set at higher level.
-    # (Metrics get rolled up later, but pop is needed to compute metrics.)
-    def roll_up_population(region):
-        pop = sum(roll_up_population(r) for r in region.subregions.values())
-        if pandas.isna(region.population) or not (region.population > 0):
-            region.population = pop
-        if not (region.population > 0):
-            raise ValueError(f'No population for "{region.name}"')
-        return region.population
-
-    roll_up_population(world)
 
     #
     # Add baseline mortality data from CDC figures for US states.
@@ -149,12 +203,13 @@ def get_world(session):
     # TODO: Some sort of proper excess mortality plotting?
     #
 
+    vprint('Loading and merging CDC mortality data...')
     usa = world.subregions['US']
     cdc_mortality = fetch_cdc_mortality.get_states(session=session)
     for mortality in cdc_mortality.itertuples(name='Mortality'):
         region = usa.subregions.get(mortality.Index)
         if region is None:
-            raise ValueError(f'Bad CDC mortality: {mortality}')
+            continue
 
         region.attribution.update(fetch_cdc_mortality.attribution())
         region.baseline_metrics.update({
@@ -167,11 +222,12 @@ def get_world(session):
     # (Use its cases/deaths data where available, for matching metrics.)
     #
 
+    vprint('Loading and merging covidtracking.com data...')
     covid_tracking = fetch_covid_tracking.get_states(session=session)
     for fips, covid in covid_tracking.groupby(level='fips', sort=False):
         region = usa.subregions.get(fips)
         if region is None:
-            raise ValueError(f'Bad covidtracking FIPS: {fips}')
+            continue
 
         # Prefer covidtracking data to JHU data, for consistency.
         covid.reset_index(level='fips', drop=True, inplace=True)
@@ -193,12 +249,13 @@ def get_world(session):
     # Add policy changes for US states from the state policy database.
     #
 
+    vprint('Loading and merging state policy database...')
     state_policy = fetch_state_policy.get_events(session=session)
     state_policy['abs_score'] = state_policy.score.abs()
     for fips, events in state_policy.groupby(level='state_fips', sort=False):
         region = usa.subregions.get(fips)
         if region is None:
-            raise ValueError(f'Bad state policy FIPS: {fips}')
+            continue
 
         region.attribution.update(fetch_state_policy.attribution())
         for date, es in events.groupby(level='date'):
@@ -219,30 +276,23 @@ def get_world(session):
         'metro_area', 'iso_3166_2_code', 'census_fips_code'
     ]
 
+    print('FIPS 6:', region_by_fips.get(6))
+
+    vprint('Loading Google mobility data...')
     mobility_data = fetch_google_mobility.get_mobility(session=session)
+    vprint('Merging Google mobility data...')
     mobility_data.sort_values(by=gcols + ['date'], inplace=True)
     mobility_data.set_index('date', inplace=True)
     for geo, mob in mobility_data.groupby(gcols, as_index=False, sort=False):
-        region = alpha2_region.get(geo[0])
-        if region is None:
-            raise ValueError(f'Bad Google mobility country: {geo}')
-
-        fips = geo[5]
-        if fips >= 100:  # County FIPS
-            region = region.subregions.get(fips // 1000)
-            region = region and region.subregions.get(fips)
-            if region is None:
-                raise ValueError(f'Bad Google mobility county FIPS: {geo}')
-        elif fips > 0:   # State FIPS
-            region = region.subregions.get(fips)
-            if region is None:
-                raise ValueError(f'Bad Google mobility state FIPS: {geo}')
+        if geo[5]:
+            region = region_by_fips.get(geo[5])
         else:
-            for name in geo[1:4]:
-                if name and region:  # TODO - fix Puerto Rico??
-                    region = region.subregions.get(name)
-            if region is None:
-                continue
+            region = region_by_iso.get(geo[0])
+            for n in geo[1:4]:
+                region = region.subregions.get(n) if (region and n) else region
+
+        if region is None:
+            continue
 
         pcfb = 'percent_change_from_baseline'  # common, long suffix
         region.attribution.update(fetch_google_mobility.attribution())
@@ -261,7 +311,7 @@ def get_world(session):
                 mob[f'residential_{pcfb}'])),
         })
 
-    # TODO: Roll up metrics into higher level regions as needed.
+    # TODO: Roll up COVID metrics into higher level regions as needed.
 
     return world
 
@@ -299,8 +349,9 @@ def get_states(session, select_states):
 
         pop = census.POP
         baseline_metrics = {
-            'historical deaths / 1Mp': Metric('black', -1,
-                                              _threshold_frame(mortality.Deaths / 365 * 1e6 / pop)),
+            'historical deaths / 1Mp': Metric(
+                'black', -1,
+                _threshold_frame(mortality.Deaths / 365 * 1e6 / pop)),
         }
 
         covid.reset_index(level='fips', drop=True, inplace=True)
@@ -365,7 +416,12 @@ if __name__ == '__main__':
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    world = get_world(session=cache_policy.new_session(parser.parse_args()))
+    parser.add_argument('--filter_regex')
+    args = parser.parse_args()
+    world = get_world(
+        session=cache_policy.new_session(args),
+        filter_regex=args.filter_regex,
+        verbose=True)
 
     def print_region(r, key, indent):
         line = (
