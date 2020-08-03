@@ -174,11 +174,10 @@ def make_region_tree(region, site_dir):
     for r in region.subregions.values():
         make_region_tree(r, site_dir)
 
-    def get_nesting(r): return (get_nesting(
-        r.parent) if r.parent else []) + [r]
+    def get_nesting(region):
+        return get_nesting(region.parent) + [region] if region else []
     nesting = get_nesting(region)
-    print(f'Make: {" > ".join(r.short_name for r in nesting)}')
-    return
+    print(f'Make: {"/".join(r.short_name for r in nesting)}')
 
     # Write HTML
     max_date = max(m.frame.index.max() for m in region.covid_metrics.values())

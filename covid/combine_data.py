@@ -68,8 +68,9 @@ def _get_skeleton(session, filter_regex):
             if place.Province_State:
                 s = us.states.lookup(place.Province_State, field='name')
                 if s:
-                    region = subregion(region, int(s.fips), s.name, s.abbr)
-                    region.fips_code = s.fips
+                    state_fips = int(s.fips)
+                    region = subregion(region, state_fips, s.name, s.abbr)
+                    region.fips_code = state_fips
                 else:
                     region = subregion(region, place.Province_State)
                 if place.iso2 != 'US':
@@ -107,16 +108,16 @@ def _get_skeleton(session, filter_regex):
         region.population = place.Population
         region.attribution.update(fetch_jhu_covid19.attribution())
 
-    def filter_region_tree(region):
+    def filter_region_tree(path, region):
+        prefix = path and (path + "/")
         region.subregions = {
             k: sub for k, sub in region.subregions.items()
-            if filter_region_tree(sub)
+            if filter_region_tree(prefix + sub.short_name, sub)
         }
         return (filter_regex.search(region.name) or
-                filter_regex.search(region.short_name) or
-                region.subregions)
+                filter_regex.search(path) or region.subregions)
 
-    if filter_regex and not filter_region_tree(world):
+    if filter_regex and not filter_region_tree('', world):
         return world  # All filtered out, return only a stub world region.
 
     # Compute population from subregions if not set at higher level.
@@ -184,10 +185,11 @@ def get_world(session, filter_regex=None, verbose=False):
             continue  # Filtered out for one reason or another.
 
         # Convert total cases and deaths into daily cases and deaths.
+        data.reset_index(level='UID', drop=True, inplace=True)
         cases = data.total_cases.iloc[1:] - data.total_cases.values[:-1]
         deaths = data.total_deaths.iloc[1:] - data.total_deaths.values[:-1]
 
-        data.reset_index(level='UID', drop=True, inplace=True)
+        region.attribution.update(fetch_jhu_covid19.attribution())
         region.covid_metrics.update({
             'positives / 100Kp': Metric(
                 'tab:blue', 1,
@@ -197,6 +199,16 @@ def get_world(session, filter_regex=None, verbose=False):
                 _trend_frame(deaths * 1e6 / region.population)),
         })
 
+    # Drop subtrees in the place tree with no JHU COVID metrics.
+    def prune_region_tree(region):
+        region.subregions = {
+            k: sub for k, sub in region.subregions.items()
+            if prune_region_tree(sub)
+        }
+        return (region.subregions or region.covid_metrics)
+
+    prune_region_tree(world)
+
     #
     # Add baseline mortality data from CDC figures for US states.
     # TODO: Include seasonal variation and county level data?
@@ -204,10 +216,9 @@ def get_world(session, filter_regex=None, verbose=False):
     #
 
     vprint('Loading and merging CDC mortality data...')
-    usa = world.subregions['US']
     cdc_mortality = fetch_cdc_mortality.get_states(session=session)
     for mortality in cdc_mortality.itertuples(name='Mortality'):
-        region = usa.subregions.get(mortality.Index)
+        region = region_by_fips.get(mortality.Index)
         if region is None:
             continue
 
@@ -225,7 +236,7 @@ def get_world(session, filter_regex=None, verbose=False):
     vprint('Loading and merging covidtracking.com data...')
     covid_tracking = fetch_covid_tracking.get_states(session=session)
     for fips, covid in covid_tracking.groupby(level='fips', sort=False):
-        region = usa.subregions.get(fips)
+        region = region_by_fips.get(fips)
         if region is None:
             continue
 
@@ -253,7 +264,7 @@ def get_world(session, filter_regex=None, verbose=False):
     state_policy = fetch_state_policy.get_events(session=session)
     state_policy['abs_score'] = state_policy.score.abs()
     for fips, events in state_policy.groupby(level='state_fips', sort=False):
-        region = usa.subregions.get(fips)
+        region = region_by_fips.get(fips)
         if region is None:
             continue
 
@@ -275,8 +286,6 @@ def get_world(session, filter_regex=None, verbose=False):
         'country_region_code', 'sub_region_1', 'sub_region_2',
         'metro_area', 'iso_3166_2_code', 'census_fips_code'
     ]
-
-    print('FIPS 6:', region_by_fips.get(6))
 
     vprint('Loading Google mobility data...')
     mobility_data = fetch_google_mobility.get_mobility(session=session)
@@ -312,6 +321,20 @@ def get_world(session, filter_regex=None, verbose=False):
         })
 
     # TODO: Roll up COVID metrics into higher level regions as needed.
+
+#XXX
+    # Compute population from subregions if not set at higher level.
+    def roll_up_population(region):
+        pop = sum(roll_up_population(r) for r in region.subregions.values())
+        if pandas.isna(region.population) or not (region.population > 0):
+            region.population = pop
+        if not (region.population > 0):
+            raise ValueError(f'No population for "{region.name}"')
+        return region.population
+
+    roll_up_population(world)
+    return world
+#XXX
 
     return world
 
@@ -425,19 +448,17 @@ if __name__ == '__main__':
 
     def print_region(r, key, indent):
         line = (
-            f'{" " * indent}{r.population:9.0f}p [' +
-            ' b'[bool(r.baseline_metrics)] +
-            ' c'[bool(r.covid_metrics)] +
-            ' h'[any('hosp' in k for k in r.covid_metrics.keys())] +
-            ' m'[bool(r.mobility_metrics)] +
-            ' p'[bool(r.daily_events)] +
-            f'] {key}')
-        if r.short_name != key:
-            line = f'{line}: {r.short_name}'
-            if r.name not in (key, r.short_name):
-                line = f'{line} ({r.name})'
-        elif r.name != key:
-            line = f'{line}: {r.name}'
+            f'{" " * indent}{r.population:9.0f}p <' +
+            '.b'[bool(r.baseline_metrics)] +
+            '.c'[bool(r.covid_metrics)] +
+            '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
+            '.m'[bool(r.mobility_metrics)] +
+            '.p'[bool(r.daily_events)] + '>')
+        if key != r.short_name:
+            line = f'{line} [{key}]'
+        line = f'{line} {r.short_name}'
+        if r.name not in (key, r.short_name):
+            line = f'{line} ({r.name})'
         print(line)
         for k, v in r.subregions.items():
             print_region(v, k, indent + 2)
