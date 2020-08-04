@@ -2,6 +2,7 @@
 # (Can also be run as a standalone program for testing.)
 
 import collections
+import functools
 import re
 from dataclasses import dataclass, field
 from typing import Optional
@@ -23,7 +24,7 @@ Metric = collections.namedtuple(
     'Metric', ['color', 'emphasis', 'frame'])
 
 DailyEvents = collections.namedtuple(
-    'DailyEvents', ['date', 'score', 'emojis', 'events'])
+    'DailyEvents', ['date', 'score', 'emojis', 'frame'])
 
 
 @dataclass(eq=False)
@@ -108,19 +109,18 @@ def _get_skeleton(session, filter_regex):
         region.population = place.Population
         region.attribution.update(fetch_jhu_covid19.attribution())
 
-    def filter_region_tree(path, region):
-        prefix = path and (path + "/")
+    def filter_region_tree(parents, region):
         region.subregions = {
             k: sub for k, sub in region.subregions.items()
-            if filter_region_tree(prefix + sub.short_name, sub)
+            if filter_region_tree(f'{parents}/{sub.short_name}', sub)
         }
-        return (filter_regex.search(region.name) or
-                filter_regex.search(path) or region.subregions)
+        return (region.subregions or filter_regex.search(parents) or
+                filter_regex.search(region.name))
 
-    if filter_regex and not filter_region_tree('', world):
+    if filter_regex and not filter_region_tree('world', world):
         return world  # All filtered out, return only a stub world region.
 
-    # Compute population from subregions if not set at higher level.
+    # Compute population from subregions if it's not set at the higher level.
     def roll_up_population(region):
         pop = sum(roll_up_population(r) for r in region.subregions.values())
         if pandas.isna(region.population) or not (region.population > 0):
@@ -152,7 +152,7 @@ def get_world(session, filter_regex=None, verbose=False):
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
 
-    vprint('Loading skeleton based on JHU place data...')
+    vprint('Loading JHU place data...')
     world = _get_skeleton(session, filter_regex)
 
     # Index by various forms of ID for merging data in.
@@ -270,13 +270,13 @@ def get_world(session, filter_regex=None, verbose=False):
 
         region.attribution.update(fetch_state_policy.attribution())
         for date, es in events.groupby(level='date'):
-            events = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
-            smin, smax = events.score.min(), events.score.max()
+            frame = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
+            smin, smax = frame.score.min(), frame.score.max()
             score = 0 if smin == -smax else smin if smin < -smax else smax
             emojis = list(dict.fromkeys(
-                e.emoji for e in events.itertuples() if abs(e.score) >= 2))
+                e.emoji for e in frame.itertuples() if abs(e.score) >= 2))
             region.daily_events.append(DailyEvents(
-                date=date, score=score, emojis=emojis, events=events))
+                date=date, score=score, emojis=emojis, frame=frame))
 
     #
     # Add mobility data where it's available.
@@ -320,118 +320,32 @@ def get_world(session, filter_regex=None, verbose=False):
                 mob[f'residential_{pcfb}'])),
         })
 
-    # TODO: Roll up COVID metrics into higher level regions as needed.
+    #
+    # Combine metrics from subregions when not defined at the higher level.
+    #
 
-#XXX
-    # Compute population from subregions if not set at higher level.
-    def roll_up_population(region):
-        pop = sum(roll_up_population(r) for r in region.subregions.values())
-        if pandas.isna(region.population) or not (region.population > 0):
-            region.population = pop
-        if not (region.population > 0):
-            raise ValueError(f'No population for "{region.name}"')
-        return region.population
+    def roll_up_metrics(region):
+        # Use None to mark metrics already defined at the higher level.
+        name_popmetrics = {name: None for name in region.covid_metrics.keys()}
+        for sub in region.subregions.values():
+            roll_up_metrics(sub)
+            for name, metric in sub.covid_metrics.items():
+                popmetrics = name_popmetrics.setdefault(name, [])
+                if popmetrics is not None:
+                    popmetrics.append((sub.population, metric))
 
-    roll_up_population(world)
+        # Only combine metrics if they're defined for >90% of the population.
+        for name, popmetrics in name_popmetrics.items():
+            if sum(p for p, m in popmetrics or []) >= region.population * 0.9:
+                popmetrics.sort(reverse=True)
+                popsum = functools.reduce(
+                    lambda a, b: a.add(b, fill_value=0.0),
+                    (m.frame * p for p, m in popmetrics))
+                region.covid_metrics[name] = popmetrics[0][1]._replace(
+                    frame=popsum / region.population)
+
+    roll_up_metrics(world)
     return world
-#XXX
-
-    return world
-
-
-def get_states(session, select_states):
-    select_fips = [int(us.states.lookup(n).fips) for n in select_states or []]
-
-    covid_states = fetch_covid_tracking.get_states(session=session)
-    census_states = fetch_census_population.get_states(session=session)
-    mortality_states = fetch_cdc_mortality.get_states(session=session)
-    policy_events = fetch_state_policy.get_events(session=session)
-    mobility_data = fetch_google_mobility.get_mobility(session=session)
-
-    attribution = {
-        **fetch_covid_tracking.attribution(),
-        **fetch_census_population.attribution(),
-        **fetch_cdc_mortality.attribution(),
-        **fetch_state_policy.attribution(),
-        **fetch_google_mobility.attribution()
-    }
-
-    policy_events['abs_score'] = policy_events.score.abs()
-    events_by_state = policy_events.groupby(level='state_fips', sort=False)
-
-    regions = []
-    for fips, covid in covid_states.groupby(level='fips', sort=False):
-        if select_fips and fips not in select_fips:
-            continue
-
-        try:
-            census = census_states.loc[fips]
-            mortality = mortality_states.loc[fips]
-        except KeyError:
-            continue
-
-        pop = census.POP
-        baseline_metrics = {
-            'historical deaths / 1Mp': Metric(
-                'black', -1,
-                _threshold_frame(mortality.Deaths / 365 * 1e6 / pop)),
-        }
-
-        covid.reset_index(level='fips', drop=True, inplace=True)
-        covid_metrics = {
-            'tests / 10Kp': Metric('tab:green', 0, _trend_frame(
-                covid.totalTestResultsIncrease * 1e4 / pop)),
-            'positives / 100Kp': Metric('tab:blue', 1, _trend_frame(
-                covid.positiveIncrease * 1e5 / pop)),
-            'hosp admit / 250Kp': Metric('tab:orange', 0, _trend_frame(
-                covid.hospitalizedIncrease * 25e4 / pop)),
-            'hosp current / 25Kp': Metric('tab:pink', 0, _trend_frame(
-                covid.hospitalizedCurrently * 25e3 / pop)),
-            'deaths / 1Mp': Metric('tab:red', 1, _trend_frame(
-                covid.deathIncrease * 1e6 / pop)),
-        }
-
-        mob = mobility_data[mobility_data.census_fips_code.eq(fips)]
-        mob = mob.sort_values(by='date')
-        mob.set_index('date', inplace=True)
-        pcfb = 'percent_change_from_baseline'  # common, long suffix
-        mobility_metrics = {
-            'retail / recreation': Metric('tab:orange', 1, _trend_frame(
-                mob[f'retail_and_recreation_{pcfb}'])),
-            'grocery / pharmacy': Metric('tab:blue', 1, _trend_frame(
-                mob[f'grocery_and_pharmacy_{pcfb}'])),
-            'parks': Metric('tab:green', 1, _trend_frame(
-                mob[f'parks_{pcfb}'])),
-            'transit stations': Metric('tab:purple', 1, _trend_frame(
-                mob[f'transit_stations_{pcfb}'])),
-            'workplaces': Metric('tab:red', 1, _trend_frame(
-                mob[f'workplaces_{pcfb}'])),
-            'residential': Metric('tab:gray', 1, _trend_frame(
-                mob[f'residential_{pcfb}'])),
-        }
-
-        daily_events = []
-        state_events = events_by_state.get_group(fips)
-        for date, es in state_events.groupby(level='date'):
-            events = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
-            smin, smax = events.score.min(), events.score.max()
-            score = 0 if smin == -smax else smin if smin < -smax else smax
-            emojis = list(dict.fromkeys(
-                e.emoji for e in events.itertuples() if abs(e.score) >= 2))
-            daily_events.append(DailyEvents(
-                date=date, score=score, emojis=emojis, events=events))
-
-        state = us.states.lookup(f'{fips:02d}')
-        regions.append(Region(
-            name=state.name, short_name=state.abbr,
-            subregions=[], population=census.POP,
-            attribution=attribution,
-            baseline_metrics=baseline_metrics,
-            covid_metrics=covid_metrics,
-            mobility_metrics=mobility_metrics,
-            daily_events=daily_events))
-
-    return regions
 
 
 if __name__ == '__main__':
@@ -446,9 +360,9 @@ if __name__ == '__main__':
         filter_regex=args.filter_regex,
         verbose=True)
 
-    def print_region(r, key, indent):
+    def print_tree(prefix, parents, key, r):
         line = (
-            f'{" " * indent}{r.population:9.0f}p <' +
+            f'{prefix}{r.population:9.0f}p <' +
             '.b'[bool(r.baseline_metrics)] +
             '.c'[bool(r.covid_metrics)] +
             '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
@@ -456,11 +370,11 @@ if __name__ == '__main__':
             '.p'[bool(r.daily_events)] + '>')
         if key != r.short_name:
             line = f'{line} [{key}]'
-        line = f'{line} {r.short_name}'
+        line = f'{line} {parents}{r.short_name}'
         if r.name not in (key, r.short_name):
             line = f'{line} ({r.name})'
         print(line)
-        for k, v in r.subregions.items():
-            print_region(v, k, indent + 2)
+        for k, sub in r.subregions.items():
+            print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
 
-    print_region(world, 'World', 0)
+    print_tree('', '', world.short_name, world)
