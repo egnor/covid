@@ -44,110 +44,6 @@ class Region:
     daily_events: list = field(default_factory=list, repr=False)
 
 
-def _get_skeleton(session, filter_regex):
-    """Returns a region tree for the world with no metrics populated."""
-
-    jhu_credits = fetch_jhu_covid19.credits()
-    world = Region(name='World', short_name='World', credits={**jhu_credits})
-    filter_regex = filter_regex and re.compile(filter_regex, re.I)
-
-    def subregion(parent, key, name=None, short_name=None):
-        region = parent.subregions.get(key)
-        if not region:
-            region = parent.subregions[key] = Region(
-                name=name or str(key), short_name=short_name or str(key),
-                parent=parent, credits={**jhu_credits})
-        return region
-
-    jhu_places = fetch_jhu_covid19.get_places(session)
-    for uid, place in jhu_places.items():
-        if not (place.Population > 0):
-            continue  # We require population data.
-
-        if place.Country_Region == 'US':
-            # US specific logic for FIPS, etc.
-            region = subregion(world, 'US', us.unitedstatesofamerica.name)
-            region.iso_code = 'US'
-            if place.Province_State:
-                s = us.states.lookup(place.Province_State, field='name')
-                if s:
-                    state_fips = int(s.fips)
-                    region = subregion(region, state_fips, s.name, s.abbr)
-                    region.fips_code = state_fips
-                else:
-                    region = subregion(region, place.Province_State)
-                if place.iso2 != 'US':
-                    region.iso2 = place.iso2
-            if place.Admin2:
-                if not place.Province_State:
-                    raise ValueError(f'Admin2 but no State in {place}')
-                region = subregion(
-                    region, place.FIPS or place.Admin2,
-                    place.Admin2, place.Admin2)
-                region.fips_code = place.FIPS
-
-        else:
-            # Generic non-US logic.
-            country = pycountry.countries.get(name=place.Country_Region)
-            if not country:
-                country = pycountry.countries.get(alpha_2=place.iso2)
-            if country:
-                region = subregion(
-                    world, country.alpha_2, country.name, country.alpha_2)
-                region.iso_code = country.alpha_2
-            elif place.Country_Region:
-                # Uncoded "countries" are usually cruise ships and such?
-                region = subregion(world, place.Country_Region)
-            else:
-                raise ValueError(f'No country in {place}')
-            if place.Province_State:
-                region = subregion(region, place.Province_State)
-                if country and place.iso2 != country.alpha_2:
-                    region.iso_code = place.iso2
-            if place.Admin2:
-                region = subregion(region, place.Admin2)
-
-        region.jhu_uid = uid
-        region.population = place.Population
-
-    def filter_region_tree(parents, region):
-        region.subregions = {
-            k: sub for k, sub in region.subregions.items()
-            if filter_region_tree(f'{parents}/{sub.short_name}', sub)
-        }
-        return (region.subregions or filter_regex.search(parents) or
-                filter_regex.search(region.name))
-
-    if filter_regex and not filter_region_tree('world', world):
-        return world  # All filtered out, return only a stub world region.
-
-    # Compute population from subregions if it's not set at the higher level.
-    def roll_up_population(region):
-        pop = sum(roll_up_population(r) for r in region.subregions.values())
-        if pandas.isna(region.population) or not (region.population > 0):
-            region.population = pop
-        if not (region.population > 0):
-            raise ValueError(f'No population for "{region.name}"')
-        return region.population
-
-    roll_up_population(world)
-    return world
-
-
-def _trend_frame(values):
-    nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero value.
-    first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
-    values = values[first_i:]
-    return pandas.DataFrame(dict(raw=values, value=values.rolling(7).mean()))
-
-
-def _threshold_frame(value):
-    return pandas.DataFrame(dict(
-        value=[value] * 2,
-        date=[pandas.to_datetime('2020-01-01'),
-              pandas.to_datetime('2020-12-31')])).set_index('date')
-
-
 def get_world(session, filter_regex=None, verbose=False):
     """Returns data organized into a tree rooted at a World region."""
 
@@ -351,8 +247,114 @@ def get_world(session, filter_regex=None, verbose=False):
     return world
 
 
+def _get_skeleton(session, filter_regex):
+    """Returns a region tree for the world with no metrics populated."""
+
+    jhu_credits = fetch_jhu_covid19.credits()
+    world = Region(name='World', short_name='World', credits={**jhu_credits})
+    filter_regex = filter_regex and re.compile(filter_regex, re.I)
+
+    def subregion(parent, key, name=None, short_name=None):
+        region = parent.subregions.get(key)
+        if not region:
+            region = parent.subregions[key] = Region(
+                name=name or str(key), short_name=short_name or str(key),
+                parent=parent, credits={**jhu_credits})
+        return region
+
+    jhu_places = fetch_jhu_covid19.get_places(session)
+    for uid, place in jhu_places.items():
+        if not (place.Population > 0):
+            continue  # We require population data.
+
+        if place.Country_Region == 'US':
+            # US specific logic for FIPS, etc.
+            region = subregion(world, 'US', us.unitedstatesofamerica.name)
+            region.iso_code = 'US'
+            if place.Province_State:
+                s = us.states.lookup(place.Province_State, field='name')
+                if s:
+                    state_fips = int(s.fips)
+                    region = subregion(region, state_fips, s.name, s.abbr)
+                    region.fips_code = state_fips
+                else:
+                    region = subregion(region, place.Province_State)
+                if place.iso2 != 'US':
+                    region.iso2 = place.iso2
+            if place.Admin2:
+                if not place.Province_State:
+                    raise ValueError(f'Admin2 but no State in {place}')
+                region = subregion(
+                    region, place.FIPS or place.Admin2,
+                    place.Admin2, place.Admin2)
+                region.fips_code = place.FIPS
+
+        else:
+            # Generic non-US logic.
+            country = pycountry.countries.get(name=place.Country_Region)
+            if not country:
+                country = pycountry.countries.get(alpha_2=place.iso2)
+            if country:
+                region = subregion(
+                    world, country.alpha_2, country.name, country.alpha_2)
+                region.iso_code = country.alpha_2
+            elif place.Country_Region:
+                # Uncoded "countries" are usually cruise ships and such?
+                region = subregion(world, place.Country_Region)
+            else:
+                raise ValueError(f'No country in {place}')
+            if place.Province_State:
+                region = subregion(region, place.Province_State)
+                if country and place.iso2 != country.alpha_2:
+                    region.iso_code = place.iso2
+            if place.Admin2:
+                region = subregion(region, place.Admin2)
+
+        region.jhu_uid = uid
+        region.population = place.Population
+
+    def filter_region_tree(parents, region):
+        region.subregions = {
+            k: sub for k, sub in region.subregions.items()
+            if filter_region_tree(f'{parents}/{sub.short_name}', sub)
+        }
+        return (region.subregions or filter_regex.search(parents) or
+                filter_regex.search(region.name))
+
+    if filter_regex and not filter_region_tree('world', world):
+        return world  # All filtered out, return only a stub world region.
+
+    # Compute population from subregions if it's not set at the higher level.
+    def roll_up_population(region):
+        pop = sum(roll_up_population(r) for r in region.subregions.values())
+        if pandas.isna(region.population) or not (region.population > 0):
+            region.population = pop
+        if not (region.population > 0):
+            raise ValueError(f'No population for "{region.name}"')
+        return region.population
+
+    roll_up_population(world)
+    return world
+
+
+def _trend_frame(values):
+    nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero value.
+    first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
+    first_i = max(0, min(first_i, len(values) - 14))
+    return pandas.DataFrame(dict(
+        raw=values, value=values[first_i:].rolling(7).mean()))
+
+
+def _threshold_frame(value):
+    return pandas.DataFrame(dict(
+        value=[value] * 2,
+        date=[pandas.to_datetime('2020-01-01'),
+              pandas.to_datetime('2020-12-31')])).set_index('date')
+
+
 if __name__ == '__main__':
     import argparse
+    import itertools
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
@@ -377,6 +379,13 @@ if __name__ == '__main__':
         if r.name not in (key, r.short_name):
             line = f'{line} ({r.name})'
         print(line)
+        for n, m in itertools.chain(
+            r.baseline_metrics.items(), r.covid_metrics.items(),
+            r.mobility_metrics.items()):
+            print(f'{prefix}           {len(m.frame):3d}d ('
+                  f'{m.frame.index.min().date()} - '
+                  f'{m.frame.index.max().date()}) {n}')
+
         for k, sub in r.subregions.items():
             print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
 

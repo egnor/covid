@@ -38,7 +38,7 @@ def make_region_page(region, site_dir):
         make_region_thumb_image(region, site_dir)
     except Exception as e:
         print(f'*** Error making {path}: {e} ***')
-        raise Exception('Error making {path}')
+        raise Exception(f'Error making {path}')
 
     print(f'Made: {path}')
 
