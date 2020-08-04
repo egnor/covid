@@ -77,7 +77,7 @@ def get_data(session):
     return all_data
 
 
-def attribution():
+def credits():
     return {'https://github.com/CSSEGISandData/COVID-19':
             'JHU CSSE COVID-19 Data'}
 

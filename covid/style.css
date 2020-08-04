@@ -24,4 +24,4 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 .event_policy.event_close, h2 .event_close { color: #4E79A7; }
 .event_policy.event_open,  h2 .event_open  { color: #F28E2B; }
 
-.attribution { font-style: italic; }
+.credits { font-style: italic; }

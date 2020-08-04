@@ -25,39 +25,129 @@ from covid import style
 from covid import urls
 
 
-def setup_plot_xaxis(axes, end_date, title=None, titlesize=60):
-    """Sets common X axis and plot style."""
+def make_region_page(region, site_dir):
+    """Write region-specific page and associated images."""
 
-    min_date = pandas.to_datetime('2020-03-01')
-    max_date = end_date + pandas.Timedelta(days=1)
-    axes.set_xlim(min_date, max_date)
-    axes.grid(color='black', alpha=0.1)
+    def get_path(r):
+        return f'{get_path(r.parent)}{r.short_name}/' if r else ''
+    path = f'{get_path(region.parent)}{region.short_name}'
 
-    week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
-    month_locator = matplotlib.dates.MonthLocator()
-    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
-    month_formatter.offset_formats[1] = ''  # Don't bother with year '2020'.
+    try:
+        make_region_html(region, site_dir)
+        make_region_plot_image(region, site_dir)
+        make_region_thumb_image(region, site_dir)
+    except Exception as e:
+        print(f'*** Error making {path}: {e} ***')
+        raise Exception('Error making {path}')
 
-    axes.xaxis.set_minor_locator(week_locator)
-    axes.xaxis.set_major_locator(month_locator)
-    axes.xaxis.set_major_formatter(month_formatter)
-    axes.xaxis.set_tick_params(which='major', labelbottom=True)
-
-    if title:
-        axes.text(
-            0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
-            ha='center', va='center', wrap=True,
-            fontsize=titlesize, fontweight='bold', alpha=0.2)
+    print(f'Made: {path}')
 
 
-def add_plot_legend(axes, legend_artists):
-    """Adds a standard style plot legend using collected legend artists."""
+def make_region_html(region, site_dir):
+    """Write region-specific HTML page."""
 
-    xmin, xmax = axes.get_xlim()
-    legend_artists.append(axes.axvspan(
-        xmax - 14, xmax, color='k', alpha=.07, zorder=0, label='last 2 weeks'))
-    axes.legend(
-        handles=legend_artists, loc='center left', bbox_to_anchor=(1, 0.5))
+    last_date = max(m.frame.index.max() for m in region.covid_metrics.values())
+    last_date_text = last_date.strftime('%Y-%m-%d')
+    doc = dominate.document(title=f'{region.name} ({last_date_text}) COVID-19')
+    doc_url = urls.region_page(region)
+    doc_link = lambda url: urls.link(doc_url, url)
+
+    with doc.head:
+        style.add_head_style(doc_url)
+
+    with doc.body:
+        with tags.h1():
+            def write_breadcrumbs(r):
+                if r is not None:
+                    write_breadcrumbs(r.parent)
+                    tags.a(r.short_name, href=doc_link(urls.region_page(r)))
+                    util.text(' » ')
+
+            write_breadcrumbs(region.parent)
+            util.text(f'{region.name} (pop. {region.population:,.0f})')
+
+        tags.img(cls='plot', src=doc_link(urls.plot_image(region)))
+
+        if region.daily_events:
+            with tags.h2():
+                tags.span('Mitigation', cls='event_close')
+                util.text(' and ')
+                tags.span('Relaxation', cls='event_open')
+                util.text(' Changes')
+
+            def score_css(s):
+                return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
+            with tags.div(cls='events'):
+                for day in (d for d in region.daily_events if d.score):
+                    date = day.date.strftime('%Y-%m-%d')
+                    tags.div(date, cls=f'event_date {score_css(day.score)}')
+                    for ev in (e for e in day.frame.itertuples() if e.score):
+                        css = score_css(ev.score)
+                        tags.div(ev.emoji, cls=f'event_emoji {css}')
+                        tags.div(ev.policy, cls=f'event_policy {css}')
+
+        if region.subregions:
+            tags.h2('Subdivisions')
+            subs = region.subregions
+            for r in sorted(subs.values(), key=lambda r: r.name):
+                with tags.a(cls='thumb', href=doc_link(urls.region_page(r))):
+                    tags.span(r.name, cls='thumb_label')
+                    tags.img(width=200, height=200,
+                             src=doc_link(urls.thumb_image(r)))
+
+        with tags.p('Sources: ', cls='credits'):
+            for i, (url, text) in enumerate(region.credits.items()):
+                util.text(', ') if i > 0 else None
+                tags.a(text, href=url)
+
+    with open(urls.file(site_dir, doc_url), 'w') as doc_file:
+        doc_file.write(doc.render())
+
+
+def make_region_plot_image(region, site_dir):
+    if region.mobility_metrics:
+        figure = matplotlib.pyplot.figure(figsize=(10, 12), tight_layout=True)
+        covid_axes, mobility_axes = figure.subplots(
+            nrows=2, ncols=1, sharex=True,
+            gridspec_kw=dict(height_ratios=[8, 4]))
+    else:
+        figure = matplotlib.pyplot.figure(figsize=(10, 8), tight_layout=True)
+        covid_axes, mobility_axes = figure.add_subplot(), None
+
+    setup_plot_xaxis(covid_axes, region, title=f'{region.name} COVID')
+    add_plot_legend(
+        covid_axes,
+        plot_covid_metrics(covid_axes, region.covid_metrics) +
+        plot_covid_metrics(covid_axes, region.baseline_metrics) +
+        plot_daily_events(covid_axes, region.daily_events))
+
+    if mobility_axes:
+        setup_plot_xaxis(
+            mobility_axes, region,
+            title=f'{region.short_name} mobility', titlesize=45)
+        add_plot_legend(
+            mobility_axes,
+            plot_mobility_metrics(mobility_axes, region.mobility_metrics) +
+            plot_daily_events(mobility_axes, region.daily_events, emoji=False))
+
+    figure.savefig(urls.file(site_dir, urls.plot_image(region)), dpi=200)
+    matplotlib.pyplot.close(figure)  # Reclaim memory.
+
+
+def make_region_thumb_image(region, site_dir):
+    # Make thumbnail for index page
+    figure = matplotlib.pyplot.figure(figsize=(8, 8), tight_layout=True)
+    thumb_axes = figure.add_subplot()
+    setup_plot_xaxis(thumb_axes, region)
+    plot_covid_metrics(thumb_axes, region.baseline_metrics)
+    plot_covid_metrics(thumb_axes, region.covid_metrics)
+    plot_daily_events(thumb_axes, region.daily_events, emoji=False)
+    thumb_axes.set_xlabel(None)
+    thumb_axes.set_ylabel(None)
+    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
+    matplotlib.pyplot.close(figure)  # Reclaim memory.
 
 
 def plot_covid_metrics(axes, covid_metrics):
@@ -145,112 +235,38 @@ def plot_daily_events(axes, daily_events, emoji=True):
     return legend_artists
 
 
-def make_region_page(region, site_dir):
-    """Write region-specific page and associated images."""
+def setup_plot_xaxis(axes, region, title=None, titlesize=60):
+    """Sets common X axis and plot style."""
 
-    def get_nesting(region):
-        return get_nesting(region.parent) + [region] if region else []
-    nesting = get_nesting(region)
+    end = max(m.frame.index.max() for m in region.covid_metrics.values())
+    axes.set_xlim(pandas.Timestamp(2020, 3, 1), end + pandas.Timedelta(days=1))
+    axes.grid(color='black', alpha=0.1)
 
-    # Write HTML
-    max_date = max(m.frame.index.max() for m in region.covid_metrics.values())
-    max_date_text = max_date.strftime('%Y-%m-%d')
-    doc = dominate.document(title=f'{region.name} ({max_date_text}) COVID-19')
-    doc_url = urls.region_page(region)
-    doc_link = lambda url: urls.link(doc_url, url)
+    week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
+    month_locator = matplotlib.dates.MonthLocator()
+    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
+    month_formatter.offset_formats[1] = ''  # Don't bother with year '2020'.
 
-    with doc.head:
-        style.add_head_style(doc_url)
+    axes.xaxis.set_minor_locator(week_locator)
+    axes.xaxis.set_major_locator(month_locator)
+    axes.xaxis.set_major_formatter(month_formatter)
+    axes.xaxis.set_tick_params(which='major', labelbottom=True)
 
-    with doc.body:
-        with tags.h1():
-            for p in nesting[:-1]:
-                tags.a(p.short_name, href=doc_link(urls.region_page(p)))
-                util.text(' » ')
-            util.text(f'{region.name} (pop. {region.population:,.0f})')
+    if title:
+        axes.text(
+            0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
+            ha='center', va='center', wrap=True,
+            fontsize=titlesize, fontweight='bold', alpha=0.2)
 
-        tags.img(cls='plot', src=doc_link(urls.plot_image(region)))
 
-        if region.daily_events:
-            with tags.h2():
-                tags.span('Mitigation', cls='event_close')
-                util.text(' and ')
-                tags.span('Relaxation', cls='event_open')
-                util.text(' Changes')
+def add_plot_legend(axes, legend_artists):
+    """Adds a standard style plot legend using collected legend artists."""
 
-            def score_css(s):
-                return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
-            with tags.div(cls='events'):
-                for day in (d for d in region.daily_events if d.score):
-                    date = day.date.strftime('%Y-%m-%d')
-                    tags.div(date, cls=f'event_date {score_css(day.score)}')
-                    for ev in (e for e in day.frame.itertuples() if e.score):
-                        css = score_css(ev.score)
-                        tags.div(ev.emoji, cls=f'event_emoji {css}')
-                        tags.div(ev.policy, cls=f'event_policy {css}')
-
-        if region.subregions:
-            tags.h2('Subdivisions')
-            subs = region.subregions
-            for r in sorted(subs.values(), key=lambda r: r.name):
-                with tags.a(cls='thumb', href=doc_link(urls.region_page(r))):
-                    tags.span(r.name, cls='thumb_label')
-                    tags.img(width=200, height=200,
-                             src=doc_link(urls.thumb_image(r)))
-
-        with tags.p('Sources: ', cls='attribution'):
-            for i, (url, text) in enumerate(region.attribution.items()):
-                util.text(', ') if i > 0 else None
-                tags.a(text, href=url)
-
-    with open(urls.file(site_dir, doc_url), 'w') as doc_file:
-        doc_file.write(doc.render())
-
-    # Make plot image for page
-    if region.mobility_metrics:
-        figure = matplotlib.pyplot.figure(figsize=(10, 12), tight_layout=True)
-        covid_axes, mobility_axes = figure.subplots(
-            nrows=2, ncols=1, sharex=True,
-            gridspec_kw=dict(height_ratios=[8, 4]))
-    else:
-        figure = matplotlib.pyplot.figure(figsize=(10, 8), tight_layout=True)
-        covid_axes, mobility_axes = figure.add_subplot(), None
-
-    setup_plot_xaxis(covid_axes, max_date, title=f'{region.name} COVID')
-
-    add_plot_legend(
-        covid_axes,
-        plot_covid_metrics(covid_axes, region.covid_metrics) +
-        plot_covid_metrics(covid_axes, region.baseline_metrics) +
-        plot_daily_events(covid_axes, region.daily_events))
-
-    if mobility_axes:
-        setup_plot_xaxis(mobility_axes, max_date,
-                         title=f'{region.short_name} mobility', titlesize=45)
-
-        add_plot_legend(
-            mobility_axes,
-            plot_mobility_metrics(mobility_axes, region.mobility_metrics) +
-            plot_daily_events(mobility_axes, region.daily_events, emoji=False))
-
-    figure.savefig(urls.file(site_dir, urls.plot_image(region)), dpi=200)
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
-
-    # Make thumbnail for index page
-    figure = matplotlib.pyplot.figure(figsize=(8, 8), tight_layout=True)
-    thumb_axes = figure.add_subplot()
-    setup_plot_xaxis(thumb_axes, max_date)
-    plot_covid_metrics(thumb_axes, region.baseline_metrics)
-    plot_covid_metrics(thumb_axes, region.covid_metrics)
-    plot_daily_events(thumb_axes, region.daily_events, emoji=False)
-    thumb_axes.set_xlabel(None)
-    thumb_axes.set_ylabel(None)
-    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
-    print(f'Made: {"/".join(r.short_name for r in nesting)}')
-
+    xmin, xmax = axes.get_xlim()
+    legend_artists.append(axes.axvspan(
+        xmax - 14, xmax, color='k', alpha=.07, zorder=0, label='last 2 weeks'))
+    axes.legend(
+        handles=legend_artists, loc='center left', bbox_to_anchor=(1, 0.5))
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
@@ -267,15 +283,16 @@ def main():
         session=cache_policy.new_session(args),
         filter_regex=args.filter_regex, verbose=True)
 
-    print(f'Generating pages in {args.site_dir}...')
-    matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
-    style.write_style_files(args.site_dir)
-
+    print('Enumerating regions...')
     all = []
     pending = collections.deque([world])
     while pending:
         all.append(pending.popleft())
         pending.extend(all[-1].subregions.values())
+
+    print(f'Generating {len(all)} pages in {args.site_dir}...')
+    matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
+    style.write_style_files(args.site_dir)
 
     # Recurse for subregions.
     processes = args.processes or os.cpu_count() * 2

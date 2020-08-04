@@ -37,7 +37,7 @@ class Region:
     population: Optional[int] = None
     parent: Optional['Region'] = field(default=None)
     subregions: dict = field(default_factory=dict, repr=False)
-    attribution: dict = field(default_factory=dict, repr=False)
+    credits: dict = field(default_factory=dict, repr=False)
     baseline_metrics: dict = field(default_factory=dict, repr=False)
     covid_metrics: dict = field(default_factory=dict, repr=False)
     mobility_metrics: dict = field(default_factory=dict, repr=False)
@@ -47,15 +47,17 @@ class Region:
 def _get_skeleton(session, filter_regex):
     """Returns a region tree for the world with no metrics populated."""
 
-    world = Region(name='World', short_name='World')
+    jhu_credits = fetch_jhu_covid19.credits()
+    world = Region(name='World', short_name='World', credits={**jhu_credits})
     filter_regex = filter_regex and re.compile(filter_regex, re.I)
 
     def subregion(parent, key, name=None, short_name=None):
-        return (parent.subregions.get(key) or
-                parent.subregions.setdefault(key, Region(
-                    name=name or str(key),
-                    short_name=short_name or str(key),
-                    parent=parent)))
+        region = parent.subregions.get(key)
+        if not region:
+            region = parent.subregions[key] = Region(
+                name=name or str(key), short_name=short_name or str(key),
+                parent=parent, credits={**jhu_credits})
+        return region
 
     jhu_places = fetch_jhu_covid19.get_places(session)
     for uid, place in jhu_places.items():
@@ -107,7 +109,6 @@ def _get_skeleton(session, filter_regex):
 
         region.jhu_uid = uid
         region.population = place.Population
-        region.attribution.update(fetch_jhu_covid19.attribution())
 
     def filter_region_tree(parents, region):
         region.subregions = {
@@ -189,7 +190,6 @@ def get_world(session, filter_regex=None, verbose=False):
         cases = data.total_cases.iloc[1:] - data.total_cases.values[:-1]
         deaths = data.total_deaths.iloc[1:] - data.total_deaths.values[:-1]
 
-        region.attribution.update(fetch_jhu_covid19.attribution())
         region.covid_metrics.update({
             'positives / 100Kp': Metric(
                 'tab:blue', 1,
@@ -222,7 +222,7 @@ def get_world(session, filter_regex=None, verbose=False):
         if region is None:
             continue
 
-        region.attribution.update(fetch_cdc_mortality.attribution())
+        region.credits.update(fetch_cdc_mortality.credits())
         region.baseline_metrics.update({
             'historical deaths / 1Mp': Metric('black', -1, _threshold_frame(
                 mortality.Deaths / 365 * 1e6 / region.population)),
@@ -242,7 +242,7 @@ def get_world(session, filter_regex=None, verbose=False):
 
         # Prefer covidtracking data to JHU data, for consistency.
         covid.reset_index(level='fips', drop=True, inplace=True)
-        region.attribution.update(fetch_covid_tracking.attribution())
+        region.credits.update(fetch_covid_tracking.credits())
         region.covid_metrics.update({
             'tests / 10Kp': Metric('tab:green', 0, _trend_frame(
                 covid.totalTestResultsIncrease * 1e4 / region.population)),
@@ -268,7 +268,7 @@ def get_world(session, filter_regex=None, verbose=False):
         if region is None:
             continue
 
-        region.attribution.update(fetch_state_policy.attribution())
+        region.credits.update(fetch_state_policy.credits())
         for date, es in events.groupby(level='date'):
             frame = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
             smin, smax = frame.score.min(), frame.score.max()
@@ -304,7 +304,7 @@ def get_world(session, filter_regex=None, verbose=False):
             continue
 
         pcfb = 'percent_change_from_baseline'  # common, long suffix
-        region.attribution.update(fetch_google_mobility.attribution())
+        region.credits.update(fetch_google_mobility.credits())
         region.mobility_metrics.update({
             'retail / recreation': Metric('tab:orange', 1, _trend_frame(
                 mob[f'retail_and_recreation_{pcfb}'])),
@@ -327,16 +327,19 @@ def get_world(session, filter_regex=None, verbose=False):
     def roll_up_metrics(region):
         # Use None to mark metrics already defined at the higher level.
         name_popmetrics = {name: None for name in region.covid_metrics.keys()}
+        name_credits = {}
         for sub in region.subregions.values():
             roll_up_metrics(sub)
             for name, metric in sub.covid_metrics.items():
                 popmetrics = name_popmetrics.setdefault(name, [])
                 if popmetrics is not None:
                     popmetrics.append((sub.population, metric))
+                    name_credits.setdefault(name, {}).update(sub.credits)
 
         # Only combine metrics if they're defined for >90% of the population.
         for name, popmetrics in name_popmetrics.items():
             if sum(p for p, m in popmetrics or []) >= region.population * 0.9:
+                region.credits.update(name_credits.get(name, {}))
                 popmetrics.sort(reverse=True)
                 popsum = functools.reduce(
                     lambda a, b: a.add(b, fill_value=0.0),

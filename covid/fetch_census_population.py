@@ -26,7 +26,7 @@ def get_states(session):
     return data
 
 
-def attribution():
+def credits():
     return {
         'https://www.census.gov/data/developers/data-sets/popest-popproj.html':
         'US Census PEP'

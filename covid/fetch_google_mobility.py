@@ -36,7 +36,7 @@ def get_mobility(session):
     return data
 
 
-def attribution():
+def credits():
     return {'https://www.google.com/covid19/mobility/':
             'Google Community Mobility Reports'}
 

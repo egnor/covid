@@ -74,7 +74,7 @@ def get_states(session):
     return data
 
 
-def attribution():
+def credits():
     return {'https://wonder.cdc.gov/': 'CDC WONDER'}
 
 

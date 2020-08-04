@@ -194,7 +194,7 @@ def get_events(session):
     return frame
 
 
-def attribution():
+def credits():
     return {'https://tinyurl.com/statepolicies':
             'COVID-19 US State Policy Database'}
 

@@ -31,7 +31,7 @@ def get_states(session):
     return data
 
 
-def attribution():
+def credits():
     return {'https://covidtracking.com/': 'The COVID Tracking Project'}
 
 
