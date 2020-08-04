@@ -50,7 +50,7 @@ def make_region_html(region, site_dir):
     last_date_text = last_date.strftime('%Y-%m-%d')
     doc = dominate.document(title=f'{region.name} ({last_date_text}) COVID-19')
     doc_url = urls.region_page(region)
-    doc_link = lambda url: urls.link(doc_url, url)
+    def doc_link(url): return urls.link(doc_url, url)
 
     with doc.head:
         style.add_head_style(doc_url)
@@ -64,7 +64,10 @@ def make_region_html(region, site_dir):
                     util.text(' » ')
 
             write_breadcrumbs(region.parent)
-            util.text(f'{region.name} (pop. {region.population:,.0f})')
+            util.text(region.short_name)
+            if region.name != region.short_name:
+                util.text(f' / {region.name}')
+            util.text(f' (pop. {region.population:,.0f})')
 
         tags.img(cls='plot', src=doc_link(urls.plot_image(region)))
 
@@ -114,7 +117,7 @@ def make_region_plot_image(region, site_dir):
         figure = matplotlib.pyplot.figure(figsize=(10, 8), tight_layout=True)
         covid_axes, mobility_axes = figure.add_subplot(), None
 
-    setup_plot_xaxis(covid_axes, region, title=f'{region.name} COVID')
+    setup_plot_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
     add_plot_legend(
         covid_axes,
         plot_covid_metrics(covid_axes, region.covid_metrics) +
@@ -268,6 +271,7 @@ def add_plot_legend(axes, legend_artists):
     axes.legend(
         handles=legend_artists, loc='center left', bbox_to_anchor=(1, 0.5))
 
+
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
@@ -300,8 +304,8 @@ def main():
     dir = args.site_dir
     with multiprocessing.Pool(processes=args.processes) as pool:
         pool.starmap(
-           make_region_page, ((r, args.site_dir) for r in all),
-           chunksize=args.chunk_size)
+            make_region_page, ((r, args.site_dir) for r in all),
+            chunksize=args.chunk_size)
 
 
 if __name__ == '__main__':

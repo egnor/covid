@@ -56,6 +56,7 @@ def get_world(session, filter_regex=None, verbose=False):
     region_by_iso = {}
     region_by_fips = {}
     region_by_uid = {}
+
     def index_region_tree(region):
         if region.iso_code:
             region_by_iso[region.iso_code] = region
@@ -380,8 +381,8 @@ if __name__ == '__main__':
             line = f'{line} ({r.name})'
         print(line)
         for n, m in itertools.chain(
-            r.baseline_metrics.items(), r.covid_metrics.items(),
-            r.mobility_metrics.items()):
+                r.baseline_metrics.items(), r.covid_metrics.items(),
+                r.mobility_metrics.items()):
             print(f'{prefix}           {len(m.frame):3d}d ('
                   f'{m.frame.index.min().date()} - '
                   f'{m.frame.index.max().date()}) {n}')
