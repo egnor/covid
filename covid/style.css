@@ -1,11 +1,13 @@
 body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 
 .thumb { display: inline-block; position: relative; }
-.thumb .thumb_label {
-    position: absolute; top: 18px; width: 100%; text-align: center;
+.thumb_label {
+    position: absolute; width: 96%; text-align: center;
+    padding: 18px 2% 0 2%;
     font-size: 22px; font-weight: 900;
     color: black; opacity: 0.5;
 }
+.thumb_pop { font-size: 70%; font-weight: normal; }
 
 .plot { width: 100%; max-width: 60em; }
 

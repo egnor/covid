@@ -21,7 +21,7 @@ from covid import fetch_jhu_covid19
 
 
 Metric = collections.namedtuple(
-    'Metric', ['color', 'emphasis', 'frame'])
+    'Metric', ['color', 'emphasis', 'peak', 'frame'])
 
 DailyEvents = collections.namedtuple(
     'DailyEvents', ['date', 'score', 'emojis', 'frame'])
@@ -88,12 +88,10 @@ def get_world(session, filter_regex=None, verbose=False):
         deaths = data.total_deaths.iloc[1:] - data.total_deaths.values[:-1]
 
         region.covid_metrics.update({
-            'positives / 100Kp': Metric(
-                'tab:blue', 1,
-                _trend_frame(cases * 1e5 / region.population)),
-            'deaths / 1Mp': Metric(
-                'tab:red', 1,
-                _trend_frame(deaths * 1e6 / region.population)),
+            'positives / 100Kp': _trend_metric(
+                'tab:blue', 1, cases * 1e5 / region.population),
+            'deaths / 1Mp': _trend_metric(
+                'tab:red', 1, deaths * 1e6 / region.population),
         })
 
     # Drop subtrees in the place tree with no JHU COVID metrics.
@@ -121,8 +119,8 @@ def get_world(session, filter_regex=None, verbose=False):
 
         region.credits.update(fetch_cdc_mortality.credits())
         region.baseline_metrics.update({
-            'historical deaths / 1Mp': Metric('black', -1, _threshold_frame(
-                mortality.Deaths / 365 * 1e6 / region.population)),
+            'historical deaths / 1Mp': _threshold_metric(
+                'black', mortality.Deaths / 365 * 1e6 / region.population),
         })
 
     #
@@ -141,16 +139,21 @@ def get_world(session, filter_regex=None, verbose=False):
         covid.reset_index(level='fips', drop=True, inplace=True)
         region.credits.update(fetch_covid_tracking.credits())
         region.covid_metrics.update({
-            'tests / 10Kp': Metric('tab:green', 0, _trend_frame(
-                covid.totalTestResultsIncrease * 1e4 / region.population)),
-            'positives / 100Kp': Metric('tab:blue', 1, _trend_frame(
-                covid.positiveIncrease * 1e5 / region.population)),
-            'hosp admit / 250Kp': Metric('tab:orange', 0, _trend_frame(
-                covid.hospitalizedIncrease * 25e4 / region.population)),
-            'hosp current / 25Kp': Metric('tab:pink', 0, _trend_frame(
-                covid.hospitalizedCurrently * 25e3 / region.population)),
-            'deaths / 1Mp': Metric('tab:red', 1, _trend_frame(
-                covid.deathIncrease * 1e6 / region.population)),
+            'tests / 10Kp': _trend_metric(
+                'tab:green', 0,
+                covid.totalTestResultsIncrease * 1e4 / region.population),
+            'positives / 100Kp': _trend_metric(
+                'tab:blue', 1,
+                covid.positiveIncrease * 1e5 / region.population),
+            'hosp admit / 250Kp': _trend_metric(
+                'tab:orange', 0,
+                covid.hospitalizedIncrease * 25e4 / region.population),
+            'hosp current / 25Kp': _trend_metric(
+                'tab:pink', 0,
+                covid.hospitalizedCurrently * 25e3 / region.population),
+            'deaths / 1Mp': _trend_metric(
+                'tab:red', 1,
+                covid.deathIncrease * 1e6 / region.population),
         })
 
     #
@@ -203,18 +206,18 @@ def get_world(session, filter_regex=None, verbose=False):
         pcfb = 'percent_change_from_baseline'  # common, long suffix
         region.credits.update(fetch_google_mobility.credits())
         region.mobility_metrics.update({
-            'retail / recreation': Metric('tab:orange', 1, _trend_frame(
-                mob[f'retail_and_recreation_{pcfb}'])),
-            'grocery / pharmacy': Metric('tab:blue', 1, _trend_frame(
-                mob[f'grocery_and_pharmacy_{pcfb}'])),
-            'parks': Metric('tab:green', 1, _trend_frame(
-                mob[f'parks_{pcfb}'])),
-            'transit stations': Metric('tab:purple', 1, _trend_frame(
-                mob[f'transit_stations_{pcfb}'])),
-            'workplaces': Metric('tab:red', 1, _trend_frame(
-                mob[f'workplaces_{pcfb}'])),
-            'residential': Metric('tab:gray', 1, _trend_frame(
-                mob[f'residential_{pcfb}'])),
+            'retail / recreation': _trend_metric(
+                'tab:orange', 1, mob[f'retail_and_recreation_{pcfb}']),
+            'grocery / pharmacy': _trend_metric(
+                'tab:blue', 1, mob[f'grocery_and_pharmacy_{pcfb}']),
+            'parks': _trend_metric(
+                'tab:green', 1, mob[f'parks_{pcfb}']),
+            'transit stations': _trend_metric(
+                'tab:purple', 1, mob[f'transit_stations_{pcfb}']),
+            'workplaces': _trend_metric(
+                'tab:red', 1, mob[f'workplaces_{pcfb}']),
+            'residential':_trend_metric(
+                'tab:gray', 1, mob[f'residential_{pcfb}']),
         })
 
     #
@@ -338,19 +341,25 @@ def _get_skeleton(session, filter_regex):
     return world
 
 
-def _trend_frame(values):
+def _trend_metric(color, emphasis, values):
     nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero value.
     first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
     first_i = max(0, min(first_i, len(values) - 14))
-    return pandas.DataFrame(dict(
-        raw=values, value=values[first_i:].rolling(7).mean()))
+    smooth = values[first_i:].rolling(7).mean()
+    peak_x = smooth.idxmax()
+    peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
+    return Metric(
+        color=color, emphasis=emphasis, peak=peak,
+        frame=pandas.DataFrame(dict(raw=values, value=smooth)))
 
 
-def _threshold_frame(value):
-    return pandas.DataFrame(dict(
-        value=[value] * 2,
-        date=[pandas.to_datetime('2020-01-01'),
-              pandas.to_datetime('2020-12-31')])).set_index('date')
+def _threshold_metric(color, value):
+    return Metric(
+        color=color, emphasis=-1, peak=None,
+        frame=pandas.DataFrame(dict(
+            value=[value] * 2,
+            date=[pandas.to_datetime('2020-01-01'),
+                  pandas.to_datetime('2020-12-31')])).set_index('date'))
 
 
 if __name__ == '__main__':
@@ -358,16 +367,16 @@ if __name__ == '__main__':
     import itertools
     from covid import cache_policy
 
-    parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser=argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--filter_regex')
-    args = parser.parse_args()
-    world = get_world(
+    args=parser.parse_args()
+    world=get_world(
         session=cache_policy.new_session(args),
         filter_regex=args.filter_regex,
         verbose=True)
 
     def print_tree(prefix, parents, key, r):
-        line = (
+        line=(
             f'{prefix}{r.population:9.0f}p <' +
             '.b'[bool(r.baseline_metrics)] +
             '.c'[bool(r.covid_metrics)] +
@@ -375,17 +384,18 @@ if __name__ == '__main__':
             '.m'[bool(r.mobility_metrics)] +
             '.p'[bool(r.daily_events)] + '>')
         if key != r.short_name:
-            line = f'{line} [{key}]'
-        line = f'{line} {parents}{r.short_name}'
+            line=f'{line} [{key}]'
+        line=f'{line} {parents}{r.short_name}'
         if r.name not in (key, r.short_name):
-            line = f'{line} ({r.name})'
+            line=f'{line} ({r.name})'
         print(line)
         for n, m in itertools.chain(
                 r.baseline_metrics.items(), r.covid_metrics.items(),
                 r.mobility_metrics.items()):
-            print(f'{prefix}           {len(m.frame):3d}d ('
-                  f'{m.frame.index.min().date()} - '
-                  f'{m.frame.index.max().date()}) {n}')
+            max = ('' if not m.peak else
+                   f' max={m.peak[1]:<2.0f} @{m.peak[0].date()}')
+            print(f'{prefix}           {len(m.frame):3d}d '
+                  f'=>{m.frame.index.max().date()}{max} {n}')
 
         for k, sub in r.subregions.items():
             print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
