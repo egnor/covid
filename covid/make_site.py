@@ -48,8 +48,8 @@ def make_region_page(region, site_dir):
 def make_region_html(region, site_dir):
     """Write region-specific HTML page."""
 
-    xmax = max(m.frame.index.max() for m in region.covid_metrics.values())
-    doc = dominate.document(title=f'{region.name} ({xmax.date()}) COVID-19')
+    latest = max(m.frame.index.max() for m in region.covid_metrics.values())
+    doc = dominate.document(title=f'{region.name} ({latest.date()}) COVID-19')
     doc_url = urls.region_page(region)
     def doc_link(url): return urls.link(doc_url, url)
 
@@ -91,15 +91,16 @@ def make_region_html(region, site_dir):
                         tags.div(ev.policy, cls=f'event_policy {css}')
 
         if region.subregions:
-            tags.h2('Subdivisions')
-            subs = region.subregions
-            for s in sorted(subs.values(), key=lambda r: r.name):
-                with tags.a(cls='thumb', href=doc_link(urls.region_page(s))):
-                    with tags.div(cls='thumb_label'):
-                        util.text(s.name)
-                        tags.div(f'pop. {s.population:,.0f}', cls='thumb_pop')
-                    tags.img(width=200, height=round(200 / PHI),
-                             src=doc_link(urls.thumb_image(s)))
+            subs = list(region.subregions.values())
+            if len(subs) >= 10:
+                tags.h2('Top 5')
+                for s in list(sorted(subs, key=lambda r: -r.population))[:5]:
+                    make_thumb_link_html(doc_url, s)
+                tags.h2('All subdivisions')
+            else:
+                tags.h2('Subdivisions')
+            for s in sorted(subs, key=lambda r: r.name):
+                make_thumb_link_html(doc_url, s)
 
         with tags.p('Sources: ', cls='credits'):
             for i, (url, text) in enumerate(region.credits.items()):
@@ -110,9 +111,19 @@ def make_region_html(region, site_dir):
         doc_file.write(doc.render())
 
 
+def make_thumb_link_html(doc_url, region):
+    region_href = urls.link(doc_url, urls.region_page(region))
+    with tags.a(cls='thumb', href=region_href):
+        with tags.div(cls='thumb_label'):
+            util.text(region.name)
+            tags.div(f'pop. {region.population:,.0f}', cls='thumb_pop')
+        tags.img(width=200, height=round(200 / PHI),
+                 src=urls.link(doc_url, urls.thumb_image(region)))
+
+
 def make_region_plot_image(region, site_dir):
     covid_max = max(m.frame.value.max() for m in region.covid_metrics.values())
-    covid_max = max(30, (covid_max // 10 + 1) * 10)
+    covid_max = min(200, max(30, (covid_max // 10 + 1) * 10))
     covid_height = covid_max / 10
 
     if region.mobility_metrics:
@@ -201,8 +212,10 @@ def plot_covid_metrics(axes, covid_metrics):
             axes.plot(m.frame.index, m.frame.raw,
                       c=m.color, alpha=alpha * 0.5, lw=1, ls=style)
         if 'value' in m.frame.columns and m.frame.value.any():
-            axes.scatter(m.frame.index[-1:], m.frame.value.iloc[-1:],
-                         c=m.color, alpha=alpha, s=(width * 2) ** 2, zorder=3)
+            last_date = m.frame.value.last_valid_index()
+            axes.scatter(
+                [last_date], [m.frame.value.loc[last_date]],
+                c=m.color, alpha=alpha, s=(width * 2) ** 2, zorder=3)
             add_to_legend(axes, *axes.plot(
                 m.frame.index, m.frame.value, label=name,
                 c=m.color, alpha=alpha, lw=width, ls=style))
