@@ -93,7 +93,7 @@ def make_region_html(region, site_dir):
         if region.subregions:
             subs = list(region.subregions.values())
             if len(subs) >= 10:
-                tags.h2('Top 5')
+                tags.h2('Top 5 by population')
                 for s in list(sorted(subs, key=lambda r: -r.population))[:5]:
                     make_thumb_link_html(doc_url, s)
                 tags.h2('All subdivisions')
