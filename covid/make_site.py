@@ -175,16 +175,16 @@ def make_region_thumb_image(region, site_dir):
 
 
 def plot_subregion_peaks(axes, region):
-    ymin, ymax = axes.get_ylim()
+    (xmin, xmax), (ymin, ymax) = axes.get_xlim(), axes.get_ylim()
     rgb = matplotlib.colors.to_rgb('tab:blue')
     xs, ys, cs, ts = [], [], [], []
     max_p = max((s.population for s in region.subregions.values()), default=1)
     for sub in sorted(region.subregions.values(), key=lambda r: -r.population):
         m = sub.covid_metrics.get('positives / 100Kp')
-        if m and m.peak:
+        if m and m.peak and matplotlib.dates.date2num(m.peak[0]) >= xmin:
             xs.append(m.peak[0])
             ys.append(min(m.peak[1], ymax))
-            cs.append(rgb + ((sub.population / max_p) ** 0.5,))
+            cs.append(rgb + (max(0.2, (sub.population / max_p) ** 0.5),))
             ts.append(sub.short_name.replace(' ', '')[:3])
     if xs:
         add_to_legend(axes, axes.scatter(
