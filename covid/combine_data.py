@@ -274,7 +274,7 @@ def _get_skeleton(session, filter_regex):
         if place.Country_Region == 'US':
             # US specific logic for FIPS, etc.
             region = subregion(world, 'US', us.unitedstatesofamerica.name)
-            region.iso_code = 'US'
+            region.iso_code = 'US'  # Place all territories under US toplevel.
             if place.Province_State:
                 s = us.states.lookup(place.Province_State, field='name')
                 if s:
@@ -288,10 +288,14 @@ def _get_skeleton(session, filter_regex):
             if place.Admin2:
                 if not place.Province_State:
                     raise ValueError(f'Admin2 but no State in {place}')
+                fips = place.FIPS
+                if place.Admin2 == 'New York City':
+                    fips = None  # JHU fudges 36061 (Manhattan) for all NYC.
+                elif place.Admin2 in ('Bronx', 'Kings', 'Queens', 'Richmond'):
+                    continue  # JHU zeroes out data for other boroughs.
                 region = subregion(
-                    region, place.FIPS or place.Admin2,
-                    place.Admin2, place.Admin2)
-                region.fips_code = place.FIPS
+                    region, fips or place.Admin2, place.Admin2, place.Admin2)
+                region.fips_code = fips
 
         else:
             # Generic non-US logic.
@@ -389,13 +393,15 @@ if __name__ == '__main__':
         if r.name not in (key, r.short_name):
             line=f'{line} ({r.name})'
         print(line)
-        for n, m in itertools.chain(
-                r.baseline_metrics.items(), r.covid_metrics.items(),
-                r.mobility_metrics.items()):
-            max = ('' if not m.peak else
-                   f' max={m.peak[1]:<2.0f} @{m.peak[0].date()}')
-            print(f'{prefix}           {len(m.frame):3d}d '
-                  f'=>{m.frame.index.max().date()}{max} {n}')
+        for cat, metrics in (
+                ('bas', r.baseline_metrics),
+                ('cov', r.covid_metrics),
+                ('mob', r.mobility_metrics)):
+            for name, m in metrics.items():
+                max = (' ' * 20 if not m.peak else
+                       f' max={m.peak[1]:<3.0f} @{m.peak[0].date()}')
+                print(f'{prefix}           {len(m.frame):3d}d '
+                      f'=>{m.frame.index.max().date()}{max} {cat}: {name}')
 
         for k, sub in r.subregions.items():
             print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
