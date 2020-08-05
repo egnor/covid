@@ -206,18 +206,18 @@ def get_world(session, filter_regex=None, verbose=False):
         pcfb = 'percent_change_from_baseline'  # common, long suffix
         region.credits.update(fetch_google_mobility.credits())
         region.mobility_metrics.update({
-            'retail / recreation': _trend_metric(
-                'tab:orange', 1, mob[f'retail_and_recreation_{pcfb}']),
-            'grocery / pharmacy': _trend_metric(
-                'tab:blue', 1, mob[f'grocery_and_pharmacy_{pcfb}']),
-            'parks': _trend_metric(
-                'tab:green', 1, mob[f'parks_{pcfb}']),
-            'transit stations': _trend_metric(
-                'tab:purple', 1, mob[f'transit_stations_{pcfb}']),
-            'workplaces': _trend_metric(
-                'tab:red', 1, mob[f'workplaces_{pcfb}']),
             'residential':_trend_metric(
-                'tab:gray', 1, mob[f'residential_{pcfb}']),
+                'tab:gray', 1, 100 + mob[f'residential_{pcfb}']),
+            'retail / recreation': _trend_metric(
+                'tab:orange', 1, 100 + mob[f'retail_and_recreation_{pcfb}']),
+            'workplaces': _trend_metric(
+                'tab:red', 1, 100 + mob[f'workplaces_{pcfb}']),
+            'parks': _trend_metric(
+                'tab:green', 0, 100 + mob[f'parks_{pcfb}']),
+            'grocery / pharmacy': _trend_metric(
+                'tab:blue', 0, 100 + mob[f'grocery_and_pharmacy_{pcfb}']),
+            'transit stations': _trend_metric(
+                'tab:purple', 0, 100 + mob[f'transit_stations_{pcfb}']),
         })
 
     #

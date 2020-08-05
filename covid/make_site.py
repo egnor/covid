@@ -204,21 +204,8 @@ def plot_covid_metrics(axes, covid_metrics):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
-    for i, (name, m) in enumerate(covid_metrics.items()):
-        width = 4 if m.emphasis >= 1 else 2
-        style = '-' if m.emphasis >= 0 else '--'
-        alpha = 1.0 if m.emphasis >= 0 else 0.5
-        if 'raw' in m.frame.columns and m.frame.raw.any():
-            axes.plot(m.frame.index, m.frame.raw,
-                      c=m.color, alpha=alpha * 0.5, lw=1, ls=style)
-        if 'value' in m.frame.columns and m.frame.value.any():
-            last_date = m.frame.value.last_valid_index()
-            axes.scatter(
-                [last_date], [m.frame.value.loc[last_date]],
-                c=m.color, alpha=alpha, s=(width * 2) ** 2, zorder=3)
-            add_to_legend(axes, *axes.plot(
-                m.frame.index, m.frame.value, label=name,
-                c=m.color, alpha=alpha, lw=width, ls=style))
+    for name, metric in covid_metrics.items():
+        plot_metric(axes, name, metric)
 
 
 def plot_mobility_metrics(axes, mobility_metrics):
@@ -229,16 +216,25 @@ def plot_mobility_metrics(axes, mobility_metrics):
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
-    for i, (name, m) in enumerate(mobility_metrics.items()):
-        if 'raw' in m.frame.columns and m.frame.raw.any():
-            axes.plot(
-                m.frame.index, m.frame.raw + 100, c=m.color, alpha=0.5, lw=1)
-        if 'value' in m.frame.columns and m.frame.value.any():
-            week_ago = m.frame.index[-1] - pandas.Timedelta(days=7)
-            f, fn = m.frame.loc[:week_ago], m.frame.loc[week_ago:]
-            add_to_legend(axes, *axes.plot(
-                f.index, f.value + 100, label=name, c=m.color, lw=2))
-            axes.plot(fn.index, fn.value + 100, c=m.color, lw=2, ls=':')
+    for name, metric in mobility_metrics.items():
+        plot_metric(axes, name, metric)
+
+
+def plot_metric(axes, name, metric):
+    width = 4 if metric.emphasis >= 1 else 2
+    style = '-' if metric.emphasis >= 0 else '--'
+    alpha = 1.0 if metric.emphasis >= 0 else 0.5
+    if 'raw' in metric.frame.columns and metric.frame.raw.any():
+        axes.plot(metric.frame.index, metric.frame.raw,
+                  c=metric.color, alpha=alpha * 0.5, lw=1, ls=style)
+    if 'value' in metric.frame.columns and metric.frame.value.any():
+        last_date = metric.frame.value.last_valid_index()
+        axes.scatter(
+            [last_date], [metric.frame.value.loc[last_date]],
+            c=metric.color, alpha=alpha, s=(width * 2) ** 2, zorder=3)
+        add_to_legend(axes, *axes.plot(
+            metric.frame.index, metric.frame.value, label=name,
+            c=metric.color, alpha=alpha, lw=width, ls=style))
 
 
 def plot_daily_events(axes, daily_events, emoji):
