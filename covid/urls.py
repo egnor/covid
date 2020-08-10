@@ -20,8 +20,8 @@ def region_page(region):
     return region_prefix(region) + index_page()
 
 
-def plot_image(region):
-    return region_prefix(region) + 'plot.png'
+def chart_image(region):
+    return region_prefix(region) + 'chart.png'
 
 
 def thumb_image(region):

@@ -1,6 +1,7 @@
 # Functions that combine data sources into a unified representation.
 # (Can also be run as a standalone program for testing.)
 
+import argparse
 import collections
 import functools
 import re
@@ -18,6 +19,12 @@ from covid import fetch_covid_tracking
 from covid import fetch_google_mobility
 from covid import fetch_state_policy
 from covid import fetch_jhu_covid19
+
+
+# Reusable command line arguments for data collection.
+argument_parser = argparse.ArgumentParser(add_help=False)
+argument_group = argument_parser.add_argument_group('data gathering')
+argument_group.add_argument('--region_regex')
 
 
 Metric = collections.namedtuple(
@@ -44,13 +51,13 @@ class Region:
     daily_events: list = field(default_factory=list, repr=False)
 
 
-def get_world(session, filter_regex=None, verbose=False):
+def get_world(session, args, verbose=False):
     """Returns data organized into a tree rooted at a World region."""
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
 
     vprint('Loading JHU place data...')
-    world = _get_skeleton(session, filter_regex)
+    world = _get_skeleton(session, args.region_regex)
 
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
@@ -251,12 +258,12 @@ def get_world(session, filter_regex=None, verbose=False):
     return world
 
 
-def _get_skeleton(session, filter_regex):
+def _get_skeleton(session, region_regex):
     """Returns a region tree for the world with no metrics populated."""
 
     jhu_credits = fetch_jhu_covid19.credits()
     world = Region(name='World', short_name='World', credits={**jhu_credits})
-    filter_regex = filter_regex and re.compile(filter_regex, re.I)
+    region_regex = region_regex and re.compile(region_regex, re.I)
 
     def subregion(parent, key, name=None, short_name=None):
         region = parent.subregions.get(key)
@@ -321,15 +328,17 @@ def _get_skeleton(session, filter_regex):
         region.jhu_uid = uid
         region.population = place.Population
 
-    def filter_region_tree(parents, region):
+    def filter_region_tree(path, region):
         region.subregions = {
             k: sub for k, sub in region.subregions.items()
-            if filter_region_tree(f'{parents}/{sub.short_name}', sub)
+            if filter_region_tree(f'{path}/{sub.short_name}', sub)
         }
-        return (region.subregions or filter_regex.search(parents) or
-                filter_regex.search(region.name))
+        return (region.subregions or
+                region_regex.search(path) or
+                region_regex.search(path.replace(' ', '_')) or
+                region_regex.search(region.name))
 
-    if filter_regex and not filter_region_tree('world', world):
+    if region_regex and not filter_region_tree('world', world):
         return world  # All filtered out, return only a stub world region.
 
     # Compute population from subregions if it's not set at the higher level.
@@ -371,17 +380,15 @@ if __name__ == '__main__':
     import itertools
     from covid import cache_policy
 
-    parser=argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument('--filter_regex')
-    args=parser.parse_args()
-    world=get_world(
-        session=cache_policy.new_session(args),
-        filter_regex=args.filter_regex,
-        verbose=True)
+    parser=argparse.ArgumentParser(
+        parents=[cache_policy.argument_parser, argument_parser])
+    args = parser.parse_args()
+    world = get_world(
+        session=cache_policy.new_session(args), args=args, verbose=True)
 
     def print_tree(prefix, parents, key, r):
         line=(
-            f'{prefix}{r.population:9.0f}p <' +
+            f'{prefix}{r.population or -1:9.0f}p <' +
             '.b'[bool(r.baseline_metrics)] +
             '.c'[bool(r.covid_metrics)] +
             '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
