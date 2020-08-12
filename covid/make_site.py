@@ -298,7 +298,7 @@ def setup_plot_xaxis(axes, region, title=None, titlesize=45):
 
 
 def add_to_legend(axes, *artists, order=0):
-    """Returns our user defined legend artist list attached to plot axes."""
+    """Adds to our user defined legend artist list attached to plot axes."""
 
     order_artists = axes.__dict__.setdefault('covid_legend_artists', {})
     order_artists.setdefault(order, []).extend(artists)
