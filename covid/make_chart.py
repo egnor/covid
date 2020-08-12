@@ -1,4 +1,4 @@
-# Functions that generate trend charts from region metrics.
+"""Functions that generate trend charts from region metrics."""
 
 import collections
 import os
@@ -6,7 +6,6 @@ import pathlib
 
 import matplotlib
 import matplotlib.dates
-import matplotlib.figure
 import matplotlib.lines
 import matplotlib.pyplot
 import matplotlib.ticker
@@ -15,6 +14,24 @@ import pandas
 from covid import urls
 
 matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
+
+
+def write_thumb_image(region, site_dir):
+    # Make thumbnail for index page
+    phi = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
+    figure = matplotlib.pyplot.figure(figsize=(8, 8 / phi), tight_layout=True)
+    thumb_axes = figure.add_subplot()
+    _setup_xaxis(thumb_axes, region)
+    thumb_axes.set_ylim(0, 50)
+    _plot_covid_metrics(thumb_axes, region.baseline_metrics)
+    _plot_covid_metrics(thumb_axes, region.covid_metrics)
+    _plot_daily_events(thumb_axes, region.daily_events, emoji=False)
+    thumb_axes.set_xlabel(None)
+    thumb_axes.set_ylabel(None)
+    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
+    matplotlib.pyplot.close(figure)  # Reclaim memory.
 
 
 def write_image(region, site_dir):
@@ -50,24 +67,6 @@ def write_image(region, site_dir):
         _add_plot_legend(mobility_axes)
 
     figure.savefig(urls.file(site_dir, urls.chart_image(region)), dpi=200)
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
-
-
-def write_thumb_image(region, site_dir):
-    # Make thumbnail for index page
-    phi = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
-    figure = matplotlib.pyplot.figure(figsize=(8, 8 / phi), tight_layout=True)
-    thumb_axes = figure.add_subplot()
-    _setup_xaxis(thumb_axes, region)
-    thumb_axes.set_ylim(0, 50)
-    _plot_covid_metrics(thumb_axes, region.baseline_metrics)
-    _plot_covid_metrics(thumb_axes, region.covid_metrics)
-    _plot_daily_events(thumb_axes, region.daily_events, emoji=False)
-    thumb_axes.set_xlabel(None)
-    thumb_axes.set_ylabel(None)
-    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
     matplotlib.pyplot.close(figure)  # Reclaim memory.
 
 

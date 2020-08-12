@@ -1,5 +1,5 @@
-# Module to retrieve data from the HIT-Covid project
-# (https://akuko.io/post/covid-intervention-tracking).
+"""Module to retrieve data from the HIT-Covid project
+(https://akuko.io/post/covid-intervention-tracking)."""
 
 import collections
 import io

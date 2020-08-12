@@ -1,12 +1,11 @@
-# Functions that combine data sources into a unified representation.
-# (Can also be run as a standalone program for testing.)
+"""Functions that combine data sources into a unified representation."""
 
 import argparse
 import collections
 import functools
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy
 import pandas
@@ -14,17 +13,21 @@ import pycountry
 import us
 
 from covid import fetch_cdc_mortality
-from covid import fetch_census_population
 from covid import fetch_covid_tracking
 from covid import fetch_google_mobility
-from covid import fetch_state_policy
 from covid import fetch_jhu_covid19
+from covid import fetch_state_policy
 
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data gathering')
-argument_group.add_argument('--region_regex')
+argument_group.add_argument('--collect_region_regex')
+argument_group.add_argument('--no_cdc_mortality', action='store_true')
+argument_group.add_argument('--no_covid_tracking', action='store_true')
+argument_group.add_argument('--no_google_mobility', action='store_true')
+argument_group.add_argument('--no_jhu_covid19', action='store_true')
+argument_group.add_argument('--no_state_policy', action='store_true')
 
 
 Metric = collections.namedtuple(
@@ -42,7 +45,8 @@ class Region:
     iso_code: Optional[str] = None
     fips_code: Optional[int] = None
     population: Optional[int] = None
-    parent: Optional['Region'] = field(default=None)
+    lat_lon: Optional[Tuple[float, float]] = None
+    parent: Optional['Region'] = field(default=None, repr=False)
     subregions: dict = field(default_factory=dict, repr=False)
     credits: dict = field(default_factory=dict, repr=False)
     baseline_metrics: dict = field(default_factory=dict, repr=False)
@@ -57,7 +61,7 @@ def get_world(session, args, verbose=False):
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
 
     vprint('Loading JHU place data...')
-    world = _get_skeleton(session, args.region_regex)
+    world = _get_skeleton(session)
 
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
@@ -80,36 +84,37 @@ def get_world(session, args, verbose=False):
     # Add COVID metrics from JHU.
     #
 
-    # Populate the tree with JHU metrics.
-    vprint('Loading JHU COVID data...')
-    jhu_data = fetch_jhu_covid19.get_data(session)
-    vprint('Merging JHU COVID data...')
-    for uid, data in jhu_data.groupby(level='UID', sort=False):
-        region = region_by_uid.get(uid)
-        if not region:
-            continue  # Filtered out for one reason or another.
+    if not args.no_jhu_covid19:
+        # Populate the tree with JHU metrics.
+        vprint('Loading JHU COVID data...')
+        jhu_data = fetch_jhu_covid19.get_data(session)
+        vprint('Merging JHU COVID data...')
+        for uid, d in jhu_data.groupby(level='UID', sort=False):
+            region = region_by_uid.get(uid)
+            if not region:
+                continue  # Filtered out for one reason or another.
 
-        # Convert total cases and deaths into daily cases and deaths.
-        data.reset_index(level='UID', drop=True, inplace=True)
-        cases = data.total_cases.iloc[1:] - data.total_cases.values[:-1]
-        deaths = data.total_deaths.iloc[1:] - data.total_deaths.values[:-1]
+            # Convert total cases and deaths into daily cases and deaths.
+            d.reset_index(level='UID', drop=True, inplace=True)
+            cases = d.total_cases.iloc[1:] - d.total_cases.values[:-1]
+            deaths = d.total_deaths.iloc[1:] - d.total_deaths.values[:-1]
 
-        region.covid_metrics.update({
-            'positives / 100Kp': _trend_metric(
-                'tab:blue', 1, cases * 1e5 / region.population),
-            'deaths / 1Mp': _trend_metric(
-                'tab:red', 1, deaths * 1e6 / region.population),
-        })
+            region.covid_metrics.update({
+                'positives / 100Kp': _trend_metric(
+                    'tab:blue', 1, cases * 1e5 / region.population),
+                'deaths / 1Mp': _trend_metric(
+                    'tab:red', 1, deaths * 1e6 / region.population),
+            })
 
-    # Drop subtrees in the place tree with no JHU COVID metrics.
-    def prune_region_tree(region):
-        region.subregions = {
-            k: sub for k, sub in region.subregions.items()
-            if prune_region_tree(sub)
-        }
-        return (region.subregions or region.covid_metrics)
+        # Drop subtrees in the place tree with no JHU COVID metrics.
+        def prune_region_tree(region):
+            region.subregions = {
+                k: sub for k, sub in region.subregions.items()
+                if prune_region_tree(sub)
+            }
+            return (region.subregions or region.covid_metrics)
 
-    prune_region_tree(world)
+        prune_region_tree(world)
 
     #
     # Add baseline mortality data from CDC figures for US states.
@@ -117,115 +122,120 @@ def get_world(session, args, verbose=False):
     # TODO: Some sort of proper excess mortality plotting?
     #
 
-    vprint('Loading and merging CDC mortality data...')
-    cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-    for mortality in cdc_mortality.itertuples(name='Mortality'):
-        region = region_by_fips.get(mortality.Index)
-        if region is None:
-            continue
+    if not args.no_cdc_mortality:
+        vprint('Loading and merging CDC mortality data...')
+        cdc_mortality = fetch_cdc_mortality.get_states(session=session)
+        for mort in cdc_mortality.itertuples(name='Mortality'):
+            region = region_by_fips.get(mort.Index)
+            if region is None:
+                continue
 
-        region.credits.update(fetch_cdc_mortality.credits())
-        region.baseline_metrics.update({
-            'historical deaths / 1Mp': _threshold_metric(
-                'black', mortality.Deaths / 365 * 1e6 / region.population),
-        })
+            region.credits.update(fetch_cdc_mortality.credits())
+            region.baseline_metrics.update({
+                'historical deaths / 1Mp': _threshold_metric(
+                    'black', mort.Deaths / 365 * 1e6 / region.population),
+            })
 
     #
     # Mix in covidtracking data to get hospital data for US states.
     # (Use its cases/deaths data where available, for matching metrics.)
     #
 
-    vprint('Loading and merging covidtracking.com data...')
-    covid_tracking = fetch_covid_tracking.get_states(session=session)
-    for fips, covid in covid_tracking.groupby(level='fips', sort=False):
-        region = region_by_fips.get(fips)
-        if region is None:
-            continue
+    if not args.no_covid_tracking:
+        vprint('Loading and merging covidtracking.com data...')
+        covid_tracking = fetch_covid_tracking.get_states(session=session)
+        for fips, covid in covid_tracking.groupby(level='fips', sort=False):
+            region = region_by_fips.get(fips)
+            if region is None:
+                continue
 
-        # Prefer covidtracking data to JHU data, for consistency.
-        covid.reset_index(level='fips', drop=True, inplace=True)
-        region.credits.update(fetch_covid_tracking.credits())
-        region.covid_metrics.update({
-            'tests / 10Kp': _trend_metric(
-                'tab:green', 0,
-                covid.totalTestResultsIncrease * 1e4 / region.population),
-            'positives / 100Kp': _trend_metric(
-                'tab:blue', 1,
-                covid.positiveIncrease * 1e5 / region.population),
-            'hosp admit / 250Kp': _trend_metric(
-                'tab:orange', 0,
-                covid.hospitalizedIncrease * 25e4 / region.population),
-            'hosp current / 25Kp': _trend_metric(
-                'tab:pink', 0,
-                covid.hospitalizedCurrently * 25e3 / region.population),
-            'deaths / 1Mp': _trend_metric(
-                'tab:red', 1,
-                covid.deathIncrease * 1e6 / region.population),
-        })
+            # Prefer covidtracking data to JHU data, for consistency.
+            covid.reset_index(level='fips', drop=True, inplace=True)
+            region.credits.update(fetch_covid_tracking.credits())
+            region.covid_metrics.update({
+                'tests / 10Kp': _trend_metric(
+                    'tab:green', 0,
+                    covid.totalTestResultsIncrease * 1e4 / region.population),
+                'positives / 100Kp': _trend_metric(
+                    'tab:blue', 1,
+                    covid.positiveIncrease * 1e5 / region.population),
+                'hosp admit / 250Kp': _trend_metric(
+                    'tab:orange', 0,
+                    covid.hospitalizedIncrease * 25e4 / region.population),
+                'hosp current / 25Kp': _trend_metric(
+                    'tab:pink', 0,
+                    covid.hospitalizedCurrently * 25e3 / region.population),
+                'deaths / 1Mp': _trend_metric(
+                    'tab:red', 1,
+                    covid.deathIncrease * 1e6 / region.population),
+            })
 
     #
     # Add policy changes for US states from the state policy database.
     #
 
-    vprint('Loading and merging state policy database...')
-    state_policy = fetch_state_policy.get_events(session=session)
-    state_policy['abs_score'] = state_policy.score.abs()
-    for fips, events in state_policy.groupby(level='state_fips', sort=False):
-        region = region_by_fips.get(fips)
-        if region is None:
-            continue
+    if not args.no_state_policy:
+        vprint('Loading and merging state policy database...')
+        state_policy = fetch_state_policy.get_events(session=session)
+        state_policy['abs_score'] = state_policy.score.abs()
+        for f, events in state_policy.groupby(level='state_fips', sort=False):
+            region = region_by_fips.get(f)
+            if region is None:
+                continue
 
-        region.credits.update(fetch_state_policy.credits())
-        for date, es in events.groupby(level='date'):
-            frame = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
-            smin, smax = frame.score.min(), frame.score.max()
-            score = 0 if smin == -smax else smin if smin < -smax else smax
-            emojis = list(dict.fromkeys(
-                e.emoji for e in frame.itertuples() if abs(e.score) >= 2))
-            region.daily_events.append(DailyEvents(
-                date=date, score=score, emojis=emojis, frame=frame))
+            region.credits.update(fetch_state_policy.credits())
+            for date, es in events.groupby(level='date'):
+                df = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
+                smin, smax = df.score.min(), df.score.max()
+                score = 0 if smin == -smax else smin if smin < -smax else smax
+                emojis = list(dict.fromkeys(
+                    e.emoji for e in df.itertuples() if abs(e.score) >= 2))
+                region.daily_events.append(DailyEvents(
+                    date=date, score=score, emojis=emojis, frame=df))
 
     #
     # Add mobility data where it's available.
     #
 
-    gcols = [
-        'country_region_code', 'sub_region_1', 'sub_region_2',
-        'metro_area', 'iso_3166_2_code', 'census_fips_code'
-    ]
+    if not args.no_google_mobility:
+        gcols = [
+            'country_region_code', 'sub_region_1', 'sub_region_2',
+            'metro_area', 'iso_3166_2_code', 'census_fips_code'
+        ]
 
-    vprint('Loading Google mobility data...')
-    mobility_data = fetch_google_mobility.get_mobility(session=session)
-    vprint('Merging Google mobility data...')
-    mobility_data.sort_values(by=gcols + ['date'], inplace=True)
-    mobility_data.set_index('date', inplace=True)
-    for geo, mob in mobility_data.groupby(gcols, as_index=False, sort=False):
-        if geo[5]:
-            region = region_by_fips.get(geo[5])
-        else:
-            region = region_by_iso.get(geo[0])
-            for n in geo[1:4]:
-                region = region.subregions.get(n) if (region and n) else region
+        vprint('Loading Google mobility data...')
+        mobility_data = fetch_google_mobility.get_mobility(session=session)
+        vprint('Merging Google mobility data...')
+        mobility_data.sort_values(by=gcols + ['date'], inplace=True)
+        mobility_data.set_index('date', inplace=True)
+        for g, m in mobility_data.groupby(gcols, as_index=False, sort=False):
+            if g[5]:
+                region = region_by_fips.get(g[5])
+            else:
+                region = region_by_iso.get(g[0])
+                for n in g[1:4]:
+                    if region and n:
+                        region = region.subregions.get(n)
 
-        if region is None:
-            continue
+            if region is None:
+                continue
 
-        pcfb = 'percent_change_from_baseline'  # common, long suffix
-        region.credits.update(fetch_google_mobility.credits())
-        region.mobility_metrics.update({
-            'residential':_trend_metric(
-                'tab:gray', 1, 100 + mob[f'residential_{pcfb}']),
-            'retail / recreation': _trend_metric(
-                'tab:orange', 1, 100 + mob[f'retail_and_recreation_{pcfb}']),
-            'workplaces': _trend_metric(
-                'tab:red', 1, 100 + mob[f'workplaces_{pcfb}']),
-            'parks': _trend_metric(
-                'tab:green', 0, 100 + mob[f'parks_{pcfb}']),
-            'grocery / pharmacy': _trend_metric(
-                'tab:blue', 0, 100 + mob[f'grocery_and_pharmacy_{pcfb}']),
-            'transit stations': _trend_metric(
-                'tab:purple', 0, 100 + mob[f'transit_stations_{pcfb}']),
-        })
+            pcfb = 'percent_change_from_baseline'  # common, long suffix
+            region.credits.update(fetch_google_mobility.credits())
+            region.mobility_metrics.update({
+                'residential': _trend_metric(
+                    'tab:gray', 1, 100 + m[f'residential_{pcfb}']),
+                'retail / recreation': _trend_metric(
+                    'tab:orange', 1, 100 + m[f'retail_and_recreation_{pcfb}']),
+                'workplaces': _trend_metric(
+                    'tab:red', 1, 100 + m[f'workplaces_{pcfb}']),
+                'parks': _trend_metric(
+                    'tab:green', 0, 100 + m[f'parks_{pcfb}']),
+                'grocery / pharmacy': _trend_metric(
+                    'tab:blue', 0, 100 + m[f'grocery_and_pharmacy_{pcfb}']),
+                'transit stations': _trend_metric(
+                    'tab:purple', 0, 100 + m[f'transit_stations_{pcfb}']),
+            })
 
     #
     # Combine metrics from subregions when not defined at the higher level.
@@ -255,15 +265,36 @@ def get_world(session, args, verbose=False):
                     frame=popsum / region.population)
 
     roll_up_metrics(world)
+
+    def trim_tree(r, rx):
+        sub = r.subregions
+        region.subregions = {k: s for k, s in sub.items() if trim_tree(s, rx)}
+        return (r.subregions or region_matches_regex(r, rx))
+
+    if args.collect_region_regex:
+        vprint(f'Filtering by /{args.collect_regex}/...')
+        trim_tree(world, re.compile(args.collect_regex, re.I))
+
     return world
 
 
-def _get_skeleton(session, region_regex):
+def region_matches_regex(region, regex):
+    if not regex:
+        return True
+    def get_path(r):
+        return f'{get_path(r.parent)}/{r.short_name}' if r else 'world'
+    p = get_path(region)
+    return bool(
+        regex.search(p) or
+        regex.search(p.replace(' ', '_')) or
+        regex.search(region.name))
+
+
+def _get_skeleton(session):
     """Returns a region tree for the world with no metrics populated."""
 
     jhu_credits = fetch_jhu_covid19.credits()
     world = Region(name='World', short_name='World', credits={**jhu_credits})
-    region_regex = region_regex and re.compile(region_regex, re.I)
 
     def subregion(parent, key, name=None, short_name=None):
         region = parent.subregions.get(key)
@@ -327,19 +358,7 @@ def _get_skeleton(session, region_regex):
 
         region.jhu_uid = uid
         region.population = place.Population
-
-    def filter_region_tree(path, region):
-        region.subregions = {
-            k: sub for k, sub in region.subregions.items()
-            if filter_region_tree(f'{path}/{sub.short_name}', sub)
-        }
-        return (region.subregions or
-                region_regex.search(path) or
-                region_regex.search(path.replace(' ', '_')) or
-                region_regex.search(region.name))
-
-    if region_regex and not filter_region_tree('world', world):
-        return world  # All filtered out, return only a stub world region.
+        region.lat_lon = (place.Lat, place.Long_)
 
     # Compute population from subregions if it's not set at the higher level.
     def roll_up_population(region):
@@ -352,6 +371,7 @@ def _get_skeleton(session, region_regex):
 
     roll_up_population(world)
     return world
+
 
 
 def _trend_metric(color, emphasis, values):
@@ -380,14 +400,15 @@ if __name__ == '__main__':
     import itertools
     from covid import cache_policy
 
-    parser=argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
     args = parser.parse_args()
     world = get_world(
         session=cache_policy.new_session(args), args=args, verbose=True)
 
     def print_tree(prefix, parents, key, r):
-        line=(
+        print(r.name, ':', '; '.join(s.name for s in r.subregions.values()))
+        line = (
             f'{prefix}{r.population or -1:9.0f}p <' +
             '.b'[bool(r.baseline_metrics)] +
             '.c'[bool(r.covid_metrics)] +
@@ -395,10 +416,10 @@ if __name__ == '__main__':
             '.m'[bool(r.mobility_metrics)] +
             '.p'[bool(r.daily_events)] + '>')
         if key != r.short_name:
-            line=f'{line} [{key}]'
-        line=f'{line} {parents}{r.short_name}'
+            line = f'{line} [{key}]'
+        line = f'{line} {parents}{r.short_name}'
         if r.name not in (key, r.short_name):
-            line=f'{line} ({r.name})'
+            line = f'{line} ({r.name})'
         print(line)
         for cat, metrics in (
                 ('bas', r.baseline_metrics),

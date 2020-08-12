@@ -1,5 +1,4 @@
-# Module to retrieve data from the JHU COVID-19 dashboard.
-# (Can also be run as a standalone program for testing.)
+"""Module to retrieve data from the JHU COVID-19 dashboard."""
 
 import io
 import re

@@ -1,8 +1,11 @@
+"""Main program to generate COVID stats static site."""
+
 import argparse
 import collections
 import multiprocessing
 import os
 import pathlib
+import re
 import signal
 
 import dominate
@@ -11,6 +14,7 @@ from dominate import tags, util
 from covid import cache_policy
 from covid import combine_data
 from covid import make_chart
+from covid import make_map
 from covid import style
 from covid import urls
 
@@ -24,13 +28,14 @@ def make_region_page(region, site_dir):
 
     try:
         make_region_html(region, site_dir)
-        make_chart.write_image(region, site_dir)
         make_chart.write_thumb_image(region, site_dir)
+        make_chart.write_image(region, site_dir)
+        make_map.write_image(region, site_dir)
     except Exception as e:
         print(f'*** Error making {path}: {e} ***')
         raise Exception(f'Error making {path}')
 
-    print(f'Made: {path}')
+    print(f'Made: {path}{"*" if urls.map_image_maybe(region) else ""}')
 
 
 def make_region_html(region, site_dir):
@@ -114,20 +119,22 @@ def main():
         cache_policy.argument_parser, combine_data.argument_parser])
     parser.add_argument('--processes', type=int)
     parser.add_argument('--chunk_size', type=int)
+    parser.add_argument('--region_regex')
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
     args = parser.parse_args()
 
     print('Loading data...')
+    make_map.setup(args)
     world = combine_data.get_world(
         session=cache_policy.new_session(args), args=args, verbose=True)
 
     print('Enumerating regions...')
-    all = []
-    pending = collections.deque([world])
-    while pending:
-        all.append(pending.popleft())
-        pending.extend(all[-1].subregions.values())
+    regex = args.region_regex and re.compile(args.region_regex, re.I)
+    def all_regions(r):
+        if combine_data.region_matches_regex(r, regex): yield r
+        yield from (a for s in r.subregions.values() for a in all_regions(s))
+    all = list(all_regions(world))
 
     print(f'Generating {len(all)} pages in {args.site_dir}...')
     style.write_style_files(args.site_dir)

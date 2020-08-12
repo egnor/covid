@@ -1,5 +1,5 @@
-# Module to get COVID-19 US State Policy Database (tinyurl.com/statepolicies)
-# (Can also be run as a standalone program for testing.)
+"""Module to get COVID-19 US State Policy Database
+(tinyurl.com/statepolicies)."""
 
 import collections
 import io
