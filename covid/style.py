@@ -1,4 +1,4 @@
-# Module to set up website collateral (favicons, style sheets, etc).
+"""Module to set up website collateral (favicons, style sheets, etc)."""
 
 import os
 import pathlib

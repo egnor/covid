@@ -1,5 +1,4 @@
-# Module to retrieve Census population data.
-# (Can also be run as a standalone program for testing.)
+"""Module to retrieve Census population data."""
 
 import json
 

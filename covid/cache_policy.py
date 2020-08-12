@@ -1,4 +1,4 @@
-# Common settings and defaults for requests_cache layer.
+"""Common settings and defaults for requests_cache layer."""
 
 import argparse
 import datetime
@@ -19,7 +19,7 @@ argument_group.add_argument(
     default=pandas.Timedelta(hours=1))
 argument_group.add_argument(
     '--cache_dir', type=pathlib.Path,
-    default=pathlib.Path.home() / 'http_cache')
+    default=pathlib.Path.home() / 'covid_cache')
 
 
 def new_session(args):

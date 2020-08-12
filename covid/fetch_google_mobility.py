@@ -1,5 +1,5 @@
-# Module to retrieve Google's Community Mobility Reports data
-# (https://www.google.com/covid19/mobility/).
+"""Module to retrieve Google's Community Mobility Reports data
+(https://www.google.com/covid19/mobility/)."""
 
 import io
 

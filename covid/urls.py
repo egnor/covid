@@ -1,4 +1,4 @@
-# Shared definitions of file placement within the site
+"""Shared definitions of file placement within the static site."""
 
 import os
 import re
@@ -20,12 +20,22 @@ def region_page(region):
     return region_prefix(region) + index_page()
 
 
-def plot_image(region):
-    return region_prefix(region) + 'plot.png'
-
-
 def thumb_image(region):
     return region_prefix(region) + 'thumb.png'
+
+
+def chart_image(region):
+    return region_prefix(region) + 'chart.png'
+
+
+def map_image_maybe(region):
+    pop = region.population
+    sub_pop = sum(
+        s.population for s in region.subregions.values()
+        if s.lat_lon and (s.population < 0.5 * pop or map_image_maybe(s)))
+    return (
+        None if len(region.subregions) < 4 or sub_pop < 0.1 * pop else
+        region_prefix(region) + 'map.png')
 
 
 def link(from_urlpath, to_urlpath):

@@ -1,5 +1,4 @@
-# Module to retrieve mortality data from the CDC WONDER database.
-# (Can also be run as a standalone program for testing.)
+"""Module to retrieve mortality data from the CDC WONDER database."""
 
 import io
 

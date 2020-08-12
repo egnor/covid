@@ -1,5 +1,4 @@
-# Module to retrieve data from covidtracking.com.
-# (Can also be run as a standalone program for testing.)
+"""Module to retrieve data from covidtracking.com."""
 
 import io
 
