@@ -30,12 +30,12 @@ def make_region_page(region, site_dir):
         make_region_html(region, site_dir)
         make_chart.write_thumb_image(region, site_dir)
         make_chart.write_image(region, site_dir)
-        make_map.write_image(region, site_dir)
+        make_map.write_video(region, site_dir)
     except Exception as e:
         print(f'*** Error making {path}: {e} ***')
         raise Exception(f'Error making {path}')
 
-    print(f'Made: {path}{"*" if urls.map_image_maybe(region) else ""}')
+    print(f'Made: {path}{"*" if urls.map_video_maybe(region) else ""}')
 
 
 def make_region_html(region, site_dir):
@@ -142,7 +142,6 @@ def main():
     # Recurse for subregions.
     processes = args.processes or os.cpu_count() * 2
     chunk_size = args.chunk_size or max(1, len(all) // (4 * processes))
-    dir = args.site_dir
     with multiprocessing.Pool(processes=args.processes) as pool:
         pool.starmap(
             make_region_page, ((r, args.site_dir) for r in all),
