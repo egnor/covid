@@ -64,7 +64,7 @@ def write_video(region, site_dir):
     figure = matplotlib.pyplot.figure(
         figsize=(10, 10), dpi=100, tight_layout=True)
 
-    axes = _make_axes(figure, region)
+    axes = _setup_axes(figure, region)
 
     def make_frame(t):
         spec = frame_specs[round(t * FPS)]
@@ -76,7 +76,6 @@ def write_video(region, site_dir):
             c=list(spec.region_color.values()),
             transform=_lat_lon_crs, zorder=2.5)
 
-        # TODO WORK WITH axes.get_tightbbox()
         image = moviepy.video.io.bindings.mplfig_to_npimage(figure)
         circles.remove()
         return image
@@ -101,7 +100,7 @@ def _make_frame_specs(regions):
     ]
 
 
-def _make_axes(figure, region):
+def _setup_axes(figure, region):
     def get_path(r):
         return [] if not r else get_path(r.parent) + [r]
     region_path = get_path(region)
@@ -145,6 +144,9 @@ def _make_axes(figure, region):
         x1, y1, x2, y2 = main_projected.bounds
         xp, yp = (x2 - x1) / 10, (y2 - y1) / 10
         axes.set_extent((x1 - xp, x2 + xp, y1 - yp, y2 + yp), axes.projection)
+
+    bb = axes.get_tightbbox().transformed(figure.dpi_scale_trans)
+    print(region.name, 'transformed bbox', bb)
 
     def add_shapes(shapes, **kwargs):
         axes.add_geometries(
