@@ -76,6 +76,7 @@ def write_video(region, site_dir):
             c=list(spec.region_color.values()),
             transform=_lat_lon_crs, zorder=2.5)
 
+        # TODO WORK WITH axes.get_tightbbox()
         image = moviepy.video.io.bindings.mplfig_to_npimage(figure)
         circles.remove()
         return image
@@ -94,7 +95,9 @@ def write_video(region, site_dir):
 
 def _make_frame_specs(regions):
     return [
-        _FrameSpec(date=None, region_color={r: (0.0, 0.0, 0.0, 0.1) for r in regions})
+        _FrameSpec(
+            date=None,
+            region_color={r: (0.0, 0.0, 0.0, 0.1) for r in regions})
     ]
 
 
