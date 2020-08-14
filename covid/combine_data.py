@@ -406,9 +406,6 @@ def _get_skeleton(session):
     return world
 
 
-
-
-
 if __name__ == '__main__':
     import argparse
     import itertools

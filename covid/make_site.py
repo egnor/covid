@@ -65,7 +65,7 @@ def make_region_html(region, args):
 
         if has_map(region, args):
             with tags.video(
-                id='map_video', preload='auto', controls='', cls='graphic'):
+                    id='map_video', preload='auto', controls='', cls='graphic'):
                 tags.source(
                     type='video/webm',
                     src=urls.link(doc_url, urls.map_video_maybe(region)))
@@ -141,8 +141,10 @@ def main():
         session=cache_policy.new_session(args), args=args, verbose=True)
 
     print('Enumerating regions...')
+
     def get_regions(r):
-        if r.matches_regex(args.page_filter): yield r
+        if r.matches_regex(args.page_filter):
+            yield r
         yield from (a for s in r.subregions.values() for a in get_regions(s))
     all_regions = list(get_regions(world))
 

@@ -115,13 +115,12 @@ def _date_subregion_metrics(region):
             for t in m.frame.itertuples():
                 if pandas.notna(t.value):
                     date_subregion_metrics.setdefault(
-                         t.Index, {}).setdefault(r, {})[n] = max(0, t.value)
+                        t.Index, {}).setdefault(r, {})[n] = max(0, t.value)
 
     return {
         d: {r: r_m.get(r, {}) for r in subregions}
         for d, r_m in sorted(date_subregion_metrics.items())
     }
-
 
 
 def _setup_axes(figure, region):
@@ -153,12 +152,16 @@ def _setup_axes(figure, region):
         axes.set_extent((-179, 179, -89, 89), _lat_lon_crs)
     else:
         BMG = shapely.geometry.base.BaseMultipartGeometry
-        mult = lambda g: isinstance(g, BMG)
-        split = lambda g: (p for s in g for p in split(s)) if mult(g) else (g,)
+        def mult(g): return isinstance(g, BMG)
+
+        def split(g): return (
+            p for s in g for p in split(s)) if mult(g) else (
+            g,)
         geoms = (s.geometry for s in (a1_region_shapes or a0_region_shapes))
         parts = (p for g in geoms for p in split(g))
 
-        area = lambda g: _equal_area_crs.project_geometry(g, _lat_lon_crs).area
+        def area(g): return _equal_area_crs.project_geometry(
+            g, _lat_lon_crs).area
         main_area, main = max((area(p), p) for p in parts)
         (center_lon, center_lat), = main.centroid.coords
         axes = figure.add_subplot(projection=cartopy.crs.Orthographic(
@@ -182,16 +185,16 @@ def _setup_axes(figure, region):
     L2D = matplotlib.lines.Line2D
     axes.legend(
         loc='center left', bbox_to_anchor=(1, 0.5),
-        title='Click to play, ⬅️ ➡️ seek, L to loop/stop',
+        title='Tap to play, ⬅️ ➡️ seek, L loop/stop',
         handles=[
             L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
                 ls='none', marker='o', ms=15, label='area ~ population'),
             L2D([], [], color=(0.0, 0.0, 1.0, 0.2),
                 ls='none', marker='o', ms=15,
-                label='area ~ cases/day (fills gray @50/100Kp)'),
+                label='area ~ cases/day (x2K)'),
             L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
                 ls='none', marker='o', ms=15,
-                label='area ~ deaths/day (fills gray @50/1Mp)'),
+                label='area ~ deaths/day (x200K)'),
         ])
 
     return axes
