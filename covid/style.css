@@ -1,5 +1,14 @@
 body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 
+.graphic { width: 100%; max-width: 1000px; height: initial; outline: none; }
+
+video::-webkit-media-controls-panel:hover { opacity: 1.0; }
+video::-webkit-media-controls-panel {
+    background-image: linear-gradient(rgba(1, 1, 1, 0.3), rgba(1, 1, 1, 0.3));
+    background-size: auto 70px;
+    opacity: 0;
+}
+
 .thumb { display: inline-block; position: relative; }
 .thumb_label {
     position: absolute; width: 96%; text-align: center;
@@ -8,8 +17,6 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
     color: black; opacity: 0.7;
 }
 .thumb_pop { font-size: 70%; font-weight: normal; opacity: 0.8; }
-
-.graphic { width: 100%; max-width: 1000px; height: initial; }
 
 .events { 
     display: grid; gap: 0.2em 0.5em;
