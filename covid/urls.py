@@ -28,14 +28,16 @@ def chart_image(region):
     return region_prefix(region) + 'chart.png'
 
 
-def map_video_maybe(region):
+def has_map(region):
     pop = region.population
-    sub_pop = sum(
+    non_biggest_pop = sum(
         s.population for s in region.subregions.values()
-        if s.lat_lon and (s.population < 0.5 * pop or map_video_maybe(s)))
-    return (
-        None if len(region.subregions) < 4 or sub_pop < 0.1 * pop else
-        region_prefix(region) + 'map.webm')
+        if s.map_metrics and (s.population < 0.5 * pop or map_video_maybe(s)))
+    return len(region.subregions) >= 3 and non_biggest_pop >= 0.1 * pop
+
+
+def map_video_maybe(region):
+    return region_prefix(region) + 'map.webm' if has_map(region) else None
 
 
 def link(from_urlpath, to_urlpath):

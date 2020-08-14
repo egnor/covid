@@ -4,21 +4,22 @@ import cartopy
 import cartopy.crs
 import cartopy.io.shapereader
 import collections
+import math
 import matplotlib
 import matplotlib.figure
+import matplotlib.lines
 import matplotlib.pyplot
 import moviepy.video.io.bindings
 import moviepy.video.VideoClip
+import mplcairo.base
 import numpy
+import pandas
 import shapely.geometry.base
 
 from covid import urls
 
 
-FPS = 10
-
-_FrameSpec = collections.namedtuple(
-    '_FrameSpec', 'date region_color')
+FPS = 3
 
 _BaseMapShapes = collections.namedtuple(
     '_BaseMapShapes', 'admin_0 admin_1 water')
@@ -48,56 +49,79 @@ def setup(args):
 
 
 def write_video(region, site_dir):
-    map_url = urls.map_video_maybe(region)
-    if not map_url:
-        return  # No map for this region.
-
-    # Walk at most 2 layers down to find regions to map.
-    plot_regions = [
-        m for s1 in region.subregions.values()
-        for m in (
-            (s2 for s2 in s1.subregions.values() if s2.lat_lon)
-            if urls.map_video_maybe(s1) else (s1,))]
-
-    frame_specs = _make_frame_specs(plot_regions)
-
-    figure = matplotlib.pyplot.figure(
-        figsize=(10, 10), dpi=100, tight_layout=True)
-
-    axes = _setup_axes(figure, region)
+    date_subregion_metrics = list(_date_subregion_metrics(region).items())
+    fig = matplotlib.pyplot.figure(figsize=(10, 10), dpi=150, tight_layout=1)
+    axes = _setup_axes(fig, region)
+    canvas = mplcairo.base.FigureCanvasCairo(fig)
 
     def make_frame(t):
-        spec = frame_specs[round(t * FPS)]
-        pop_size = 2e4 / sum(m.population for m in spec.region_color.keys())
-        circles = axes.scatter(
-            x=[m.lat_lon[1] for m in spec.region_color.keys()],
-            y=[m.lat_lon[0] for m in spec.region_color.keys()],
-            s=[m.population * pop_size for m in spec.region_color.keys()],
-            c=list(spec.region_color.values()),
-            transform=_lat_lon_crs, zorder=2.5)
+        date, sub_metrics = date_subregion_metrics[round(t * FPS)]
+        title = f'{date.date()}'
 
-        image = moviepy.video.io.bindings.mplfig_to_npimage(figure)
-        circles.remove()
-        return image
+        data_artists = []
+        data_artists.append(axes.text(
+            0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
+            fontsize=55, fontweight='bold', alpha=0.2,
+            ha='center', va='center'))
 
-    duration = (len(frame_specs) - 0.5) / FPS
+        lats = [m.lat_lon[1] for m in sub_metrics.keys()]
+        lons = [m.lat_lon[0] for m in sub_metrics.keys()]
+
+        pop_size = 3e4 / region.population
+        data_artists.append(axes.scatter(
+            x=lats, y=lons,
+            s=[s.population * pop_size for s in sub_metrics.keys()],
+            color=(0.0, 0.0, 0.0, 0.1), transform=_lat_lon_crs, zorder=2.1))
+
+        metric_size = pop_size / 50  # Metric matches pop size when it hits 50.
+        data_artists.append(axes.scatter(
+            x=lats, y=lons, s=[
+                m.get('positives / 100Kp', 0) * s.population * metric_size
+                for s, m in sub_metrics.items()],
+            color=(0.0, 0.0, 1.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
+
+        data_artists.append(axes.scatter(
+            x=lats, y=lons, s=[
+                m.get('deaths / 1Mp', 0) * s.population * metric_size
+                for s, m in sub_metrics.items()],
+            color=(1.0, 0.0, 0.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
+
+        canvas.draw()
+        [a.remove() for a in data_artists]
+        return _rgb_from_canvas(canvas)
+
+    duration = (len(date_subregion_metrics) - 0.5) / FPS
     clip = moviepy.video.VideoClip.VideoClip(make_frame, duration=duration)
     clip.set_fps(FPS).write_videofile(
-        str(urls.file(site_dir, map_url)),
+        str(urls.file(site_dir, urls.map_video_maybe(region))),
         ffmpeg_params=[
             '-c:v', 'vp9', '-b:v', '0', '-quality', 'good', '-speed', '0',
             '-pix_fmt', 'yuv420p'],
         logger=None)
 
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
+    matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
-def _make_frame_specs(regions):
-    return [
-        _FrameSpec(
-            date=None,
-            region_color={r: (0.0, 0.0, 0.0, 0.1) for r in regions})
-    ]
+def _date_subregion_metrics(region):
+    # Walk at most 2 layers down to find regions to map.
+    subregions = [
+        r for s in region.subregions.values()
+        for r in (s.subregions.values() if urls.has_map(s) else (s,))
+        if r.map_metrics]
+
+    date_subregion_metrics = {}
+    for r in subregions:
+        for n, m in r.map_metrics.items():
+            for t in m.frame.itertuples():
+                if pandas.notna(t.value):
+                    date_subregion_metrics.setdefault(
+                         t.Index, {}).setdefault(r, {})[n] = max(0, t.value)
+
+    return {
+        d: {r: r_m.get(r, {}) for r in subregions}
+        for d, r_m in sorted(date_subregion_metrics.items())
+    }
+
 
 
 def _setup_axes(figure, region):
@@ -145,9 +169,6 @@ def _setup_axes(figure, region):
         xp, yp = (x2 - x1) / 10, (y2 - y1) / 10
         axes.set_extent((x1 - xp, x2 + xp, y1 - yp, y2 + yp), axes.projection)
 
-    bb = axes.get_tightbbox().transformed(figure.dpi_scale_trans)
-    print(region.name, 'transformed bbox', bb)
-
     def add_shapes(shapes, **kwargs):
         axes.add_geometries(
             (s.geometry for s in shapes),
@@ -157,4 +178,30 @@ def _setup_axes(figure, region):
     add_shapes(_base_map_shapes.admin_0, lw=0.5)
     add_shapes(a0_region_a1_shapes, lw=0.5)
     add_shapes(a1_region_shapes or a0_region_shapes, lw=1)
+
+    L2D = matplotlib.lines.Line2D
+    axes.legend(
+        loc='center left', bbox_to_anchor=(1, 0.5),
+        title='Click to play, ⬅️ ➡️ seek, L to loop/stop',
+        handles=[
+            L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
+                ls='none', marker='o', ms=15, label='area ~ population'),
+            L2D([], [], color=(0.0, 0.0, 1.0, 0.2),
+                ls='none', marker='o', ms=15,
+                label='area ~ cases/day (fills gray @50/100Kp)'),
+            L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
+                ls='none', marker='o', ms=15,
+                label='area ~ deaths/day (fills gray @50/1Mp)'),
+        ])
+
     return axes
+
+
+def _rgb_from_canvas(canvas):
+    bbox = matplotlib.transforms.BboxBase.union([
+        axes.get_tightbbox(canvas.get_renderer())
+        for axes in canvas.figure.axes])
+    x_min, x_max = max(0, math.floor(bbox.x0) - 5), math.ceil(bbox.x1) + 5
+    y_min, y_max = max(0, math.floor(bbox.y0) - 5), math.ceil(bbox.y1) + 5
+    bgra = canvas.get_renderer()._get_buffer()
+    return bgra[-y_max:-y_min, x_min:x_max, [2, 1, 0]]

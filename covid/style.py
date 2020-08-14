@@ -21,7 +21,7 @@ def write_style_files(site_dir):
                     write_file.write(read_file.read())
 
     # Copy style files directly from the source directory.
-    for name in ('style.css', 'NotoColorEmoji.ttf'):
+    for name in ('style.css', 'NotoColorEmoji.ttf', 'util.js'):
         with open(source_dir / name, 'rb') as read_file:
             with open(urls.file(site_dir, name), 'wb') as write_file:
                 write_file.write(read_file.read())
@@ -47,3 +47,4 @@ def add_head_style(this_urlpath=''):
               href=urls.link(this_urlpath, 'favicon-16x16.png'))
     tags.link(rel='stylesheet', type='text/css',
               href=urls.link(this_urlpath, 'style.css'))
+    tags.script(src=urls.link(this_urlpath, 'util.js'))

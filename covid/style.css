@@ -9,7 +9,7 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 }
 .thumb_pop { font-size: 70%; font-weight: normal; opacity: 0.8; }
 
-.plot { width: 100%; max-width: 60em; }
+.graphic { width: 100%; max-width: 1000px; height: initial; }
 
 .events { 
     display: grid; gap: 0.2em 0.5em;

@@ -16,7 +16,12 @@ from covid import urls
 matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
 
 
-def write_thumb_image(region, site_dir):
+def write_images(region, site_dir):
+    _write_thumb_image(region, site_dir)
+    _write_chart_image(region, site_dir)
+
+
+def _write_thumb_image(region, site_dir):
     # Make thumbnail for index page
     phi = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
     figure = matplotlib.pyplot.figure(figsize=(8, 8 / phi), tight_layout=True)
@@ -34,7 +39,7 @@ def write_thumb_image(region, site_dir):
     matplotlib.pyplot.close(figure)  # Reclaim memory.
 
 
-def write_image(region, site_dir):
+def _write_chart_image(region, site_dir):
     covid_max = max(m.frame.value.max() for m in region.covid_metrics.values())
     covid_max = min(200, max(30, (covid_max // 10 + 1) * 10))
     covid_height = covid_max / 10
@@ -136,7 +141,7 @@ def _plot_metric(axes, name, metric):
 
 
 def _plot_daily_events(axes, daily_events, emoji):
-    """Plots important policy changes. Returns a list of legend artists."""
+    """Plots important policy changes."""
 
     top_ticks, top_labels = [], []
     for d in (d for d in daily_events if abs(d.score) >= 2):
@@ -187,8 +192,8 @@ def _setup_xaxis(axes, region, title=None, titlesize=45):
     if title:
         axes.text(
             0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
-            ha='center', va='center', wrap=True,
-            fontsize=titlesize, fontweight='bold', alpha=0.2)
+            fontsize=titlesize, fontweight='bold', alpha=0.2,
+            ha='center', va='center')
 
     _add_to_legend(axes, axes.axvspan(
         xmax - pandas.Timedelta(weeks=2), xmax, color='k', alpha=.07, zorder=0,
