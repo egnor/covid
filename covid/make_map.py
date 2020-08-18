@@ -28,7 +28,7 @@ _base_map_shapes = None
 
 _lat_lon_crs = cartopy.crs.PlateCarree()
 
-_equal_area_crs = cartopy.crs.Mollweide()
+_area_crs = cartopy.crs.Mollweide()
 
 
 def setup(args):
@@ -50,16 +50,20 @@ def setup(args):
 
 def write_video(region, site_dir):
     date_subregion_metrics = list(_date_subregion_metrics(region).items())
-    fig = matplotlib.pyplot.figure(figsize=(10, 10), dpi=150, tight_layout=1)
+    fig = matplotlib.pyplot.figure(figsize=(10, 10), dpi=150)
     axes = _setup_axes(fig, region)
     canvas = mplcairo.base.FigureCanvasCairo(fig)
+
+    fig.tight_layout()
+    fig.tight_layout()  # Needs to be called twice to fully settle??
+    bbox = axes.get_tightbbox(canvas.get_renderer()).padded(10)
 
     def make_frame(t):
         date, sub_metrics = date_subregion_metrics[round(t * FPS)]
         title = f'{date.date()}'
 
-        data_artists = []
-        data_artists.append(axes.text(
+        frame_arts = []
+        frame_arts.append(axes.text(
             0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
             fontsize=55, fontweight='bold', alpha=0.2,
             ha='center', va='center'))
@@ -68,36 +72,34 @@ def write_video(region, site_dir):
         lons = [m.lat_lon[0] for m in sub_metrics.keys()]
 
         pop_size = 3e4 / region.population
-        data_artists.append(axes.scatter(
+        frame_arts.append(axes.scatter(
             x=lats, y=lons,
             s=[s.population * pop_size for s in sub_metrics.keys()],
             color=(0.0, 0.0, 0.0, 0.1), transform=_lat_lon_crs, zorder=2.1))
 
         metric_size = pop_size / 50  # Metric matches pop size when it hits 50.
-        data_artists.append(axes.scatter(
+        frame_arts.append(axes.scatter(
             x=lats, y=lons, s=[
                 m.get('positives / 100Kp', 0) * s.population * metric_size
                 for s, m in sub_metrics.items()],
             color=(0.0, 0.0, 1.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
 
-        data_artists.append(axes.scatter(
+        frame_arts.append(axes.scatter(
             x=lats, y=lons, s=[
                 m.get('deaths / 1Mp', 0) * s.population * metric_size
                 for s, m in sub_metrics.items()],
             color=(1.0, 0.0, 0.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
 
         canvas.draw()
-        [a.remove() for a in data_artists]
-        return _rgb_from_canvas(canvas)
+        [a.remove() for a in frame_arts]
+        return _rgb_from_canvas(canvas.get_renderer(), bbox)
 
     duration = (len(date_subregion_metrics) - 0.5) / FPS
     clip = moviepy.video.VideoClip.VideoClip(make_frame, duration=duration)
     clip.set_fps(FPS).write_videofile(
-        str(urls.file(site_dir, urls.map_video_maybe(region))),
-        ffmpeg_params=[
-            '-c:v', 'vp9', '-b:v', '0', '-quality', 'good', '-speed', '0',
-            '-pix_fmt', 'yuv420p'],
-        logger=None)
+        str(urls.file(site_dir, urls.map_video_maybe(region))), logger=None,
+        ffmpeg_params=
+            '-c:v vp9 -b:v 0 -pix_fmt yuv420p -quality good -speed 0'.split())
 
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
@@ -152,16 +154,13 @@ def _setup_axes(figure, region):
         axes.set_extent((-179, 179, -89, 89), _lat_lon_crs)
     else:
         BMG = shapely.geometry.base.BaseMultipartGeometry
-        def mult(g): return isinstance(g, BMG)
-
         def split(g): return (
-            p for s in g for p in split(s)) if mult(g) else (
-            g,)
+            (p for s in g for p in split(s)) if isinstance(g, BMG) else (g,))
+
         geoms = (s.geometry for s in (a1_region_shapes or a0_region_shapes))
         parts = (p for g in geoms for p in split(g))
 
-        def area(g): return _equal_area_crs.project_geometry(
-            g, _lat_lon_crs).area
+        def area(g): return _area_crs.project_geometry(g, _lat_lon_crs).area
         main_area, main = max((area(p), p) for p in parts)
         (center_lon, center_lat), = main.centroid.coords
         axes = figure.add_subplot(projection=cartopy.crs.Orthographic(
@@ -200,11 +199,8 @@ def _setup_axes(figure, region):
     return axes
 
 
-def _rgb_from_canvas(canvas):
-    bbox = matplotlib.transforms.BboxBase.union([
-        axes.get_tightbbox(canvas.get_renderer())
-        for axes in canvas.figure.axes])
-    x_min, x_max = max(0, math.floor(bbox.x0) - 5), math.ceil(bbox.x1) + 5
-    y_min, y_max = max(0, math.floor(bbox.y0) - 5), math.ceil(bbox.y1) + 5
-    bgra = canvas.get_renderer()._get_buffer()
+def _rgb_from_canvas(renderer, bbox):
+    x_min, x_max = max(0, math.floor(bbox.x0)), max(0, math.ceil(bbox.x1))
+    y_min, y_max = max(0, math.floor(bbox.y0)), max(0, math.ceil(bbox.y1))
+    bgra = renderer._get_buffer()
     return bgra[-y_max:-y_min, x_min:x_max, [2, 1, 0]]
