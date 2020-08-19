@@ -71,7 +71,7 @@ def _write_chart_image(region, site_dir):
         _add_plot_legend(mobility_axes)
 
     fig.tight_layout(pad=0, h_pad=1)
-    fig.savefig(urls.file(site_dir, urls.chart_image(region)))
+    fig.savefig(urls.file(site_dir, urls.chart_image(region)), pad_inches=0)
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
@@ -89,7 +89,7 @@ def _plot_subregion_peaks(axes, region):
             ts.append(sub.short_name.replace(' ', '')[:3])
     if xs:
         _add_to_legend(axes, axes.scatter(
-            xs, ys, c=cs, marker=6, label='subdiv peak positives'), order=+10)
+            xs, ys, c=cs, marker=6, label='subdiv peak positives'), order=+5)
         for x, y, c, t in zip(xs, ys, cs, ts):
             axes.annotate(
                 t, c=c, xy=(x, y), ha='center', va='top',
@@ -100,11 +100,10 @@ def _plot_covid_metrics(axes, covid_metrics):
     """Plots COVID case-related metrics."""
 
     # (This function does not set ylim.)
-    axes.set_ylabel('number per capita')
+    axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-
     for name, metric in covid_metrics.items():
         _plot_metric(axes, name, metric)
 
@@ -115,10 +114,11 @@ def _plot_mobility_metrics(axes, mobility_metrics):
     axes.set_ylim(0, 250)
     axes.set_ylabel('% of same weekday in January')
     axes.axhline(100, c='black', lw=1)  # Identity line.
+    axes.yaxis.tick_right()
+    axes.yaxis.set_label_position('right')
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-
     for name, metric in mobility_metrics.items():
         _plot_metric(axes, name, metric)
 
@@ -188,6 +188,8 @@ def _setup_xaxis(axes, region, title=None, titlesize=45):
     axes.xaxis.set_major_locator(month_locator)
     axes.xaxis.set_major_formatter(month_formatter)
     axes.xaxis.set_tick_params(which='major', labelbottom=True)
+    for label in axes.get_xticklabels():
+        label.set_horizontalalignment('left')
 
     if title:
         axes.text(
@@ -197,7 +199,7 @@ def _setup_xaxis(axes, region, title=None, titlesize=45):
 
     _add_to_legend(axes, axes.axvspan(
         xmax - pandas.Timedelta(weeks=2), xmax, color='k', alpha=.07, zorder=0,
-        label='last 2 weeks'), order=+5)
+        label='last 2 weeks'), order=+10)
 
 
 def _add_to_legend(axes, *artists, order=0):
@@ -211,8 +213,6 @@ def _add_plot_legend(axes):
     """Adds a standard plot legend using the legend_artists(axes) list."""
 
     order_artists = axes.__dict__.get('covid_legend_artists', {})
-    axes.legend(
-        loc='center left', bbox_to_anchor=(1, 0.5),
-        handles=[
-            artist for order, artists in sorted(order_artists.items())
-            for artist in artists])
+    axes.legend(loc='upper left', handles=[
+        artist for order, artists in sorted(order_artists.items())
+        for artist in artists])

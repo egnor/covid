@@ -67,10 +67,10 @@ def make_region_html(region, args):
         if has_map(region, args):
             with tags.div(cls='graphic'):
                 with tags.video(width='100%', id='map', preload='auto'):
-                    href = urls.link(doc_url, urls.map_video_maybe(region)))
+                    href = urls.link(doc_url, urls.map_video_maybe(region))
                     tags.source(type='video/webm', src=f'{href}#t=1000');
 
-                with tags.div(cls='video_controls'):
+                with tags.div(cls='map_controls'):
                     def i(n): return tags.i(cls=f'fas fa-{n}')
                     tags.button(
                         i('pause'),
@@ -81,6 +81,7 @@ def make_region_html(region, args):
                     tags.button(i('repeat'), ' L', id='map_loop')
                     tags.button(i('backward'), ' R', id='map_rewind')
                     tags.button(i('step-backward'), ' [', id='map_prev')
+                    tags.input(type='range', id='map_slider')
                     tags.button(i('step-forward'), ' ]', id='map_next')
                     tags.button(i('forward'), ' F', id='map_forward')
 

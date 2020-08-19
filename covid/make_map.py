@@ -4,6 +4,7 @@ import cartopy
 import cartopy.crs
 import cartopy.io.shapereader
 import collections
+import datetime
 import math
 import matplotlib
 import matplotlib.figure
@@ -90,7 +91,9 @@ def write_video(region, site_dir):
     clip = moviepy.video.VideoClip.VideoClip(make_frame, duration=duration)
     clip.set_fps(FPS).write_videofile(
         str(urls.file(site_dir, urls.map_video_maybe(region))), logger=None,
-        ffmpeg_params='-c:v vp9 -b:v 0 -pix_fmt yuv420p -quality good -speed 0'.split())
+        ffmpeg_params=(
+            '-c:v vp9 -b:v 0 -pix_fmt yuv420p '
+            '-quality good -speed 0').split())
 
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
@@ -113,6 +116,7 @@ def _date_region_metrics(region):
     return {
         d: {r: r_m.get(r, {}) for r in subregions}
         for d, r_m in sorted(date_region_metrics.items())
+        if d.date() >= datetime.date(2020, 3, 1)
     }
 
 
@@ -173,16 +177,13 @@ def _setup_axes(figure, region):
     add_shapes(a1_region_shapes or a0_region_shapes, lw=1)
 
     L2D = matplotlib.lines.Line2D
-    axes.legend(
-        loc='center left', bbox_to_anchor=(1, 0.5),
-        handles=[
-            L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
-                ls='none', marker='o', ms=15, label='area ~ population'),
-            L2D([], [], color=(0.0, 0.0, 1.0, 0.2),
-                ls='none', marker='o', ms=15, label='area ~ positives x2K'),
-            L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
-                ls='none', marker='o', ms=15, label='area ~ deaths x200K'),
-        ])
+    axes.legend(loc='lower left', handles=[
+        L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
+            ls='none', marker='o', ms=15, label='population'),
+        L2D([], [], color=(0.0, 0.0, 1.0, 0.2),
+            ls='none', marker='o', ms=15, label='positives x2K'),
+        L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
+            ls='none', marker='o', ms=15, label='deaths x200K')])
 
     return axes
 
