@@ -1,9 +1,7 @@
 body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 
-.graphic {
-    width: 100%; max-width: 1000px; height: initial;
-    margin-bottom: 10px; outline: none;
-}
+.graphic { width: 100%; max-width: 1000px; margin: 0 0 10px 0; outline: none; }
+.graphic img, .graphic video { max-width: 100%; }
 
 .map_controls { display: flex; margin: 0 -2px; }
 .map_controls button {
@@ -15,11 +13,8 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 .map_controls button svg { color: #000000; }
 .map_controls button.paused svg.fa-pause { color: #6666FF; }
 .map_controls button.playing svg.fa-play { color: #6666FF; }
-.map_controls button.looping svg.fa-repeat { color: #6666FF; }
-.map_controls button.seeking svg.fa-backward { color: #6666FF; }
-.map_controls button.seeking svg.fa-step-backward { color: #6666FF; }
-.map_controls button.seeking svg.fa-step-forward { color: #6666FF; }
-.map_controls button.seeking svg.fa-forward { color: #6666FF; }
+.map_controls button.looping svg { color: #6666FF; }
+.map_controls button.seeking svg { color: #6666FF; }
 .map_controls input[type="range"] { flex: 1; }
 
 .thumb { display: inline-block; position: relative; }

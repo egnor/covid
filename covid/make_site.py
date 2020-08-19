@@ -62,11 +62,9 @@ def make_region_html(region, args):
                 util.text(f' / {region.name}')
             util.text(f' (pop. {region.population:,.0f}) {latest.date()}')
 
-        tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
-
         if has_map(region, args):
             with tags.div(cls='graphic'):
-                with tags.video(width='100%', id='map', preload='auto'):
+                with tags.video(id='map', preload='auto'):
                     href = urls.link(doc_url, urls.map_video_maybe(region))
                     tags.source(type='video/webm', src=f'{href}#t=1000');
 
@@ -84,6 +82,8 @@ def make_region_html(region, args):
                     tags.input(type='range', id='map_slider')
                     tags.button(i('step-forward'), ' ]', id='map_next')
                     tags.button(i('forward'), ' F', id='map_forward')
+
+        tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
 
         if region.daily_events:
             tags.h2(

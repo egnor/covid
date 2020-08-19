@@ -15,7 +15,7 @@ import moviepy.video.VideoClip
 import mplcairo.base
 import numpy
 import pandas
-import shapely.geometry.base
+from shapely.geometry.base import BaseMultipartGeometry
 
 from covid import urls
 
@@ -148,14 +148,15 @@ def _setup_axes(figure, region):
         axes.set_box_aspect(0.505)
         axes.set_extent((-179, 179, -89, 89), _lat_lon_crs)
     else:
-        BMG = shapely.geometry.base.BaseMultipartGeometry
-        def split(g): return (
-            (p for s in g for p in split(s)) if isinstance(g, BMG) else (g,))
-
-        geoms = (s.geometry for s in (a1_region_shapes or a0_region_shapes))
-        parts = (p for g in geoms for p in split(g))
-
+        def m(g): return isinstance(g, BaseMultipartGeometry)
+        def split(g): return (p for s in g for p in split(s)) if m(g) else (g,)
         def area(g): return _area_crs.project_geometry(g, _lat_lon_crs).area
+
+        shapes = a1_region_shapes or a0_region_shapes
+        parts = (
+            (s.geometry for s in shapes) if region.fips_code == 15 else  # HI
+            (p for s in shapes for p in split(s.geometry)))
+
         main_area, main = max((area(p), p) for p in parts)
         (center_lon, center_lat), = main.centroid.coords
         axes = figure.add_subplot(projection=cartopy.crs.Orthographic(
@@ -165,6 +166,7 @@ def _setup_axes(figure, region):
         x1, y1, x2, y2 = main_projected.bounds
         xp, yp = (x2 - x1) / 10, (y2 - y1) / 10
         axes.set_extent((x1 - xp, x2 + xp, y1 - yp, y2 + yp), axes.projection)
+        axes.set_box_aspect(0.618)
 
     def add_shapes(shapes, **kwargs):
         axes.add_geometries(

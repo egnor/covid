@@ -70,6 +70,7 @@ def _write_chart_image(region, site_dir):
         _plot_daily_events(mobility_axes, region.daily_events, emoji=False)
         _add_plot_legend(mobility_axes)
 
+    fig.align_ylabels()
     fig.tight_layout(pad=0, h_pad=1)
     fig.savefig(urls.file(site_dir, urls.chart_image(region)), pad_inches=0)
     matplotlib.pyplot.close(fig)  # Reclaim memory.
@@ -100,6 +101,8 @@ def _plot_covid_metrics(axes, covid_metrics):
     """Plots COVID case-related metrics."""
 
     # (This function does not set ylim.)
+    axes.set_ylabel('number per capita')
+    axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
@@ -111,11 +114,11 @@ def _plot_covid_metrics(axes, covid_metrics):
 def _plot_mobility_metrics(axes, mobility_metrics):
     """Plots metrics of population mobility."""
 
+    axes.axhline(100, c='black', lw=1)  # Identity line.
     axes.set_ylim(0, 250)
     axes.set_ylabel('% of same weekday in January')
-    axes.axhline(100, c='black', lw=1)  # Identity line.
-    axes.yaxis.tick_right()
     axes.yaxis.set_label_position('right')
+    axes.yaxis.tick_right()
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
@@ -196,10 +199,6 @@ def _setup_xaxis(axes, region, title=None, titlesize=45):
             0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
             fontsize=titlesize, fontweight='bold', alpha=0.2,
             ha='center', va='center')
-
-    _add_to_legend(axes, axes.axvspan(
-        xmax - pandas.Timedelta(weeks=2), xmax, color='k', alpha=.07, zorder=0,
-        label='last 2 weeks'), order=+10)
 
 
 def _add_to_legend(axes, *artists, order=0):
