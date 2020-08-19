@@ -2,12 +2,21 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 
 .graphic { width: 100%; max-width: 1000px; height: initial; outline: none; }
 
-video::-webkit-media-controls-panel:hover { opacity: 1.0; }
-video::-webkit-media-controls-panel {
-    background-image: linear-gradient(rgba(1, 1, 1, 0.3), rgba(1, 1, 1, 0.3));
-    background-size: auto 70px;
-    opacity: 0;
+.video_controls button {
+    border: none; padding: 5px; border-radius: 5px; outline: none;
+    background-color: #D9D9D9;
 }
+.video_controls button:active { background-color: #CCCCCC; }
+.video_controls button { font-weight: bold; color: #BBBBBB; }
+.video_controls button svg { color: #000000; }
+:focus-within .video_controls button { color: #777777; }
+.video_controls button.paused svg.fa-pause { color: #6666FF; }
+.video_controls button.playing svg.fa-play { color: #6666FF; }
+.video_controls button.looping svg.fa-repeat { color: #6666FF; }
+.video_controls button.seeking svg.fa-backward { color: #6666FF; }
+.video_controls button.seeking svg.fa-step-backward { color: #6666FF; }
+.video_controls button.seeking svg.fa-step-forward { color: #6666FF; }
+.video_controls button.seeking svg.fa-forward { color: #6666FF; }
 
 .thumb { display: inline-block; position: relative; }
 .thumb_label {

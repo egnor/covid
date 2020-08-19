@@ -23,9 +23,9 @@ def write_images(region, site_dir):
 
 def _write_thumb_image(region, site_dir):
     # Make thumbnail for index page
-    phi = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
-    figure = matplotlib.pyplot.figure(figsize=(8, 8 / phi), tight_layout=True)
-    thumb_axes = figure.add_subplot()
+    p = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
+    fig = matplotlib.pyplot.figure(figsize=(8, 8 / p), dpi=50)
+    thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes, region)
     thumb_axes.set_ylim(0, 50)
     _plot_covid_metrics(thumb_axes, region.baseline_metrics)
@@ -35,8 +35,9 @@ def _write_thumb_image(region, site_dir):
     thumb_axes.set_ylabel(None)
     thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
     thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    figure.savefig(urls.file(site_dir, urls.thumb_image(region)), dpi=50)
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
+    fig.tight_layout(pad=0)
+    fig.savefig(urls.file(site_dir, urls.thumb_image(region)), pad_inches=0)
+    matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
 def _write_chart_image(region, site_dir):
@@ -45,15 +46,13 @@ def _write_chart_image(region, site_dir):
     covid_height = covid_max / 10
 
     if region.mobility_metrics:
-        figure = matplotlib.pyplot.figure(
-            figsize=(10, covid_height + 4), tight_layout=True)
-        covid_axes, mobility_axes = figure.subplots(
+        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 4), dpi=200)
+        covid_axes, mobility_axes = fig.subplots(
             nrows=2, ncols=1, sharex=True,
             gridspec_kw=dict(height_ratios=[covid_height, 4]))
     else:
-        figure = matplotlib.pyplot.figure(
-            figsize=(10, covid_height), tight_layout=True)
-        covid_axes, mobility_axes = figure.add_subplot(), None
+        fig = matplotlib.pyplot.figure(figsize=(10, covid_height), dpi=200)
+        covid_axes, mobility_axes = fig.add_subplot(), None
 
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
@@ -71,8 +70,9 @@ def _write_chart_image(region, site_dir):
         _plot_daily_events(mobility_axes, region.daily_events, emoji=False)
         _add_plot_legend(mobility_axes)
 
-    figure.savefig(urls.file(site_dir, urls.chart_image(region)), dpi=200)
-    matplotlib.pyplot.close(figure)  # Reclaim memory.
+    fig.tight_layout(pad=0, h_pad=1)
+    fig.savefig(urls.file(site_dir, urls.chart_image(region)))
+    matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
 def _plot_subregion_peaks(axes, region):

@@ -69,7 +69,6 @@ def get_world(session, args, verbose=False):
     """Returns data organized into a tree rooted at a World region."""
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
-
     vprint('Loading JHU place data...')
     world = _get_skeleton(session)
 
@@ -267,12 +266,6 @@ def get_world(session, args, verbose=False):
     # Combine metrics from subregions when not defined at the higher level.
     #
 
-    map_metric = (lambda index, input_df: Metric(
-        color=None, emphasis=None, peak=None,
-        frame=pandas.DataFrame(
-            {'value': numpy.interp(index, input_df.index, input_df.value)},
-            index=index)))
-
     def roll_up_metrics(region):
         # Use None to mark metrics already defined at the higher level.
         name_popmetrics = {name: None for name in region.covid_metrics.keys()}
@@ -296,20 +289,39 @@ def get_world(session, args, verbose=False):
                 region.covid_metrics[name] = popmetrics[0][1]._replace(
                     frame=popsum / region.population)
 
-        # Make synchronized weekly map metrics from time series metrics.
+    vprint('Rolling up metrics...')
+    roll_up_metrics(world)
+
+    #
+    # Interpolate synchronized weekly map metrics from time series metrics.
+    #
+
+    # Sync map metric weekly data points to this end date.
+    latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
+
+    def map_metric(color, dates, df, mult): return Metric(
+        color=color, emphasis=None, peak=None,
+        frame=pandas.DataFrame(
+            {'value': mult * numpy.interp(dates, df.index, df.value)},
+            index=dates))
+
+    def make_map_metrics(region):
+        for sub in region.subregions.values():
+            make_map_metrics(sub)
+
         if region.covid_metrics:
             pos_df = region.covid_metrics['positives / 100Kp'].frame
             death_df = region.covid_metrics['deaths / 1Mp'].frame
-            weekly = pandas.date_range(
-                start=pos_df.index[0].astimezone(None),
-                end=pos_df.index[-1].astimezone(None),
-                freq='W', normalize=True)
+            first = pos_df.index[0].astimezone(latest.tz)
+            weeks = (latest - first) // pandas.Timedelta(days=7)
+            dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
+            mult = region.population / 50  # /100Kp => x2K, /1Mp => x200K
             region.map_metrics.update({
-                'positives / 100Kp': map_metric(weekly, pos_df),
-                'deaths / 1Mp': map_metric(weekly, death_df),
+                'positives x2K': map_metric('#0000FF50', dates, pos_df, mult),
+                'deaths x200K': map_metric('#FF000050', dates, death_df, mult),
             })
 
-    roll_up_metrics(world)
+    make_map_metrics(world)
 
     def trim_tree(r, rx):
         sub = r.subregions

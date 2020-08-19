@@ -48,6 +48,7 @@ def make_region_html(region, args):
         style.add_head_style(doc_url)
 
     with doc.body:
+        tags.attr(id='map_key_target', tabindex='-1')
         with tags.h2():
             def write_breadcrumbs(r):
                 if r is not None:
@@ -64,18 +65,29 @@ def make_region_html(region, args):
         tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
 
         if has_map(region, args):
-            with tags.video(
-                    id='map_video', preload='auto', controls='', cls='graphic'):
-                tags.source(
-                    type='video/webm',
-                    src=urls.link(doc_url, urls.map_video_maybe(region)))
+            with tags.div(cls='graphic'):
+                with tags.video(width='100%', id='map', preload='auto'):
+                    href = urls.link(doc_url, urls.map_video_maybe(region)))
+                    tags.source(type='video/webm', src=f'{href}#t=1000');
+
+                with tags.div(cls='video_controls'):
+                    def i(n): return tags.i(cls=f'fas fa-{n}')
+                    tags.button(
+                        i('pause'),
+                        ' ',
+                        i('play'),
+                        ' P',
+                        id='map_play')
+                    tags.button(i('repeat'), ' L', id='map_loop')
+                    tags.button(i('backward'), ' R', id='map_rewind')
+                    tags.button(i('step-backward'), ' [', id='map_prev')
+                    tags.button(i('step-forward'), ' ]', id='map_next')
+                    tags.button(i('forward'), ' F', id='map_forward')
 
         if region.daily_events:
-            with tags.h2():
-                tags.span('Mitigation', cls='event_close')
-                util.text(' and ')
-                tags.span('Relaxation', cls='event_open')
-                util.text(' Changes')
+            tags.h2(
+                tags.span('Mitigation', cls='event_close'), ' and ',
+                tags.span('Relaxation', cls='event_open'), ' Changes')
 
             def score_css(s):
                 return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
@@ -113,9 +125,8 @@ def make_region_html(region, args):
 def make_thumb_link_html(doc_url, region):
     region_href = urls.link(doc_url, urls.region_page(region))
     with tags.a(cls='thumb', href=region_href):
-        with tags.div(cls='thumb_label'):
-            util.text(region.name)
-            tags.div(f'pop. {region.population:,.0f}', cls='thumb_pop')
+        pp = f'pop. {region.population:,.0f}'
+        tags.div(region.name, tags.div(pp, cls='thumb_pop'), cls='thumb_label')
         tags.img(width=200, src=urls.link(doc_url, urls.thumb_image(region)))
 
 

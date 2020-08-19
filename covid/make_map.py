@@ -49,79 +49,70 @@ def setup(args):
 
 
 def write_video(region, site_dir):
-    date_subregion_metrics = list(_date_subregion_metrics(region).items())
+    date_region_metrics = list(_date_region_metrics(region).items())
+
     fig = matplotlib.pyplot.figure(figsize=(10, 10), dpi=150)
     axes = _setup_axes(fig, region)
     canvas = mplcairo.base.FigureCanvasCairo(fig)
 
     fig.tight_layout()
     fig.tight_layout()  # Needs to be called twice to fully settle??
-    bbox = axes.get_tightbbox(canvas.get_renderer()).padded(10)
+    bbox = axes.get_tightbbox(canvas.get_renderer())
 
     def make_frame(t):
-        date, sub_metrics = date_subregion_metrics[round(t * FPS)]
-        title = f'{date.date()}'
-
         frame_arts = []
+        date, region_metrics = date_region_metrics[round(t * FPS)]
         frame_arts.append(axes.text(
-            0.5, 0.5, '\n'.join(title.split()), transform=axes.transAxes,
+            0.5, 0.5, f'{date.date()}', transform=axes.transAxes,
             fontsize=55, fontweight='bold', alpha=0.2,
             ha='center', va='center'))
 
-        lats = [m.lat_lon[1] for m in sub_metrics.keys()]
-        lons = [m.lat_lon[0] for m in sub_metrics.keys()]
-
-        pop_size = 3e4 / region.population
+        lons, lats = zip(*(r.lat_lon for r in region_metrics.keys()))
+        size_per_pop = 3e4 / region.population
         frame_arts.append(axes.scatter(
             x=lats, y=lons,
-            s=[s.population * pop_size for s in sub_metrics.keys()],
+            s=[r.population * size_per_pop for r in region_metrics.keys()],
             color=(0.0, 0.0, 0.0, 0.1), transform=_lat_lon_crs, zorder=2.1))
 
-        metric_size = pop_size / 50  # Metric matches pop size when it hits 50.
-        frame_arts.append(axes.scatter(
-            x=lats, y=lons, s=[
-                m.get('positives / 100Kp', 0) * s.population * metric_size
-                for s, m in sub_metrics.items()],
-            color=(0.0, 0.0, 1.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
-
-        frame_arts.append(axes.scatter(
-            x=lats, y=lons, s=[
-                m.get('deaths / 1Mp', 0) * s.population * metric_size
-                for s, m in sub_metrics.items()],
-            color=(1.0, 0.0, 0.0, 0.2), transform=_lat_lon_crs, zorder=2.2))
+        # Use main region map metrics as a guide to ordering and color.
+        for name, metric in region.map_metrics.items():
+            frame_arts.append(axes.scatter(
+                x=lats, y=lons, s=[
+                    m.get(name, 0) * size_per_pop
+                    for r, m in region_metrics.items()],
+                color=metric.color, transform=_lat_lon_crs, zorder=2.2))
 
         canvas.draw()
         [a.remove() for a in frame_arts]
         return _rgb_from_canvas(canvas.get_renderer(), bbox)
 
-    duration = (len(date_subregion_metrics) - 0.5) / FPS
+    duration = (len(date_region_metrics) - 0.5) / FPS
     clip = moviepy.video.VideoClip.VideoClip(make_frame, duration=duration)
     clip.set_fps(FPS).write_videofile(
         str(urls.file(site_dir, urls.map_video_maybe(region))), logger=None,
-        ffmpeg_params=
-            '-c:v vp9 -b:v 0 -pix_fmt yuv420p -quality good -speed 0'.split())
+        ffmpeg_params='-c:v vp9 -b:v 0 -pix_fmt yuv420p -quality good -speed 0'.split())
 
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
-def _date_subregion_metrics(region):
+def _date_region_metrics(region):
     # Walk at most 2 layers down to find regions to map.
     subregions = [
         r for s in region.subregions.values()
         for r in (s.subregions.values() if urls.has_map(s) else (s,))
         if r.map_metrics]
 
-    date_subregion_metrics = {}
+    date_region_metrics = {}
     for r in subregions:
         for n, m in r.map_metrics.items():
             for t in m.frame.itertuples():
                 if pandas.notna(t.value):
-                    date_subregion_metrics.setdefault(
+                    date_region_metrics.setdefault(
                         t.Index, {}).setdefault(r, {})[n] = max(0, t.value)
 
     return {
         d: {r: r_m.get(r, {}) for r in subregions}
-        for d, r_m in sorted(date_subregion_metrics.items())
+        for d, r_m in sorted(date_region_metrics.items())
     }
 
 
@@ -184,16 +175,13 @@ def _setup_axes(figure, region):
     L2D = matplotlib.lines.Line2D
     axes.legend(
         loc='center left', bbox_to_anchor=(1, 0.5),
-        title='Tap to play, ⬅️ ➡️ seek, L loop/stop',
         handles=[
             L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
                 ls='none', marker='o', ms=15, label='area ~ population'),
             L2D([], [], color=(0.0, 0.0, 1.0, 0.2),
-                ls='none', marker='o', ms=15,
-                label='area ~ cases/day (x2K)'),
+                ls='none', marker='o', ms=15, label='area ~ positives x2K'),
             L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
-                ls='none', marker='o', ms=15,
-                label='area ~ deaths/day (x200K)'),
+                ls='none', marker='o', ms=15, label='area ~ deaths x200K'),
         ])
 
     return axes
