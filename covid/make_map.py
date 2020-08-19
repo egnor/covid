@@ -52,7 +52,7 @@ def setup(args):
 def write_video(region, site_dir):
     date_region_metrics = list(_date_region_metrics(region).items())
 
-    fig = matplotlib.pyplot.figure(figsize=(10, 10), dpi=150)
+    fig = matplotlib.pyplot.figure(figsize=(10, 6.5), dpi=150)
     axes = _setup_axes(fig, region)
     canvas = mplcairo.base.FigureCanvasCairo(fig)
 

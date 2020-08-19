@@ -33,10 +33,11 @@ def _write_thumb_image(region, site_dir):
     _plot_daily_events(thumb_axes, region.daily_events, emoji=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
-    thumb_axes.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    thumb_axes.yaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-    fig.tight_layout(pad=0)
-    fig.savefig(urls.file(site_dir, urls.thumb_image(region)), pad_inches=0)
+    thumb_axes.tick_params(
+        which='both', bottom=False, top=False, left=False, right=False,
+        labelbottom=False, labeltop=False, labelleft=False, labelright=False)
+    fig.tight_layout(pad=0.1)
+    fig.savefig(urls.file(site_dir, urls.thumb_image(region)))
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
@@ -72,7 +73,7 @@ def _write_chart_image(region, site_dir):
 
     fig.align_ylabels()
     fig.tight_layout(pad=0, h_pad=1)
-    fig.savefig(urls.file(site_dir, urls.chart_image(region)), pad_inches=0)
+    fig.savefig(urls.file(site_dir, urls.chart_image(region)))
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
