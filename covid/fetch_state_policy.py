@@ -80,6 +80,9 @@ def get_events(session):
             # if ('healthcare' in area_norm and 'telehealth' in norm and
             #         rows[7][c] == '1/0/1900'):
             #     rows[7][c] = 0
+            if ('masks' in area_norm and 'prevent local' in norm and
+                rows[2][c] == '*'):
+                rows[2][c] = 0
 
             ctype = (
                 bool if all(r[c] in (0, 1) for r in rows) else
@@ -137,6 +140,8 @@ def get_events(session):
                 -2 if 're-close indoor dining' in norm else
                 -2 if 're-close bars' in norm else
                 -1 if 're-close' in norm else
+                +2 if ('ended statewide' in norm and 'masks' in area_norm) else
+                +2 if ('prevent local' in norm and 'masks' in area_norm) else
                 -2 if ('public spaces' in norm and 'masks' in area_norm) else
                 -1 if 'masks' in area_norm else
                 -1 if 'quarantine rules' in area_norm else

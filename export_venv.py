@@ -47,8 +47,9 @@ venv_path = args.builds_dir / venv_name
 print(f'=== venv: {venv_path}')
 venv.create(venv_path, clear=True, symlinks=True, with_pip=True)
 
+# Listing numpy is a HACK - see https://github.com/SciTools/cartopy/issues/1552
 venv_environ = dict(os.environ, VIRTUAL_ENV=venv_path)
-for pip_args in (['wheel'], ['-r', req_path], [wheel_path]):
+for pip_args in (['wheel'], ['numpy==1.19.1'], ['-r', req_path], [wheel_path]):
     command = [venv_path / 'bin' / 'pip3', '-q', 'install'] + pip_args
     print(f'=== (in venv) pip3 install {" ".join(str(a) for a in pip_args)}')
     subprocess.run(command, check=True, env=venv_environ)
