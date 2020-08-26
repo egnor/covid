@@ -66,7 +66,7 @@ def make_region_html(region, args):
             with tags.div(cls='graphic'):
                 with tags.video(id='map', preload='auto'):
                     href = urls.link(doc_url, urls.map_video_maybe(region))
-                    tags.source(type='video/webm', src=f'{href}#t=1000');
+                    tags.source(type='video/webm', src=f'{href}#t=1000')
 
                 with tags.div(cls='map_controls'):
                     def i(n): return tags.i(cls=f'fas fa-{n}')
