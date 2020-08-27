@@ -28,7 +28,6 @@ def _write_thumb_image(region, site_dir):
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes, region)
     thumb_axes.set_ylim(0, 50)
-    _plot_covid_metrics(thumb_axes, region.baseline_metrics)
     _plot_covid_metrics(thumb_axes, region.covid_metrics)
     _plot_daily_events(thumb_axes, region.daily_events, emoji=False)
     thumb_axes.set_xlabel(None)
@@ -58,7 +57,6 @@ def _write_chart_image(region, site_dir):
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
     _plot_covid_metrics(covid_axes, region.covid_metrics)
-    _plot_covid_metrics(covid_axes, region.baseline_metrics)
     _plot_daily_events(covid_axes, region.daily_events, emoji=True)
     _plot_subregion_peaks(covid_axes, region)
     _add_plot_legend(covid_axes)
@@ -79,16 +77,19 @@ def _write_chart_image(region, site_dir):
 
 def _plot_subregion_peaks(axes, region):
     (xmin, xmax), (ymin, ymax) = axes.get_xlim(), axes.get_ylim()
+
+    def pop(r): return r.totals['population']
     rgb = matplotlib.colors.to_rgb('tab:blue')
     xs, ys, cs, ts = [], [], [], []
-    max_p = max((s.population for s in region.subregions.values()), default=1)
-    for sub in sorted(region.subregions.values(), key=lambda r: -r.population):
+    max_p = max((pop(s) for s in region.subregions.values()), default=1)
+    for sub in sorted(region.subregions.values(), key=lambda r: -pop(r)):
         m = sub.covid_metrics.get('positives / 100Kp')
         if m and m.peak and matplotlib.dates.date2num(m.peak[0]) >= xmin:
             xs.append(m.peak[0])
             ys.append(min(m.peak[1], ymax))
-            cs.append(rgb + (max(0.2, (sub.population / max_p) ** 0.5),))
+            cs.append(rgb + (max(0.2, (pop(sub) / max_p) ** 0.5),))
             ts.append(sub.short_name.replace(' ', '')[:3])
+
     if xs:
         _add_to_legend(axes, axes.scatter(
             xs, ys, c=cs, marker=6, label='subdiv peak positives'), order=+5)
@@ -178,8 +179,12 @@ def _plot_daily_events(axes, daily_events, emoji):
 def _setup_xaxis(axes, region, title=None, titlesize=45):
     """Sets common X axis and plot style."""
 
-    end = max(m.frame.index.max() for m in region.covid_metrics.values())
-    xmin, xmax = pandas.Timestamp(2020, 3, 1), end + pandas.Timedelta(days=1)
+    latest = max(
+        m.frame.index.max() for m in region.covid_metrics.values()
+        if m.emphasis >= 0)
+
+    xmin = pandas.Timestamp(2020, 3, 1)
+    xmax = latest + pandas.Timedelta(days=1)
     axes.set_xlim(xmin, xmax)
     axes.grid(color='black', alpha=0.1)
 

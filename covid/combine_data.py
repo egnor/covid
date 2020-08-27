@@ -32,25 +32,23 @@ argument_group.add_argument('--no_state_policy', action='store_true')
 
 
 Metric = collections.namedtuple(
-    'Metric', ['color', 'emphasis', 'peak', 'frame'])
+    'Metric', ['color', 'emphasis', 'peak', 'frame', 'credits'])
 
 DailyEvents = collections.namedtuple(
-    'DailyEvents', ['date', 'score', 'emojis', 'frame'])
+    'DailyEvents', ['date', 'score', 'emojis', 'frame', 'credits'])
 
 
 @dataclass(eq=False)
 class Region:
     name: str
     short_name: str
+    lat_lon: Optional[Tuple[float, float]] = None
     jhu_uid: Optional[int] = None
     iso_code: Optional[str] = None
     fips_code: Optional[int] = None
-    population: Optional[int] = None
-    lat_lon: Optional[Tuple[float, float]] = None
+    totals: collections.Counter = field(default_factory=collections.Counter)
     parent: Optional['Region'] = field(default=None, repr=False)
     subregions: dict = field(default_factory=dict, repr=False)
-    credits: dict = field(default_factory=dict, repr=False)
-    baseline_metrics: dict = field(default_factory=dict, repr=False)
     covid_metrics: dict = field(default_factory=dict, repr=False)
     map_metrics: dict = field(default_factory=dict, repr=False)
     mobility_metrics: dict = field(default_factory=dict, repr=False)
@@ -93,7 +91,7 @@ def get_world(session, args, verbose=False):
     # Add COVID metrics from JHU.
     #
 
-    def trend_metric(color, emphasis, values):
+    def trend_metric(color, emphasis, credits, values):
         nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
         first_i = max(0, min(first_i, len(values) - 14))
@@ -101,31 +99,40 @@ def get_world(session, args, verbose=False):
         peak_x = smooth.idxmax()
         peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
         frame = pandas.DataFrame({'raw': values, 'value': smooth})
-        return Metric(color=color, emphasis=emphasis, peak=peak, frame=frame)
+        return Metric(
+            color=color, emphasis=emphasis, peak=peak, frame=frame,
+            credits=credits)
 
     if not args.no_jhu_covid19:
         # Populate the tree with JHU metrics.
         vprint('Loading JHU COVID data...')
         jhu_data = fetch_jhu_covid19.get_data(session)
+        jhu_credits = fetch_jhu_covid19.credits()
         vprint('Merging JHU COVID data...')
-        for uid, d in jhu_data.groupby(level='UID', sort=False):
+        for uid, df in jhu_data.groupby(level='UID', sort=False):
             region = region_by_uid.get(uid)
             if not region:
                 continue  # Filtered out for one reason or another.
 
-            # Convert total cases and deaths into daily cases and deaths.
-            d.reset_index(level='UID', drop=True, inplace=True)
-            cases = d.total_cases.iloc[1:] - d.total_cases.values[:-1]
-            deaths = d.total_deaths.iloc[1:] - d.total_deaths.values[:-1]
+            # All rows in the group have the same UID; index only by date.
+            df.reset_index(level='UID', drop=True, inplace=True)
 
+            # Convert total cases and deaths into daily cases and deaths.
             region.covid_metrics.update({
                 'positives / 100Kp': trend_metric(
-                    'tab:blue', 1, cases * 1e5 / region.population),
+                    'tab:blue', 1, jhu_credits,
+                    (df.total_cases.iloc[1:] - df.total_cases.values[:-1]) *
+                        1e5 / region.totals['population']),
                 'deaths / 1Mp': trend_metric(
-                    'tab:red', 1, deaths * 1e6 / region.population),
+                    'tab:red', 1, jhu_credits,
+                    (df.total_deaths.iloc[1:] - df.total_deaths.values[:-1]) *
+                        1e6 / region.totals['population']),
             })
 
-        # Drop subtrees in the place tree with no JHU COVID metrics.
+            region.totals['deaths'] = df.total_deaths.iloc[-1]
+            region.totals['positives'] = df.total_cases.iloc[-1]
+
+        # Drop subtrees in the region tree with no JHU COVID metrics.
         def prune_region_tree(region):
             region.subregions = {
                 k: sub for k, sub in region.subregions.items()
@@ -136,32 +143,6 @@ def get_world(session, args, verbose=False):
         prune_region_tree(world)
 
     #
-    # Add baseline mortality data from CDC figures for US states.
-    # TODO: Include seasonal variation and county level data?
-    # TODO: Some sort of proper excess mortality plotting?
-    #
-
-    threshold_metric = (lambda color, value: Metric(
-        color=color, emphasis=-1, peak=None,
-        frame=pandas.DataFrame(
-            {'value': [value] * 2},
-            index=pandas.DatetimeIndex(['2020-01-01', '2020-12-31']))))
-
-    if not args.no_cdc_mortality:
-        vprint('Loading and merging CDC mortality data...')
-        cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-        for mort in cdc_mortality.itertuples(name='Mortality'):
-            region = region_by_fips.get(mort.Index)
-            if region is None:
-                continue
-
-            region.credits.update(fetch_cdc_mortality.credits())
-            region.baseline_metrics.update({
-                'historical deaths / 1Mp': threshold_metric(
-                    'black', mort.Deaths / 365 * 1e6 / region.population),
-            })
-
-    #
     # Mix in covidtracking data to get hospital data for US states.
     # (Use its cases/deaths data where available, for matching metrics.)
     #
@@ -169,31 +150,60 @@ def get_world(session, args, verbose=False):
     if not args.no_covid_tracking:
         vprint('Loading and merging covidtracking.com data...')
         covid_tracking = fetch_covid_tracking.get_states(session=session)
+        covid_credits = fetch_covid_tracking.credits()
         for fips, covid in covid_tracking.groupby(level='fips', sort=False):
             region = region_by_fips.get(fips)
             if region is None:
-                continue
+                continue  # Filtered out for one reason or another.
+
+            # All rows in the group have the same fips; index only by date.
+            covid.reset_index(level='fips', drop=True, inplace=True)
 
             # Take all covidtracking data where available, for consistency.
-            covid.reset_index(level='fips', drop=True, inplace=True)
-            region.credits.update(fetch_covid_tracking.credits())
+            pop = region.totals['population']
             region.covid_metrics.update({
                 'tests / 10Kp': trend_metric(
-                    'tab:green', 0,
-                    covid.totalTestResultsIncrease * 1e4 / region.population),
+                    'tab:green', 0, covid_credits,
+                    covid.totalTestResultsIncrease * 1e4 / pop),
                 'positives / 100Kp': trend_metric(
-                    'tab:blue', 1,
-                    covid.positiveIncrease * 1e5 / region.population),
+                    'tab:blue', 1, covid_credits,
+                    covid.positiveIncrease * 1e5 / pop),
                 'hosp admit / 250Kp': trend_metric(
-                    'tab:orange', 0,
-                    covid.hospitalizedIncrease * 25e4 / region.population),
+                    'tab:orange', 0, covid_credits,
+                    covid.hospitalizedIncrease * 25e4 / pop),
                 'hosp current / 25Kp': trend_metric(
-                    'tab:pink', 0,
-                    covid.hospitalizedCurrently * 25e3 / region.population),
+                    'tab:pink', 0, covid_credits,
+                    covid.hospitalizedCurrently * 25e3 / pop),
                 'deaths / 1Mp': trend_metric(
-                    'tab:red', 1,
-                    covid.deathIncrease * 1e6 / region.population),
+                    'tab:red', 1, covid_credits,
+                    covid.deathIncrease * 1e6 / pop),
             })
+
+            region.totals['deaths'] = covid.death.iloc[-1]
+            region.totals['positives'] = covid.positive.iloc[-1]
+
+    #
+    # Add baseline mortality data from CDC figures for US states.
+    # TODO: Include seasonal variation and county level data?
+    # TODO: Some sort of proper excess mortality plotting?
+    #
+
+    if not args.no_cdc_mortality:
+        vprint('Loading and merging CDC mortality data...')
+        cdc_mortality = fetch_cdc_mortality.get_states(session=session)
+        cdc_credits = fetch_cdc_mortality.credits()
+        all_of_2020 = pandas.DatetimeIndex(['2020-01-01', '2020-12-31'])
+        for mort in cdc_mortality.itertuples(name='Mortality'):
+            region = region_by_fips.get(mort.Index)
+            if region is None:
+                continue  # Filtered out for one reason or another.
+
+            mort_1M = mort.Deaths / 365 * 1e6 / region.totals['population']
+            region.covid_metrics.update({
+                'historical deaths / 1Mp': Metric(
+                    color='black', emphasis=-1, peak=None, credits=cdc_credits,
+                    frame=pandas.DataFrame(
+                        {'value': [mort_1M] * 2}, index=all_of_2020))})
 
     #
     # Add policy changes for US states from the state policy database.
@@ -203,12 +213,12 @@ def get_world(session, args, verbose=False):
         vprint('Loading and merging state policy database...')
         state_policy = fetch_state_policy.get_events(session=session)
         state_policy['abs_score'] = state_policy.score.abs()
+        policy_credits = fetch_state_policy.credits()
         for f, events in state_policy.groupby(level='state_fips', sort=False):
             region = region_by_fips.get(f)
             if region is None:
                 continue
 
-            region.credits.update(fetch_state_policy.credits())
             for date, es in events.groupby(level='date'):
                 df = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
                 smin, smax = df.score.min(), df.score.max()
@@ -216,7 +226,8 @@ def get_world(session, args, verbose=False):
                 emojis = list(dict.fromkeys(
                     e.emoji for e in df.itertuples() if abs(e.score) >= 2))
                 region.daily_events.append(DailyEvents(
-                    date=date, score=score, emojis=emojis, frame=df))
+                    date=date, score=score, emojis=emojis, frame=df,
+                    credits=policy_credits))
 
     #
     # Add mobility data where it's available.
@@ -230,6 +241,7 @@ def get_world(session, args, verbose=False):
 
         vprint('Loading Google mobility data...')
         mobility_data = fetch_google_mobility.get_mobility(session=session)
+        mobility_credits = fetch_google_mobility.credits()
         vprint('Merging Google mobility data...')
         mobility_data.sort_values(by=gcols + ['date'], inplace=True)
         mobility_data.set_index('date', inplace=True)
@@ -246,48 +258,59 @@ def get_world(session, args, verbose=False):
                 continue
 
             pcfb = 'percent_change_from_baseline'  # common, long suffix
-            region.credits.update(fetch_google_mobility.credits())
             region.mobility_metrics.update({
                 'residential': trend_metric(
-                    'tab:gray', 1, 100 + m[f'residential_{pcfb}']),
+                    'tab:gray', 1, mobility_credits,
+                    100 + m[f'residential_{pcfb}']),
                 'retail / recreation': trend_metric(
-                    'tab:orange', 1, 100 + m[f'retail_and_recreation_{pcfb}']),
+                    'tab:orange', 1, mobility_credits,
+                    100 + m[f'retail_and_recreation_{pcfb}']),
                 'workplaces': trend_metric(
-                    'tab:red', 1, 100 + m[f'workplaces_{pcfb}']),
+                    'tab:red', 1, mobility_credits,
+                    100 + m[f'workplaces_{pcfb}']),
                 'parks': trend_metric(
-                    'tab:green', 0, 100 + m[f'parks_{pcfb}']),
+                    'tab:green', 0, mobility_credits,
+                    100 + m[f'parks_{pcfb}']),
                 'grocery / pharmacy': trend_metric(
-                    'tab:blue', 0, 100 + m[f'grocery_and_pharmacy_{pcfb}']),
+                    'tab:blue', 0, mobility_credits,
+                    100 + m[f'grocery_and_pharmacy_{pcfb}']),
                 'transit stations': trend_metric(
-                    'tab:purple', 0, 100 + m[f'transit_stations_{pcfb}']),
+                    'tab:purple', 0, mobility_credits,
+                    100 + m[f'transit_stations_{pcfb}']),
             })
 
     #
     # Combine metrics from subregions when not defined at the higher level.
     #
 
-    def roll_up_metrics(region):
-        # Use None to mark metrics already defined at the higher level.
-        name_popmetrics = {name: None for name in region.covid_metrics.keys()}
-        name_credits = {}
-        for sub in region.subregions.values():
+    def roll_up_metrics(r):
+        name_popmetrics = {}
+        name_poptotals = {}
+        for sub in r.subregions.values():
             roll_up_metrics(sub)
+            pop = sub.totals['population']
+            for name, total in sub.totals.items():
+                if name not in r.totals:
+                    name_poptotals.setdefault(name, []).append((pop, total))
             for name, metric in sub.covid_metrics.items():
-                popmetrics = name_popmetrics.setdefault(name, [])
-                if popmetrics is not None:
-                    popmetrics.append((sub.population, metric))
-                    name_credits.setdefault(name, {}).update(sub.credits)
+                if name not in r.covid_metrics:
+                    name_popmetrics.setdefault(name, []).append((pop, metric))
 
-        # Combine metrics if they're defined for >90% of the population.
+        # Combine totals & metrics defined for >90% of the population.
+        pop = r.totals['population']
+        for name, poptotals in name_poptotals.items():
+            if sum(p for p, t in poptotals or []) >= pop * 0.9:
+                r.totals[name] = sum(t for p, t in poptotals)
+
         for name, popmetrics in name_popmetrics.items():
-            if sum(p for p, m in popmetrics or []) >= region.population * 0.9:
-                region.credits.update(name_credits.get(name, {}))
+            if sum(p for p, m in popmetrics or []) >= pop * 0.9:
                 popmetrics.sort(reverse=True)
-                popsum = functools.reduce(
-                    lambda a, b: a.add(b, fill_value=0.0),
-                    (m.frame * p for p, m in popmetrics))
-                region.covid_metrics[name] = popmetrics[0][1]._replace(
-                    frame=popsum / region.population)
+                r.covid_metrics[name] = popmetrics[0][1]._replace(
+                    credits=dict(
+                        c for p, m in popmetrics for c in m.credits.items()),
+                    frame=functools.reduce(
+                        lambda a, b: a.add(b, fill_value=0.0),
+                        (p * m.frame for p, m in popmetrics)) / pop)
 
     vprint('Rolling up metrics...')
     roll_up_metrics(world)
@@ -299,10 +322,10 @@ def get_world(session, args, verbose=False):
     # Sync map metric weekly data points to this end date.
     latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
 
-    def map_metric(color, dates, df, mult): return Metric(
-        color=color, emphasis=None, peak=None,
+    def map_metric(color, dates, m, mul): return Metric(
+        color=color, emphasis=None, peak=None, credits=m.credits,
         frame=pandas.DataFrame(
-            {'value': mult * numpy.interp(dates, df.index, df.value)},
+            {'value': mul * numpy.interp(dates, m.frame.index, m.frame.value)},
             index=dates))
 
     def make_map_metrics(region):
@@ -310,15 +333,15 @@ def get_world(session, args, verbose=False):
             make_map_metrics(sub)
 
         if region.covid_metrics:
-            pos_df = region.covid_metrics['positives / 100Kp'].frame
-            death_df = region.covid_metrics['deaths / 1Mp'].frame
-            first = pos_df.index[0].astimezone(latest.tz)
+            pos = region.covid_metrics['positives / 100Kp']
+            death = region.covid_metrics['deaths / 1Mp']
+            first = pos.frame.index[0].astimezone(latest.tz)
             weeks = (latest - first) // pandas.Timedelta(days=7)
             dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
-            mult = region.population / 50  # /100Kp => x2K, /1Mp => x200K
+            mul = region.totals['population'] / 50  # 100K => 2K, 1Mp => 200K
             region.map_metrics.update({
-                'positives x2K': map_metric('#0000FF50', dates, pos_df, mult),
-                'deaths x200K': map_metric('#FF000050', dates, death_df, mult),
+                'positives x2K': map_metric('#0000FF50', dates, pos, mul),
+                'deaths x200K': map_metric('#FF000050', dates, death, mul),
             })
 
     make_map_metrics(world)
@@ -338,17 +361,15 @@ def get_world(session, args, verbose=False):
 def _get_skeleton(session):
     """Returns a region tree for the world with no metrics populated."""
 
-    jhu_credits = fetch_jhu_covid19.credits()
-    world = Region(name='World', short_name='World', credits={**jhu_credits})
-
     def subregion(parent, key, name=None, short_name=None):
         region = parent.subregions.get(key)
         if not region:
             region = parent.subregions[key] = Region(
                 name=name or str(key), short_name=short_name or str(key),
-                parent=parent, credits={**jhu_credits})
+                parent=parent)
         return region
 
+    world = Region(name='World', short_name='World')
     jhu_places = fetch_jhu_covid19.get_places(session)
     for uid, place in jhu_places.items():
         if not (place.Population > 0):
@@ -402,17 +423,18 @@ def _get_skeleton(session):
                 region = subregion(region, place.Admin2)
 
         region.jhu_uid = uid
-        region.population = place.Population
+        region.totals['population'] = place.Population
         region.lat_lon = (place.Lat, place.Long_)
 
     # Compute population from subregions if it's not set at the higher level.
     def roll_up_population(region):
-        pop = sum(roll_up_population(r) for r in region.subregions.values())
-        if pandas.isna(region.population) or not (region.population > 0):
-            region.population = pop
-        if not (region.population > 0):
+        spop = sum(roll_up_population(r) for r in region.subregions.values())
+        rpop = region.totals['population']
+        rpop = spop if (pandas.isna(rpop) or not (rpop > 0)) else rpop
+        if not (rpop > 0):
             raise ValueError(f'No population for "{region.name}"')
-        return region.population
+        region.totals['population'] = rpop
+        return rpop
 
     roll_up_population(world)
     return world
@@ -437,8 +459,7 @@ if __name__ == '__main__':
     def print_tree(prefix, parents, key, r):
         if r.matches_regex(print_regex):
             line = (
-                f'{prefix}{r.population or -1:9.0f}p <' +
-                '.b'[bool(r.baseline_metrics)] +
+                f'{prefix}{r.totals["population"] or -1:9.0f}p <' +
                 '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
                 '.c'[bool(r.covid_metrics)] +
                 '.m'[bool(r.map_metrics)] +
@@ -451,7 +472,6 @@ if __name__ == '__main__':
                 line = f'{line} ({r.name})'
             print(line)
             for cat, metrics in (
-                    ('bas', r.baseline_metrics),
                     ('cov', r.covid_metrics),
                     ('map', r.map_metrics),
                     ('mob', r.mobility_metrics)):

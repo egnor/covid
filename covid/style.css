@@ -1,6 +1,6 @@
 body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 
-.graphic { width: 100%; max-width: 1000px; margin: 0 0 10px 0; outline: none; }
+.graphic { width: 100%; max-width: 1000px; margin: 10px 0 0 0; outline: none; }
 .graphic img, .graphic video { max-width: 100%; }
 
 .map_controls { display: flex; margin: 0 -2px; }
@@ -23,7 +23,7 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
     text-align: center; font-size: 22px; font-weight: 900;
     color: black; opacity: 0.7;
 }
-.thumb_pop { font-size: 70%; font-weight: normal; opacity: 0.8; }
+.thumb_label div { font-size: 70%; font-weight: normal; opacity: 0.8; }
 
 .events { 
     display: grid; gap: 0.2em 0.5em;
@@ -37,6 +37,8 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
     font-family: Noto Color Emoji;
 }
 
+h1 { margin-top: 0px; }
+h1, h2, h3, h4, h5, h6 { margin-bottom: 5px; }
 .event_policy.event_close, h2 .event_close { color: #4E79A7; }
 .event_policy.event_open,  h2 .event_open  { color: #F28E2B; }
 

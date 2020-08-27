@@ -26,7 +26,7 @@ def make_region_page(region, args):
     try:
         make_region_html(region, args)
         make_chart.write_images(region, args.site_dir)
-        if has_map(region, args):
+        if urls.has_map(region):
             make_map.write_video(region, args.site_dir)
             map_note = ' (+map video)'
     except Exception as e:
@@ -39,7 +39,10 @@ def make_region_page(region, args):
 def make_region_html(region, args):
     """Write region-specific HTML page."""
 
-    latest = max(m.frame.index.max() for m in region.covid_metrics.values())
+    latest = max(
+        m.frame.index.max() for m in region.covid_metrics.values()
+        if m.emphasis >= 0)
+
     doc = dominate.document(title=f'{region.name} ({latest.date()}) COVID-19')
     doc_url = urls.region_page(region)
     def doc_link(url): return urls.link(doc_url, url)
@@ -49,7 +52,7 @@ def make_region_html(region, args):
 
     with doc.body:
         tags.attr(id='map_key_target', tabindex='-1')
-        with tags.h2():
+        with tags.h1():
             def write_breadcrumbs(r):
                 if r is not None:
                     write_breadcrumbs(r.parent)
@@ -60,9 +63,14 @@ def make_region_html(region, args):
             util.text(region.short_name)
             if region.name != region.short_name:
                 util.text(f' / {region.name}')
-            util.text(f' (pop. {region.population:,.0f}) {latest.date()}')
 
-        if has_map(region, args):
+        with tags.div():
+            util.text(f'{latest.date()}: ')
+            util.text(f'{region.totals["population"]:,.0f}\xa0pop, ')
+            util.text(f'{region.totals.get("positives", 0):,.0f}\xa0pos, ')
+            util.text(f'{region.totals.get("deaths", 0):,.0f}\xa0died')
+
+        if urls.has_map(region):
             with tags.div(cls='graphic'):
                 with tags.video(id='map', preload='auto'):
                     href = urls.link(doc_url, urls.map_video_maybe(region))
@@ -101,12 +109,13 @@ def make_region_html(region, args):
                         tags.div(ev.emoji, cls=f'event_emoji {css}')
                         tags.div(ev.policy, cls=f'event_policy {css}')
 
-        if region.subregions:
-            subs = [r for r in region.subregions.values()
-                    if r.matches_regex(args.page_filter)]
+        subs = [r for r in region.subregions.values()
+                if r.matches_regex(args.page_filter)]
+        if subs:
+            def deaths(r): return r.totals.get('deaths', 0)
             if len(subs) >= 10:
-                tags.h2('Top 5 by population')
-                for s in list(sorted(subs, key=lambda r: -r.population))[:5]:
+                tags.h2('Top 5 by total mortality')
+                for s in list(sorted(subs, key=deaths, reverse=True))[:5]:
                     make_thumb_link_html(doc_url, s)
                 tags.h2('All subdivisions')
             else:
@@ -114,8 +123,12 @@ def make_region_html(region, args):
             for s in sorted(subs, key=lambda r: r.name):
                 make_thumb_link_html(doc_url, s)
 
+        r = region
+        credits = dict(c for e in r.daily_events for c in e.credits.items())
+        for md in (r.covid_metrics, r.map_metrics, r.mobility_metrics):
+            credits.update(c for m in md.values() for c in m.credits.items())
         with tags.p('Sources: ', cls='credits'):
-            for i, (url, text) in enumerate(region.credits.items()):
+            for i, (url, text) in enumerate(credits.items()):
                 util.text(', ') if i > 0 else None
                 tags.a(text, href=url)
 
@@ -126,13 +139,12 @@ def make_region_html(region, args):
 def make_thumb_link_html(doc_url, region):
     region_href = urls.link(doc_url, urls.region_page(region))
     with tags.a(cls='thumb', href=region_href):
-        pp = f'pop. {region.population:,.0f}'
-        tags.div(region.name, tags.div(pp, cls='thumb_pop'), cls='thumb_label')
+        with tags.div(region.name, cls='thumb_label'):
+            tags.div(
+                f'{region.totals["population"]:,.0f}\xa0pop, '
+                f'{region.totals.get("positives", 0):,.0f}\xa0pos, '
+                f'{region.totals.get("deaths", 0):,.0f}\xa0died')
         tags.img(width=200, src=urls.link(doc_url, urls.thumb_image(region)))
-
-
-def has_map(region, args):
-    return urls.has_map(region) and region.matches_regex(args.map_filter)
 
 
 def main():
@@ -144,7 +156,6 @@ def main():
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
     parser.add_argument('--page_filter')
-    parser.add_argument('--map_filter')
     args = parser.parse_args()
 
     print('Loading data...')

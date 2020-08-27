@@ -29,11 +29,11 @@ def chart_image(region):
 
 
 def has_map(region):
-    pop = region.population
+    rp = region.totals['population']
     non_biggest_pop = sum(
-        s.population for s in region.subregions.values()
-        if s.map_metrics and (s.population < 0.5 * pop or map_video_maybe(s)))
-    return len(region.subregions) >= 3 and non_biggest_pop >= 0.1 * pop
+        s.totals['population'] for s in region.subregions.values()
+        if s.map_metrics and (s.totals['population'] < 0.5 * rp or has_map(s)))
+    return len(region.subregions) >= 3 and non_biggest_pop >= 0.1 * rp
 
 
 def map_video_maybe(region):

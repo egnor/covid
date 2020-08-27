@@ -69,10 +69,11 @@ def write_video(region, site_dir):
             ha='center', va='center'))
 
         lons, lats = zip(*(r.lat_lon for r in region_metrics.keys()))
-        size_per_pop = 3e4 / region.population
+        size_per_pop = 3e4 / region.totals['population']
         frame_arts.append(axes.scatter(
-            x=lats, y=lons,
-            s=[r.population * size_per_pop for r in region_metrics.keys()],
+            x=lats, y=lons, s=[
+                r.totals['population'] * size_per_pop
+                for r in region_metrics.keys()],
             color=(0.0, 0.0, 0.0, 0.1), transform=_lat_lon_crs, zorder=2.1))
 
         # Use main region map metrics as a guide to ordering and color.
