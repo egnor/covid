@@ -371,6 +371,18 @@ def _get_skeleton(session):
 
     world = Region(name='World', short_name='World')
     jhu_places = fetch_jhu_covid19.get_places(session)
+
+    # Do not generate a region for these US county FIPS codes.
+    skip_fips = set((
+        25007, 25019,                              # MA: "Dukes and Nantucket"
+        36005, 36047, 36081, 36085,                # NY: "New York City"
+        49003, 49005, 49033,                       # UT: "Bear River"
+        49023, 49027, 49039, 49041, 49031, 49055,  # UT: "Central Utah"
+        49007, 49015, 49019,                       # UT: "Southeast Utah"
+        49001, 49017, 49021, 49025, 49053,         # UT: "Southwest Utah"
+        49009, 49013, 49047,                       # UT: "TriCounty"
+        49057, 49029))                             # UT: "Weber-Morgan"
+
     for uid, place in jhu_places.items():
         if not (place.Population > 0):
             continue  # We require population data.
@@ -392,14 +404,15 @@ def _get_skeleton(session):
             if place.Admin2:
                 if not place.Province_State:
                     raise ValueError(f'Admin2 but no State in {place}')
-                fips = place.FIPS
-                if place.Admin2 == 'New York City':
-                    fips = None  # JHU fudges 36061 (Manhattan) for all NYC.
-                elif place.Admin2 in ('Bronx', 'Kings', 'Queens', 'Richmond'):
-                    continue  # JHU zeroes out data for other boroughs.
-                region = subregion(
-                    region, fips or place.Admin2, place.Admin2, place.Admin2)
-                region.fips_code = fips
+                key = place.FIPS or place.Admin2
+                if key == 36061:
+                    key = None  # JHU fudges 36061 (Manhattan) for all NYC.
+                elif key == 'Kansas City':
+                    continue    # KC data is also allocated to counties.
+                elif key in skip_fips:
+                    continue    # These regions are tracked elsewhere.
+                region = subregion(region, key, place.Admin2, place.Admin2)
+                region.fips_code = key if isinstance(key, int) else None
 
         else:
             # Generic non-US logic.
