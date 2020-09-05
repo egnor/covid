@@ -112,7 +112,7 @@ def make_region_html(region, args):
         subs = [r for r in region.subregions.values()
                 if r.matches_regex(args.page_filter)]
         if subs:
-            sub_pop = [s.totals['population'] for s in subs]
+            sub_pop = sum(s.totals['population'] for s in subs)
             if len(subs) >= 10 and sub_pop > 0.9 * region.totals['population']:
                 def deaths(r): return r.totals.get('deaths', 0)
                 tags.h2('Top 5 by total mortality')
