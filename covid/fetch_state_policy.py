@@ -84,10 +84,18 @@ def get_events(session):
                 rows[2][c] == '*'):
                 rows[2][c] = 0
 
-            ctype = (
-                bool if all(r[c] in (0, 1) for r in rows) else
-                pandas.Timestamp if all(
-                    r[c] == 0 or '/' in str(r[c]) for r in rows) else int)
+            if all(r[c] in (0, 1) for r in rows):
+                ctype = bool
+            elif all(r[c] in (0, '0') or '/' in str(r[c]) for r in rows):
+                ctype = pandas.Timestamp
+            elif all(isinstance(r[c], int) for r in rows):
+                ctype = int
+            elif all(type(r[c]) in (float, int) for r in rows):
+                ctype = float
+            else:
+                raise ValueError(
+                    f'Inscrutable values in "{tab_title}" / "{name}": [' +
+                    ', '.join(repr(r[c]) for r in rows) + ']')
 
             emoji = (
                 '🚨' if 'state of emergency' in norm else
@@ -161,12 +169,13 @@ def get_events(session):
                 value = row[cdef.index]
                 if cdef.ctype == pandas.Timestamp:
                     last_detail = {}
-                    if value == 0:
+                    if value in (0, '0'):
                         continue
 
                     # Codes for policies in effect pre-COVID.
                     date = value.replace('already in effect', '').strip()
                     date = date.replace('1/0/1900', '1/1/2020')  # Sentinel.
+                    date = date.replace('*', '')  # Footnote.
 
                     try:
                         date = pandas.Timestamp(date)
@@ -191,7 +200,8 @@ def get_events(session):
                     except ValueError:
                         raise ValueError(
                             f'Bad value "{value}" in "{tab_title}" / '
-                            f'"{cdef.name}" for {row[1]} (row {r + 2})')
+                            f'"{cdef.name}" for {row[1]} (row {r + 2}), '
+                            f'expected {cdef.ctype}')
 
     frame = pandas.DataFrame(out_data)
     frame.sort_values(by=['state_fips', 'date'], inplace=True)
