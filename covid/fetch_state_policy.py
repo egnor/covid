@@ -47,7 +47,8 @@ def get_events(session):
     }
 
     skip_tabs = [
-        'Information', 'Racial Disparities', 'Notes/Details', 'Codebook',
+        'Information', 'Vote By Mail', 'Racial Disparities',
+        'Codebook', 'Notes/Details',
     ]
 
     for tab_json in fetch_json['valueRanges']:
