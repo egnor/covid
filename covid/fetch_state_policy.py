@@ -4,6 +4,7 @@
 import collections
 import io
 import json
+import re
 import urllib.parse
 
 import pandas
@@ -64,10 +65,9 @@ def get_events(session):
                 f'Unexpected columns in "{tab_title}": '
                 f'"{header[0]}", "{header[1]}", "{header[2]}"')
 
-        rows = tab_values[1:52]
+        rows = [[str(v) for v in r] for r in tab_values[1:52]]
         for i, r in enumerate(rows):
-            if (not all(isinstance(*vt) for vt in zip(r[:3], (str, str, int)))
-                    or not r[1].isupper() or len(r[1]) != 2):
+            if (not r[1].isupper() or len(r[1]) != 2 or not r[2].isdigit()):
                 raise ValueError(
                     f'Unexpected data "{r[:3]}" in "{tab_title}" row {i + 2}')
 
@@ -83,15 +83,15 @@ def get_events(session):
             #     rows[7][c] = 0
             if ('masks' in area_norm and 'prevent local' in norm and
                 rows[2][c] == '*'):
-                rows[2][c] = 0
+                rows[2][c] = '0'
 
-            if all(r[c] in (0, 1) for r in rows):
+            if all(r[c] in ('0', '1') for r in rows):
                 ctype = bool
-            elif all(r[c] in (0, '0') or '/' in str(r[c]) for r in rows):
+            elif all(r[c] in ('0', '1') or '/' in r[c] for r in rows):
                 ctype = pandas.Timestamp
-            elif all(isinstance(r[c], int) for r in rows):
+            elif all(re.fullmatch(r'\d+', r[c]) for r in rows):
                 ctype = int
-            elif all(type(r[c]) in (float, int) for r in rows):
+            elif all(re.fullmatch(r'\d+(\.\d+)?', r[c]) for r in rows):
                 ctype = float
             else:
                 raise ValueError(
@@ -170,13 +170,15 @@ def get_events(session):
                 value = row[cdef.index]
                 if cdef.ctype == pandas.Timestamp:
                     last_detail = {}
-                    if value in (0, '0'):
-                        continue
 
                     # Codes for policies in effect pre-COVID.
                     date = value.replace('already in effect', '').strip()
-                    date = date.replace('1/0/1900', '1/1/2020')  # Sentinel.
                     date = date.replace('*', '')  # Footnote.
+                    date = '1/1/2020' if date == '1/0/1900' else date
+                    date = '1/1/2020' if date == '1' else date
+                    date = '' if date == '0' else date
+                    if not date:
+                        continue
 
                     try:
                         date = pandas.Timestamp(date)
@@ -187,7 +189,7 @@ def get_events(session):
 
                     out_data['state_name'].append(row[0])
                     out_data['state_abbrev'].append(row[1])
-                    out_data['state_fips'].append(row[2])
+                    out_data['state_fips'].append(int(row[2]))
                     out_data['date'].append(pandas.Timestamp(date))
                     out_data['policy_area'].append(tab_title)
                     out_data['policy'].append(cdef.name)
