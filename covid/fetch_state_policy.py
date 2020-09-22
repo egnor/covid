@@ -82,7 +82,7 @@ def get_events(session):
             #         rows[7][c] == '1/0/1900'):
             #     rows[7][c] = 0
             if ('masks' in area_norm and 'prevent local' in norm and
-                rows[2][c] == '*'):
+                    rows[2][c] == '*'):
                 rows[2][c] = '0'
 
             if all(r[c] in ('0', '1') for r in rows):

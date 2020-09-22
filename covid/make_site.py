@@ -43,7 +43,7 @@ def make_region_html(region, args):
         m.frame.index.max() for m in region.covid_metrics.values()
         if m.emphasis >= 0)
 
-    doc = dominate.document(title=f'{region.name} ({latest.date()}) COVID-19')
+    doc = dominate.document(title=f'{region.name} COVID-19 ({latest.date()})')
     doc_url = urls.region_page(region)
     def doc_link(url): return urls.link(doc_url, url)
 
@@ -65,10 +65,13 @@ def make_region_html(region, args):
                 util.text(f' / {region.name}')
 
         with tags.div():
-            util.text(f'{latest.date()}: ')
-            util.text(f'{region.totals["population"]:,.0f}\xa0pop, ')
-            util.text(f'{region.totals.get("positives", 0):,.0f}\xa0pos, ')
-            util.text(f'{region.totals.get("deaths", 0):,.0f}\xa0died')
+            pop = region.totals["population"]
+            p = region.totals.get("positives", 0)
+            d = region.totals.get("deaths", 0)
+            util.text(f'{pop:,.0f}\xa0pop, ')
+            util.text(f'{p:,.0f}\xa0({100 * p / pop:.2g}%)\xa0pos, ')
+            util.text(f'{d:,.0f}\xa0({100 * d / pop:.2g}%)\xa0died ')
+            util.text(f'as of {latest.date()}')
 
         if urls.has_map(region):
             with tags.div(cls='graphic'):
@@ -114,11 +117,21 @@ def make_region_html(region, args):
         if subs:
             sub_pop = sum(s.totals['population'] for s in subs)
             if len(subs) >= 10 and sub_pop > 0.9 * region.totals['population']:
-                def deaths(r): return r.totals.get('deaths', 0)
-                tags.h2('Top 5 by total mortality')
-                for s in list(sorted(subs, key=deaths, reverse=True))[:5]:
+                def pop(r):
+                    return r.totals.get('population', 0)
+                def newpos(r):
+                    m = (r.covid_metrics or {}).get('positives / 100Kp')
+                    return m.frame.value.iloc[-1] * pop(r) if m else 0
+
+                tags.h2('Top 5 by population')
+                for s in list(sorted(subs, key=pop, reverse=True))[:5]:
                     make_thumb_link_html(doc_url, s)
-                tags.h2('All subdivisions')
+
+                tags.h2('Top 5 by new positives')
+                for s in list(sorted(subs, key=newpos, reverse=True))[:5]:
+                    make_thumb_link_html(doc_url, s)
+
+                tags.h2(f'All {"divisions" if region.parent else "countries"}')
             else:
                 tags.h2('Subdivisions')
             for s in sorted(subs, key=lambda r: r.name):

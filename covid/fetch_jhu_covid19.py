@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
     for uid, series in data.groupby(level='UID'):
         p = places[uid]
-        name = ' / '.join(
+        name = '/'.join(
             n for n in [p.Country_Region, p.Province_State, p.Admin2] if n)
         fips = f'[{p.FIPS}] ' if p.FIPS else ''
         print(f'{p.Population:9.0f}p {len(series):3d}d {fips}{name}')

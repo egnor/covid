@@ -23,7 +23,7 @@ argument_group.add_argument(
 
 
 def new_session(args):
-    """Returns a new CachedSession per the supplied command line args."""
+    """Returns a new Session with caching per supplied command line args."""
 
     session = requests.Session()
     if args.cache_time:
@@ -35,3 +35,23 @@ def new_session(args):
         session.mount('https://', adapter)
 
     return session
+
+
+def cached_derived_data_path(session, url, tag='derived'):
+    adapter = session.get_adapter(url)
+    if isinstance(adapter, cachecontrol.CacheControlAdapter):
+        cache, heuristic = adapter.cache, adapter.heuristic
+        if (isinstance(cache, cachecontrol.caches.file_cache.FileCache) and
+                isinstance(heuristic, cachecontrol.heuristics.ExpiresAfter)):
+            path = pathlib.Path(
+                cachecontrol.caches.file_cache.url_to_file_path(
+                    f'{url}:{tag}', cache))
+            if path.exists():
+                ft = datetime.datetime.fromtimestamp(path.stat().st_mtime)
+                keep_time = datetime.datetime.now() - heuristic.delta
+                if ft < keep_time:
+                    path.unlink()
+
+            return path
+
+    return None

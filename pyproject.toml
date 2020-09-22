@@ -21,6 +21,7 @@ cartopy = "^0.18.0"
 scipy = "^1.5.2"
 moviepy = "^1.0.3"
 numpy = "^1.19.1"
+pyreadr = "^0.3.4"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"

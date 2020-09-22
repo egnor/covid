@@ -292,6 +292,17 @@ version = "2.4.7"
 
 [[package]]
 category = "main"
+description = "Reads/writes R RData and Rds files into/from pandas data frames."
+name = "pyreadr"
+optional = false
+python-versions = "*"
+version = "0.3.4"
+
+[package.dependencies]
+pandas = ">0.24.0"
+
+[[package]]
+category = "main"
 description = "Pure Python read/write support for ESRI Shapefile format"
 name = "pyshp"
 optional = false
@@ -422,7 +433,7 @@ version = "0.34.2"
 test = ["pytest (>=3.0.0)", "pytest-cov"]
 
 [metadata]
-content-hash = "50e300050acf093607abcdb604d101996a31b6327a087693c79e9f99e9944d6c"
+content-hash = "c2bf8489a257576c71b542e6c2f539d882c6b5c325d28d13baeae3210f4427ad"
 lock-version = "1.1"
 python-versions = "^3.8"
 
@@ -648,6 +659,21 @@ pycountry = [
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},
     {file = "pyparsing-2.4.7.tar.gz", hash = "sha256:c203ec8783bf771a155b207279b9bccb8dea02d8f0c9e5f8ead507bc3246ecc1"},
+]
+pyreadr = [
+    {file = "pyreadr-0.3.4-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:787e001e8cab4739e571a81003536708fd7b7a7af2596a82e02dad37e9afe25d"},
+    {file = "pyreadr-0.3.4-cp36-cp36m-manylinux1_i686.whl", hash = "sha256:6155f4ba8b72c19d2530847c8ca276ae3d9cf72bc8838d7232e97b066eb91232"},
+    {file = "pyreadr-0.3.4-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:a011c92c373b666fa06612d65ec817f86c9382f4a51796c6b3b82432004469b2"},
+    {file = "pyreadr-0.3.4-cp36-cp36m-win_amd64.whl", hash = "sha256:61e819f2dad700b742ba8617858549edc8458a9236c2472f44d12714e863454f"},
+    {file = "pyreadr-0.3.4-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:5d0c11af482576d2955e888e18b8799f3d5b0dc41e18717a334f8235fff199b7"},
+    {file = "pyreadr-0.3.4-cp37-cp37m-manylinux1_i686.whl", hash = "sha256:c2ff1fcb9b89a3be3a3c1f76060de88f20e7a07c6cea6f51d173ca3e86ee386b"},
+    {file = "pyreadr-0.3.4-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:719c006df5225afaeac5cf51b3ddc85709ca58f7819fa49073319aa51a4cc7b4"},
+    {file = "pyreadr-0.3.4-cp37-cp37m-win_amd64.whl", hash = "sha256:6367d0f84c99e5f84b0712484bfd703edecef7edd5a55a79c6dc4c143bf05da0"},
+    {file = "pyreadr-0.3.4-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:dae1e838d8c64d723e77e5def5d82e093d9f23f4814c5921c45fa472d2615221"},
+    {file = "pyreadr-0.3.4-cp38-cp38-manylinux1_i686.whl", hash = "sha256:3242b13e9027bf0623e00d73fb283ab8c8b073ce13db9f28959f8cad157fdc5c"},
+    {file = "pyreadr-0.3.4-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:87a6cd05cec3b698be2adb4e572b19fb9b089c86e9ea3b8ac43d4cc6b8e4e820"},
+    {file = "pyreadr-0.3.4-cp38-cp38-win_amd64.whl", hash = "sha256:0fc210aa1b43e5e09d7bea7cc49ff6164b81373eb7f8085bd1627a5e4a0c982d"},
+    {file = "pyreadr-0.3.4.tar.gz", hash = "sha256:22ef2e8ec5c3ffaecf63a0b19fa3ef55c9105a53875b0d77aefb5e351734bcbb"},
 ]
 pyshp = [
     {file = "pyshp-2.1.0.tar.gz", hash = "sha256:e65c7f24d372b97d0920b864bbeb78322bb37b83f2606e2a2212631d5d51e5c0"},
