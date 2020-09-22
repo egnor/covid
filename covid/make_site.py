@@ -119,6 +119,7 @@ def make_region_html(region, args):
             if len(subs) >= 10 and sub_pop > 0.9 * region.totals['population']:
                 def pop(r):
                     return r.totals.get('population', 0)
+
                 def newpos(r):
                     m = (r.covid_metrics or {}).get('positives / 100Kp')
                     return m.frame.value.iloc[-1] * pop(r) if m else 0

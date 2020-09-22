@@ -84,7 +84,7 @@ def get_world(session, args, verbose=False):
     def index_region_tree(r):
         for index_dict, key in [
             (region_by_iso, r.iso_code), (region_by_fips, r.fips_code),
-            (region_by_jhu, r.jhu_uid), (region_by_uid, r.unified_id)]:
+                (region_by_jhu, r.jhu_uid), (region_by_uid, r.unified_id)]:
             index_dict[key] = r
         for sub in r.subregions.values():
             index_region_tree(sub)
@@ -112,7 +112,7 @@ def get_world(session, args, verbose=False):
         unified_credits = fetch_unified_dataset.credits()
         unified_data = (
             fetch_unified_dataset.get_data(session)
-                .xs(level='Age', key='Total').xs(level='Sex', key='Total'))
+            .xs(level='Age', key='Total').xs(level='Sex', key='Total'))
 
         vprint('Merging Unified COVID-19 Dataset...')
         for uid, df in unified_data.groupby(level='ID', sort=False):
@@ -121,6 +121,7 @@ def get_world(session, args, verbose=False):
                 continue  # Filtered out for one reason or another.
 
             df.reset_index(level='ID', drop=True, inplace=True)
+
             def best_source(type):
                 # TODO: Pick the best source, not just the first one!
                 for_type = df.xs(type)
@@ -425,7 +426,7 @@ def _unified_skeleton(session):
 
     world = Region(name='World', short_name='World')
     for id, p in fetch_unified_dataset.get_places(session).items():
-        if not (p.Population > 0): 
+        if not (p.Population > 0):
             continue  # Analysis requires population data.
 
         region = subregion(world, p.ISO1_2C, p.Admin0)
