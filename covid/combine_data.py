@@ -349,14 +349,14 @@ def get_world(session, args, verbose=False):
                 if name not in r.covid_metrics:
                     name_popmetrics.setdefault(name, []).append((pop, metric))
 
-        # Combine totals & metrics defined for >90% of the population.
+        # Combine totals & metrics if population sums ~match.
         pop = r.totals['population']
         for name, poptotals in name_poptotals.items():
-            if sum(p for p, t in poptotals or []) >= pop * 0.9:
+            if abs(sum(p for p, t in poptotals or []) - pop) < pop * 0.1:
                 r.totals[name] = sum(t for p, t in poptotals)
 
         for name, popmetrics in name_popmetrics.items():
-            if sum(p for p, m in popmetrics or []) >= pop * 0.9:
+            if abs(sum(p for p, m in popmetrics or []) - pop) < pop * 0.1:
                 popmetrics.sort(reverse=True)
                 r.covid_metrics[name] = popmetrics[0][1]._replace(
                     credits=dict(
