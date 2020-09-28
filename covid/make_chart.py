@@ -15,6 +15,8 @@ from covid import urls
 
 matplotlib.use('module://mplcairo.base')  # For decent emoji rendering.
 
+matplotlib.rcParams.update({'figure.max_open_warning': 0})
+
 
 def write_images(region, site_dir):
     _write_thumb_image(region, site_dir)

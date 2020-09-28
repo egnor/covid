@@ -78,14 +78,12 @@ def get_events(session):
             area_norm, norm = tab_title.lower(), name.lower()
 
             # Hacks for data glitches!
-            # if ('healthcare' in area_norm and 'telehealth' in norm and
-            #         rows[7][c] == '1/0/1900'):
-            #     rows[7][c] = 0
-            if ('masks' in area_norm and 'prevent local' in norm and
-                    rows[2][c] == '*'):
-                rows[2][c] = '0'
+            if rows[0][c] == '4/30/3030':
+                rows[0][c] = '4/30/2020'
 
-            if all(r[c] in ('0', '1') for r in rows):
+            if all(r[c] in ('0', '') for r in rows):
+                continue  # Empty data
+            elif all(r[c] in ('0', '1') for r in rows):
                 ctype = bool
             elif all(r[c] in ('0', '1') or '/' in r[c] for r in rows):
                 ctype = pandas.Timestamp
@@ -117,16 +115,17 @@ def get_events(session):
                 '🚧' if 'construction' in norm else
                 '🛐' if 'religious' in norm else
                 '🚪' if 'eviction' in norm else
+                '🍞' if 'snap' in norm else
                 '💵' if ('rent' in norm or 'mortgage' in norm) else
                 '🔌' if 'utility' in norm else
                 '🕴️' if 'unemployment' in norm else
-                '🍞' if 'snap' in norm else
                 '📞' if 'tele' in norm else
                 '💊' if ('medication' in norm or 'prescription' in norm) else
                 '💊' if 'dea registration' in norm else
                 '⚕️' if 'medicaid' in norm else
                 '🩺' if 'medical' in norm else
                 '👮' if 'prisons' in norm else
+                '💼' if 'unemployment' in area_norm else
                 '')
 
             score = (
@@ -153,6 +152,7 @@ def get_events(session):
                 +2 if ('prevent local' in norm and 'masks' in area_norm) else
                 -2 if ('public spaces' in norm and 'masks' in area_norm) else
                 -1 if 'masks' in area_norm else
+                +1 if 'quarantines ended' in norm else
                 -1 if 'quarantine rules' in area_norm else
                 -1 if 'suspended elective' in norm else
                 -1 if 'incarcerated' in area_norm else
