@@ -22,6 +22,7 @@ scipy = "^1.5.2"
 moviepy = "^1.0.3"
 numpy = "^1.19.1"
 pyreadr = "^0.3.4"
+xlrd = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"
