@@ -14,10 +14,10 @@ import pandas
 TierDescription = collections.namedtuple('TierDescription', 'emoji color name')
 
 TIER_DESCRIPTION = {
-    1: TierDescription('🟣', 'purple', 'Widespread'),
-    2: TierDescription('🔴', 'red', 'Substantial'),
-    3: TierDescription('🟠', 'orange', 'Moderate'),
-    4: TierDescription('🟡', 'yellow', 'Minimal')
+    1: TierDescription('🟣', 'Purple', 'Widespread'),
+    2: TierDescription('🔴', 'Red', 'Substantial'),
+    3: TierDescription('🟠', 'Orange', 'Moderate'),
+    4: TierDescription('🟡', 'Yellow', 'Minimal')
 }
 
 HTML_URL = 'https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/COVID19CountyMonitoringOverview.aspx'

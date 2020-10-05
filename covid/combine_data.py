@@ -299,7 +299,7 @@ def get_world(session, args, verbose=False):
             pd = fetch_california_blueprint.TIER_DESCRIPTION[prev]
             text = f'Entered {td.color} tier ({td.name})'
             if td.color != pd.color:
-                text += f'; previously {pd.color} ({pd.name})'
+                text += f'; was {pd.emoji} {pd.color} ({pd.name})'
 
             region.policy_changes.append(PolicyChange(
                 date=date, score=3 * numpy.sign(tier - prev - 0.1),
