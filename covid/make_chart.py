@@ -31,7 +31,7 @@ def _write_thumb_image(region, site_dir):
     _setup_xaxis(thumb_axes, region)
     thumb_axes.set_ylim(0, 50)
     _plot_covid_metrics(thumb_axes, region.covid_metrics)
-    _plot_daily_events(thumb_axes, region.daily_events, emoji=False)
+    _plot_policy_changes(thumb_axes, region.policy_changes, emoji=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
@@ -59,7 +59,7 @@ def _write_chart_image(region, site_dir):
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
     _plot_covid_metrics(covid_axes, region.covid_metrics)
-    _plot_daily_events(covid_axes, region.daily_events, emoji=True)
+    _plot_policy_changes(covid_axes, region.policy_changes, emoji=True)
     _plot_subregion_peaks(covid_axes, region)
     _add_plot_legend(covid_axes)
 
@@ -68,7 +68,7 @@ def _write_chart_image(region, site_dir):
             mobility_axes, region,
             title=f'{region.short_name} mobility')
         _plot_mobility_metrics(mobility_axes, region.mobility_metrics)
-        _plot_daily_events(mobility_axes, region.daily_events, emoji=False)
+        _plot_policy_changes(mobility_axes, region.policy_changes, emoji=False)
         _add_plot_legend(mobility_axes)
 
     fig.align_ylabels()
@@ -147,34 +147,37 @@ def _plot_metric(axes, name, metric):
             c=metric.color, alpha=alpha, lw=width, ls=style))
 
 
-def _plot_daily_events(axes, daily_events, emoji):
+def _plot_policy_changes(axes, policy_changes, emoji):
     """Plots important policy changes."""
 
-    top_ticks, top_labels = [], []
-    for d in (d for d in daily_events if abs(d.score) >= 2):
-        if emoji:
-            # For some reason "VARIANT SELECTOR-16" gives warnings.
-            top_labels.append('\n'.join(d.emojis).replace('\uFE0F', ''))
-            top_ticks.append(d.date)
+    date_changes = {}
+    for p in policy_changes:
+        if abs(p.score) >= 2:
+            date_changes.setdefault(p.date.round('d'), []).append(p)
 
-        color = 'tab:orange' if d.score > 0 else 'tab:blue'
-        axes.axvline(d.date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
+    if not date_changes:
+        return
 
-    if [d for d in daily_events if d.score <= 0]:
+    for date, changes in date_changes.items():
+        color = 'tab:orange' if changes[0].score > 0 else 'tab:blue'
+        axes.axvline(date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
+
+    if any(changes[0].score < 0 for changes in date_changes.values()):
         _add_to_legend(axes, matplotlib.lines.Line2D(
             [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
-            label='mitigation changes'))
-
-    if [d for d in daily_events if d.score > 0]:
+            label='closing changes'))
+    if any(changes[0].score > 0 for changes in date_changes.values()):
         _add_to_legend(axes, matplotlib.lines.Line2D(
             [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
-            label='relaxation changes'))
+            label='reopening changes'))
 
-    if top_ticks and top_labels:
+    if emoji:
         top = axes.secondary_xaxis('top')
-        top.set_xticks(top_ticks)
+        top.set_xticks(list(date_changes.keys()))
         top.set_xticklabels(
-            top_labels, fontdict=dict(fontsize=15), linespacing=1.1,
+            ['\n'.join(c.emoji.replace('\uFE0F', '') for c in changes)
+             for changes in date_changes.values()],
+            fontdict=dict(fontsize=15), linespacing=1.1,
             font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf')
 
 

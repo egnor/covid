@@ -82,11 +82,7 @@ def make_region_html(region, args):
                 with tags.div(cls='map_controls'):
                     def i(n): return tags.i(cls=f'fas fa-{n}')
                     tags.button(
-                        i('pause'),
-                        ' ',
-                        i('play'),
-                        ' P',
-                        id='map_play')
+                        i('pause'), ' ', i('play'), ' P', id='map_play')
                     tags.button(i('repeat'), ' L', id='map_loop')
                     tags.button(i('backward'), ' R', id='map_rewind')
                     tags.button(i('step-backward'), ' [', id='map_prev')
@@ -96,24 +92,27 @@ def make_region_html(region, args):
 
         tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
 
-        if region.daily_events:
+        nonzero_policy = [p for p in region.policy_changes if p.score]
+        if nonzero_policy:
             tags.h2(
-                tags.span('Mitigation', cls='event_close'), ' and ',
-                tags.span('Relaxation', cls='event_open'), ' Changes')
+                tags.span('Closing', cls='policy_close'), ' and ',
+                tags.span('Reopening', cls='policy_open'), ' policy changes')
 
-            def score_css(s):
-                return f'event_{"open" if s > 0 else "close"} score_{abs(s)}'
-            with tags.div(cls='events'):
-                for day in (d for d in region.daily_events if d.score):
-                    date = str(day.date.date())
-                    tags.div(date, cls=f'event_date {score_css(day.score)}')
-                    for ev in (e for e in day.frame.itertuples() if e.score):
-                        css = score_css(ev.score)
-                        tags.div(ev.emoji, cls=f'event_emoji {css}')
-                        tags.div(ev.policy, cls=f'event_policy {css}')
+            with tags.div(cls='policies'):
+                last_date = None
+                for p in nonzero_policy:
+                    score_css = 'policy_open' if p.score > 0 else 'policy_close'
+                    score_css += ' policy_major' if abs(p.score) >= 2 else ''
+
+                    date = str(p.date.date())
+                    if date != last_date:
+                        tags.div(date, cls=f'date')
+                        last_date = date
+                    tags.div(p.emoji, cls=f'emoji')
+                    tags.div(p.text, cls=f'text {score_css}')
 
         subs = [r for r in region.subregions.values()
-                if r.matches_regex(args.page_filter)]
+                if r.matches_regex(args.page_regex)]
         if subs:
             sub_pop = sum(s.totals['population'] for s in subs)
             if len(subs) >= 10 and sub_pop > 0.9 * region.totals['population']:
@@ -139,7 +138,7 @@ def make_region_html(region, args):
                 make_thumb_link_html(doc_url, s)
 
         r = region
-        credits = dict(c for e in r.daily_events for c in e.credits.items())
+        credits = dict(c for p in r.policy_changes for c in p.credits.items())
         for md in (r.covid_metrics, r.map_metrics, r.mobility_metrics):
             credits.update(c for m in md.values() for c in m.credits.items())
         with tags.p('Sources: ', cls='credits'):
@@ -170,18 +169,15 @@ def main():
     parser.add_argument('--chunk_size', type=int)
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
-    parser.add_argument('--page_filter')
+    parser.add_argument('--page_regex')
     args = parser.parse_args()
-
-    print('Loading data...')
     make_map.setup(args)
+
     world = combine_data.get_world(
         session=cache_policy.new_session(args), args=args, verbose=True)
 
-    print('Enumerating regions...')
-
     def get_regions(r):
-        if r.matches_regex(args.page_filter):
+        if r.matches_regex(args.page_regex):
             yield r
         yield from (a for s in r.subregions.values() for a in get_regions(s))
     all_regions = list(get_regions(world))

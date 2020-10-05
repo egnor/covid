@@ -25,21 +25,18 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 }
 .thumb_label div { font-size: 70%; font-weight: normal; opacity: 0.8; }
 
-.events { 
+.policies {
     display: grid; gap: 0.2em 0.5em;
     justify-content: start; align-items: center;
 }
-.event_date { grid-column: 1; }
-.event_policy { grid-column: 3; }
-.event_policy.score_2, .event_policy.score_3 { font-weight: bold; }
-.event_emoji {
-    grid-column: 2; justify-self: center;
-    font-family: Noto Color Emoji;
-}
+.policies .date  { grid-column: 1; }
+.policies .emoji { grid-column: 2; justify-self: center; }
+.policies .emoji { font-family: Noto Color Emoji; }
+.policies .text  { grid-column: 3; }
+.policy_major { font-weight: bold; }
+.policy_close { color: #4E79A7; }
+.policy_open  { color: #F28E2B; }
 
 h1 { margin-top: 0px; }
 h1, h2, h3, h4, h5, h6 { margin-bottom: 5px; }
-.event_policy.event_close, h2 .event_close { color: #4E79A7; }
-.event_policy.event_open,  h2 .event_open  { color: #F28E2B; }
-
 .credits { font-style: italic; }

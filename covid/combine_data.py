@@ -6,13 +6,14 @@ import functools
 import re
 from dataclasses import dataclass, field
 from re import compile, Pattern
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy
 import pandas
 import pycountry
 import us
 
+from covid import fetch_california_blueprint
 from covid import fetch_cdc_mortality
 from covid import fetch_covid_tracking
 from covid import fetch_google_mobility
@@ -24,7 +25,8 @@ from covid import fetch_unified_dataset
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data gathering')
-argument_group.add_argument('--data_filter')
+argument_group.add_argument('--data_regex')
+argument_group.add_argument('--no_california_blueprint', action='store_true')
 argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
@@ -36,8 +38,8 @@ argument_group.add_argument('--use_jhu_covid19', action='store_true')
 Metric = collections.namedtuple(
     'Metric', ['color', 'emphasis', 'peak', 'frame', 'credits'])
 
-DailyEvents = collections.namedtuple(
-    'DailyEvents', ['date', 'score', 'emojis', 'frame', 'credits'])
+PolicyChange = collections.namedtuple(
+    'PolicyChange', ['date', 'score', 'emoji', 'text', 'credits'])
 
 
 @dataclass(eq=False)
@@ -51,12 +53,12 @@ class Region:
     unified_id: Optional[str] = None
     lat_lon: Optional[Tuple[float, float]] = None
     totals: collections.Counter = field(default_factory=collections.Counter)
-    parent: Optional['Region'] = field(default=None, repr=False)
-    subregions: dict = field(default_factory=dict, repr=False)
-    covid_metrics: dict = field(default_factory=dict, repr=False)
-    map_metrics: dict = field(default_factory=dict, repr=False)
-    mobility_metrics: dict = field(default_factory=dict, repr=False)
-    daily_events: list = field(default_factory=list, repr=False)
+    parent: Optional['Region'] = field(default=None, repr=0)
+    subregions: Dict[str, 'Region'] = field(default_factory=dict, repr=0)
+    covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
 
     def path(r):
         return f'{r.parent.path()}/{r.short_name}' if r.parent else r.name
@@ -72,8 +74,10 @@ def get_world(session, args, verbose=False):
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
     vprint('Loading place data...')
-    # world = _jhu_skeleton(session)
-    world = _unified_skeleton(session)
+    if args.use_jhu_covid19 and args.no_unified_dataset:
+        world = _jhu_skeleton(session)
+    else:
+        world = _unified_skeleton(session)
 
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
@@ -85,7 +89,8 @@ def get_world(session, args, verbose=False):
         for index_dict, key in [
             (region_by_iso, r.iso_code), (region_by_fips, r.fips_code),
                 (region_by_jhu, r.jhu_uid), (region_by_uid, r.unified_id)]:
-            index_dict[key] = r
+            if key is not None:
+                index_dict[key] = r
         for sub in r.subregions.values():
             index_region_tree(sub)
 
@@ -266,21 +271,47 @@ def get_world(session, args, verbose=False):
         vprint('Loading and merging state policy database...')
         policy_credits = fetch_state_policy.credits()
         state_policy = fetch_state_policy.get_events(session=session)
-        state_policy['abs_score'] = state_policy.score.abs()
         for f, events in state_policy.groupby(level='state_fips', sort=False):
             region = region_by_fips.get(f)
             if region is None:
                 continue
 
-            for date, es in events.groupby(level='date'):
-                df = es.sort_values(['abs_score', 'policy'], ascending=[0, 1])
-                smin, smax = df.score.min(), df.score.max()
-                score = 0 if smin == -smax else smin if smin < -smax else smax
-                emojis = list(dict.fromkeys(
-                    e.emoji for e in df.itertuples() if abs(e.score) >= 2))
-                region.daily_events.append(DailyEvents(
-                    date=date, score=score, emojis=emojis, frame=df,
-                    credits=policy_credits))
+            for e in events.itertuples():
+                region.policy_changes.append(PolicyChange(
+                    date=e.Index[1], score=e.score, emoji=e.emoji,
+                    text=e.policy, credits=policy_credits))
+
+    if not args.no_california_blueprint:
+        vprint('Loading and merging California blueprint data chart...')
+        cal_credits = fetch_california_blueprint.credits()
+        cal_counties = fetch_california_blueprint.get_counties(session=session)
+        cols = list(enumerate(['FIPS'] + list(cal_counties.columns)))
+        tier_col = next(i for i, c in cols if 'Updated Overall Tier' in c)
+        prev_col = next(i for i, c in cols if 'Previous Overall Tier' in c)
+        date_col = next(i for i, c in cols if 'First Date in Current' in c)
+        for row in cal_counties.itertuples(index=True, name=None):
+            region = region_by_fips.get(row[0])
+            if region is None:
+                continue
+
+            tier, prev, date = (row[c] for c in (tier_col, prev_col, date_col))
+            td = fetch_california_blueprint.TIER_DESCRIPTION[tier]
+            pd = fetch_california_blueprint.TIER_DESCRIPTION[prev]
+            text = f'Entered {td.color} tier ({td.name})'
+            if td.color != pd.color:
+                text += f'; previously {pd.color} ({pd.name})'
+
+            region.policy_changes.append(PolicyChange(
+                date=date, score=3 * numpy.sign(tier - prev - 0.1),
+                emoji=td.emoji, credits=cal_credits, text=text))
+
+    def sort_policy_changes(r):
+        def sort_key(p): return (p.date.date(), -abs(p.score), p.score)
+        r.policy_changes.sort(key=sort_key)
+        for sub in r.subregions.values():
+            sort_policy_changes(sub)
+
+    sort_policy_changes(world)
 
     #
     # Add mobility data where it's available.
@@ -373,7 +404,8 @@ def get_world(session, args, verbose=False):
     #
 
     # Sync map metric weekly data points to this end date.
-    latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
+    latest = max((m.frame.index[-1] for m in world.covid_metrics.values()),
+                 default=None)
 
     def map_metric(color, m, mul):
         first = m.frame.index[0].astimezone(latest.tz)
@@ -406,9 +438,9 @@ def get_world(session, args, verbose=False):
         region.subregions = {k: s for k, s in sub.items() if trim_tree(s, rx)}
         return (r.subregions or r.matches_regex(rx))
 
-    if args.data_filter:
-        vprint(f'Filtering by /{args.data_filter}/...')
-        trim_tree(world, re.compile(args.data_filter, re.I))
+    if args.data_regex:
+        vprint(f'Filtering by /{args.data_regex}/...')
+        trim_tree(world, re.compile(args.data_regex, re.I))
 
     return world
 
@@ -582,7 +614,7 @@ if __name__ == '__main__':
                 '.c'[bool(r.covid_metrics)] +
                 '.m'[bool(r.map_metrics)] +
                 '.g'[bool(r.mobility_metrics)] +
-                '.p'[bool(r.daily_events)] + '>')
+                '.p'[bool(r.policy_changes)] + '>')
             if key != r.short_name:
                 line = f'{line} [{key}]'
             line = f'{line} {parents}{r.short_name}'
@@ -596,10 +628,14 @@ if __name__ == '__main__':
                 for name, m in metrics.items():
                     max = (' ' * 20 if not m.peak else
                            f' peak={m.peak[1]:<2.0f} @{m.peak[0].date()}')
-                    print(f'{prefix}           {len(m.frame):3d}d '
+                    print(f'{prefix}    {len(m.frame):3d}d '
                           f'=>{m.frame.index.max().date()}{max} {cat}: {name}')
                     if args.print_data:
                         print(m.frame)
+
+            for c in r.policy_changes:
+                print(f'{prefix}      {c.date.date()} {c.score:+2d} '
+                      f'{c.emoji} {c.text}')
 
         for k, sub in r.subregions.items():
             print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
