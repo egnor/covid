@@ -4,8 +4,7 @@ import argparse
 import collections
 import functools
 import re
-from dataclasses import dataclass, field
-from re import compile, Pattern
+from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
 
 import numpy
@@ -35,11 +34,22 @@ argument_group.add_argument('--use_covid_tracking', action='store_true')
 argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
 
-Metric = collections.namedtuple(
-    'Metric', ['color', 'emphasis', 'peak', 'frame', 'credits'])
+@dataclass(frozen=True)
+class Metric:
+    color: str
+    emphasis: int
+    peak: Optional[Tuple[pandas.Timestamp, float]]
+    frame: pandas.DataFrame
+    credits: Dict[str, str]
 
-PolicyChange = collections.namedtuple(
-    'PolicyChange', ['date', 'score', 'emoji', 'text', 'credits'])
+
+@dataclass(frozen=True)
+class PolicyChange:
+    date: pandas.Timestamp
+    score: int
+    emoji: str
+    text: str
+    credits: Dict[str, str]
 
 
 @dataclass(eq=False)
@@ -59,12 +69,16 @@ class Region:
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
+    current_policy: Optional[PolicyChange] = None
 
     def path(r):
         return f'{r.parent.path()}/{r.short_name}' if r.parent else r.name
 
     def matches_regex(r, rx):
-        rx = rx if isinstance(rx, Pattern) else (rx and re.compile(rx, re.I))
+        rx = rx if isinstance(
+            rx, re.Pattern) else (
+            rx and re.compile(
+                rx, re.I))
         return bool(not rx or rx.search(r.name) or rx.search(r.path()) or
                     rx.search(r.path().replace(' ', '_')))
 
@@ -286,8 +300,8 @@ def get_world(session, args, verbose=False):
         cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         cols = list(enumerate(['FIPS'] + list(cal_counties.columns)))
-        tier_col = next(i for i, c in cols if 'Updated Overall Tier' in c)
-        prev_col = next(i for i, c in cols if 'Previous Overall Tier' in c)
+        tier_col = next(i for i, c in cols if 'Updated Tier Assignment' in c)
+        prev_col = next(i for i, c in cols if 'Previous Tier Assignment' in c)
         date_col = next(i for i, c in cols if 'First Date in Current' in c)
         for row in cal_counties.itertuples(index=True, name=None):
             region = region_by_fips.get(row[0])
@@ -301,9 +315,10 @@ def get_world(session, args, verbose=False):
             if td.color != pd.color:
                 text += f'; was {pd.emoji} {pd.color} ({pd.name})'
 
-            region.policy_changes.append(PolicyChange(
-                date=date, score=3 * numpy.sign(tier - prev - 0.1),
-                emoji=td.emoji, credits=cal_credits, text=text))
+            region.current_policy = PolicyChange(
+                date=date, score=3 * numpy.sign(tier - prev),
+                emoji=td.emoji, credits=cal_credits, text=text)
+            region.policy_changes.append(region.current_policy)
 
     def sort_policy_changes(r):
         def sort_key(p): return (p.date.date(), -abs(p.score), p.score)
@@ -389,7 +404,8 @@ def get_world(session, args, verbose=False):
         for name, popmetrics in name_popmetrics.items():
             if abs(sum(p for p, m in popmetrics or []) - pop) < pop * 0.1:
                 popmetrics.sort(reverse=True)
-                r.covid_metrics[name] = popmetrics[0][1]._replace(
+                r.covid_metrics[name] = replace(
+                    popmetrics[0][1],
                     credits=dict(
                         c for p, m in popmetrics for c in m.credits.items()),
                     frame=functools.reduce(

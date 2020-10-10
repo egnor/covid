@@ -17,13 +17,13 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 .map_controls button.seeking svg { color: #6666FF; }
 .map_controls input[type="range"] { flex: 1; }
 
-.thumb { display: inline-block; position: relative; }
-.thumb_label {
+.subregion { display: inline-block; position: relative; }
+.subregion_label {
     position: absolute; width: 96%; padding: 10px 2% 0 2%;
     text-align: center; font-size: 22px; font-weight: 900;
     color: black; opacity: 0.7;
 }
-.thumb_label div { font-size: 70%; font-weight: normal; opacity: 0.8; }
+.subregion_label div { font-size: 70%; font-weight: normal; opacity: 0.8; }
 
 .policies {
     display: grid; gap: 0.2em 0.5em;
@@ -31,7 +31,6 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 }
 .policies .date  { grid-column: 1; }
 .policies .emoji { grid-column: 2; justify-self: center; }
-.policies .emoji { font-family: Noto Color Emoji; }
 .policies .text  { grid-column: 3; }
 .policy_major { font-weight: bold; }
 .policy_close { color: #4E79A7; }
@@ -40,3 +39,4 @@ body { font-family: 'Dejavu Sans', 'Bitstream Vera Sans', sans-serif; }
 h1 { margin-top: 0px; }
 h1, h2, h3, h4, h5, h6 { margin-bottom: 5px; }
 .credits { font-style: italic; }
+.emoji { font-family: Noto Color Emoji; }

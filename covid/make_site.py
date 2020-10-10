@@ -63,6 +63,9 @@ def make_region_html(region, args):
             util.text(region.short_name)
             if region.name != region.short_name:
                 util.text(f' / {region.name}')
+            if region.current_policy and region.current_policy.emoji:
+                util.text(' ')
+                tags.span(region.current_policy.emoji, cls='emoji')
 
         with tags.div():
             pop = region.totals["population"]
@@ -92,24 +95,25 @@ def make_region_html(region, args):
 
         tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
 
-        nonzero_policy = [p for p in region.policy_changes if p.score]
-        if nonzero_policy:
+        cp = region.current_policy
+        notables = [p for p in region.policy_changes if p.score or p == cp]
+        if notables:
             tags.h2(
                 tags.span('Closing', cls='policy_close'), ' and ',
                 tags.span('Reopening', cls='policy_open'), ' policy changes')
 
             with tags.div(cls='policies'):
                 last_date = None
-                for p in nonzero_policy:
-                    score_css = 'policy_open' if p.score > 0 else 'policy_close'
-                    score_css += ' policy_major' if abs(p.score) >= 2 else ''
-
-                    date = str(p.date.date())
+                for p in notables:
+                    date, score = str(p.date.date()), p.score
                     if date != last_date:
                         tags.div(date, cls=f'date')
                         last_date = date
                     tags.div(p.emoji, cls=f'emoji')
-                    tags.div(p.text, cls=f'text {score_css}')
+                    tags.div(p.text, cls=f'text' +
+                        (' policy_close' if p.score < 0 else
+                         ' policy_open' if p.score else '') +
+                        (' policy_major' if abs(score) >= 2 or p == cp else ''))
 
         subs = [r for r in region.subregions.values()
                 if r.matches_regex(args.page_regex)]
@@ -125,17 +129,17 @@ def make_region_html(region, args):
 
                 tags.h2('Top 5 by population')
                 for s in list(sorted(subs, key=pop, reverse=True))[:5]:
-                    make_thumb_link_html(doc_url, s)
+                    make_subregion_html(doc_url, s)
 
                 tags.h2('Top 5 by new positives')
                 for s in list(sorted(subs, key=newpos, reverse=True))[:5]:
-                    make_thumb_link_html(doc_url, s)
+                    make_subregion_html(doc_url, s)
 
                 tags.h2(f'All {"divisions" if region.parent else "countries"}')
             else:
                 tags.h2('Subdivisions')
             for s in sorted(subs, key=lambda r: r.name):
-                make_thumb_link_html(doc_url, s)
+                make_subregion_html(doc_url, s)
 
         r = region
         credits = dict(c for p in r.policy_changes for c in p.credits.items())
@@ -150,10 +154,13 @@ def make_region_html(region, args):
         doc_file.write(doc.render())
 
 
-def make_thumb_link_html(doc_url, region):
+def make_subregion_html(doc_url, region):
     region_href = urls.link(doc_url, urls.region_page(region))
-    with tags.a(cls='thumb', href=region_href):
-        with tags.div(region.name, cls='thumb_label'):
+    with tags.a(cls='subregion', href=region_href):
+        with tags.div(region.name, cls='subregion_label', __pretty=False):
+            if region.current_policy and region.current_policy.emoji:
+                util.text('\xa0')
+                tags.span(region.current_policy.emoji, cls='emoji')
             tags.div(
                 f'{region.totals["population"]:,.0f}\xa0pop, '
                 f'{region.totals.get("positives", 0):,.0f}\xa0pos, '

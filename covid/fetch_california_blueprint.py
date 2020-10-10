@@ -38,7 +38,7 @@ def get_counties(session):
     xlsx_response.raise_for_status()
     data = pandas.read_excel(
         io=xlsx_response.content, sheet_name='County Tiers and Metrics',
-        header=1, na_filter=False)
+        header=2, na_filter=False)
 
     # Trim rows after any null/footnote row.
     footnote = re.compile(r'[*^]|small county|$', re.I)
@@ -47,7 +47,7 @@ def get_counties(session):
         data = data.loc[:empty[0]].iloc[:-1]
 
     af = addfips.AddFIPS()
-    data.County = data.County.str.replace('*', '')
+    data.County = data.County.str.replace(re.compile(r'[*^]'), '')
     data['FIPS'] = data.County.apply(
         lambda c: int(af.get_county_fips(c, 'CA')))
     data.set_index('FIPS', drop=True, inplace=True)

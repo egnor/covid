@@ -60,6 +60,7 @@ def get_events(session):
 
         tab_values = tab_json['values']
         header = tab_values[0]
+        header = header[:next((i for i, h in enumerate(header) if not h), None)]
         if header[:3] != ['State', 'State Abbreviation', 'State FIPS Code']:
             raise ValueError(
                 f'Unexpected columns in "{tab_title}": '
@@ -70,6 +71,9 @@ def get_events(session):
             if (not r[1].isupper() or len(r[1]) != 2 or not r[2].isdigit()):
                 raise ValueError(
                     f'Unexpected data "{r[:3]}" in "{tab_title}" row {i + 2}')
+            if len(r) < len(header):
+                raise ValueError(
+                    f'Short row {i + 2} ({r[1]}) in "{tab_title}"')
 
         Col = collections.namedtuple('Col', 'index name ctype emoji score')
         coldefs = []

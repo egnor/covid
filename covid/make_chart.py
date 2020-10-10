@@ -30,8 +30,8 @@ def _write_thumb_image(region, site_dir):
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes, region)
     thumb_axes.set_ylim(0, 50)
-    _plot_covid_metrics(thumb_axes, region.covid_metrics)
-    _plot_policy_changes(thumb_axes, region.policy_changes, emoji=False)
+    _plot_covid_metrics(thumb_axes, region)
+    _plot_policy_changes(thumb_axes, region, show_emoji=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
@@ -58,17 +58,16 @@ def _write_chart_image(region, site_dir):
 
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
-    _plot_covid_metrics(covid_axes, region.covid_metrics)
-    _plot_policy_changes(covid_axes, region.policy_changes, emoji=True)
+    _plot_covid_metrics(covid_axes, region)
+    _plot_policy_changes(covid_axes, region, show_emoji=True)
     _plot_subregion_peaks(covid_axes, region)
     _add_plot_legend(covid_axes)
 
     if mobility_axes:
         _setup_xaxis(
-            mobility_axes, region,
-            title=f'{region.short_name} mobility')
-        _plot_mobility_metrics(mobility_axes, region.mobility_metrics)
-        _plot_policy_changes(mobility_axes, region.policy_changes, emoji=False)
+             mobility_axes, region, title=f'{region.short_name} mobility')
+        _plot_mobility_metrics(mobility_axes, region)
+        _plot_policy_changes(mobility_axes, region, show_emoji=False)
         _add_plot_legend(mobility_axes)
 
     fig.align_ylabels()
@@ -101,7 +100,7 @@ def _plot_subregion_peaks(axes, region):
                 xytext=(0, -15), textcoords='offset pixels')
 
 
-def _plot_covid_metrics(axes, covid_metrics):
+def _plot_covid_metrics(axes, region):
     """Plots COVID case-related metrics."""
 
     # (This function does not set ylim.)
@@ -111,11 +110,11 @@ def _plot_covid_metrics(axes, covid_metrics):
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-    for name, metric in covid_metrics.items():
+    for name, metric in region.covid_metrics.items():
         _plot_metric(axes, name, metric)
 
 
-def _plot_mobility_metrics(axes, mobility_metrics):
+def _plot_mobility_metrics(axes, region):
     """Plots metrics of population mobility."""
 
     axes.axhline(100, c='black', lw=1)  # Identity line.
@@ -126,7 +125,7 @@ def _plot_mobility_metrics(axes, mobility_metrics):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    for name, metric in mobility_metrics.items():
+    for name, metric in region.mobility_metrics.items():
         _plot_metric(axes, name, metric)
 
 
@@ -147,19 +146,16 @@ def _plot_metric(axes, name, metric):
             c=metric.color, alpha=alpha, lw=width, ls=style))
 
 
-def _plot_policy_changes(axes, policy_changes, emoji):
+def _plot_policy_changes(axes, region, show_emoji):
     """Plots important policy changes."""
 
     date_changes = {}
-    for p in policy_changes:
-        if abs(p.score) >= 2:
+    for p in region.policy_changes:
+        if abs(p.score) >= 2 or p == region.current_policy:
             date_changes.setdefault(p.date.round('d'), []).append(p)
-
-    if not date_changes:
-        return
-
     for date, changes in date_changes.items():
-        color = 'tab:orange' if changes[0].score > 0 else 'tab:blue'
+        s = changes[0].score
+        color = 'tab:orange' if s > 0 else 'tab:blue' if s else 'tab:gray'
         axes.axvline(date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
 
     if any(changes[0].score < 0 for changes in date_changes.values()):
@@ -171,7 +167,7 @@ def _plot_policy_changes(axes, policy_changes, emoji):
             [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
             label='reopening changes'))
 
-    if emoji:
+    if date_changes and show_emoji:
         top = axes.secondary_xaxis('top')
         top.set_xticks(list(date_changes.keys()))
         top.set_xticklabels(
