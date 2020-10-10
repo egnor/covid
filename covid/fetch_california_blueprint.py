@@ -28,11 +28,13 @@ def get_counties(session):
     html_response.raise_for_status()
     html = bs4.BeautifulSoup(html_response.text, features='html.parser')
     links = html.find_all(name='a', string=re.compile('data chart', re.I))
-    targets = [urllib.parse.urljoin(HTML_URL, l['href']) for l in links]
+    targets = [
+        urllib.parse.urljoin(HTML_URL, l['href'])
+        for l in links if l['href'].endswith('.xlsx')]
     if not targets:
         raise ValueError(f'No data links found: {HTML_URL}')
     if not all(t == targets[0] for t in targets):
-        raise ValueError('Inconsistent data links in {HTML_URL}: {targets}')
+        raise ValueError(f'Inconsistent data links in {HTML_URL}: {targets}')
 
     xlsx_response = session.get(targets[0])
     xlsx_response.raise_for_status()
