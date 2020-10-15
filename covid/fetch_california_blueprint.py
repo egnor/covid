@@ -40,7 +40,7 @@ def get_counties(session):
     xlsx_response.raise_for_status()
     data = pandas.read_excel(
         io=xlsx_response.content, sheet_name='County Tiers and Metrics',
-        header=2, na_filter=False)
+        header=1, na_filter=False)
 
     # Trim rows after any null/footnote row.
     footnote = re.compile(r'[*^]|small county|$', re.I)
