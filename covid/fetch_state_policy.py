@@ -50,6 +50,7 @@ def get_events(session):
     skip_tabs = [
         'Information', 'Vote By Mail', 'Racial Disparities',
         'Codebook', 'Notes/Details',
+        'Pre-COVID UI Monetary Eligibility Thresholds',
     ]
 
     for tab_json in fetch_json['valueRanges']:
