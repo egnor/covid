@@ -82,9 +82,7 @@ def get_events(session):
             name = header[c].strip()
             area_norm, norm = tab_title.lower(), name.lower()
 
-            # Hacks for data glitches!
-            if rows[0][c] == '4/30/3030':
-                rows[0][c] = '4/30/2020'
+            # Hacks for data glitches go here!
 
             if all(r[c] in ('0', '') for r in rows):
                 continue  # Empty data
@@ -96,6 +94,8 @@ def get_events(session):
                 ctype = int
             elif all(re.fullmatch(r'\d+(\.\d+)?', r[c]) for r in rows):
                 ctype = float
+            elif all('moved to' in r[c] or not r[c] for r in rows):
+                continue  # Relocated data
             else:
                 raise ValueError(
                     f'Inscrutable values in "{tab_title}" / "{name}": [' +
