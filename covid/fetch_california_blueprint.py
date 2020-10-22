@@ -4,6 +4,7 @@ import collections
 import io
 import re
 import urllib.parse
+import warnings
 
 import addfips
 import bs4
@@ -22,6 +23,9 @@ TIER_DESCRIPTION = {
 
 HTML_URL = 'https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/COVID19CountyMonitoringOverview.aspx'
 
+# TODO: Get historical data by looking through the charts archived at:
+# https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/CaliforniaBlueprintDataCharts.aspx
+
 
 def get_counties(session):
     html_response = session.get(HTML_URL)
@@ -33,8 +37,13 @@ def get_counties(session):
         for l in links if l['href'].endswith('.xlsx')]
     if not targets:
         raise ValueError(f'No data links found: {HTML_URL}')
+
+    # Work around data glitch
+    targets = [t.replace('102020', '102120') for t in targets]
+
     if not all(t == targets[0] for t in targets):
-        raise ValueError(f'Inconsistent data links in {HTML_URL}: {targets}')
+        raise ValueError(f'*** Inconsistent data links in {HTML_URL}: ' +
+                         ''.join(f'\n  {t}' for t in targets))
 
     xlsx_response = session.get(targets[0])
     xlsx_response.raise_for_status()

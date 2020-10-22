@@ -16,7 +16,8 @@ def get_mobility(session):
     data = pandas.read_csv(
         io.StringIO(response.text),
         na_values=[''], keep_default_na=False,
-        parse_dates=['date'], dtype={'sub_region_2': str, 'metro_area': str})
+        parse_dates=['date'],
+        dtype={'sub_region_2': str, 'metro_area': str, 'iso_3166_2_code': str})
 
     # Use '' for empty string fields for consistent typing & groupby().
     data.sub_region_1.fillna('', inplace=True)
