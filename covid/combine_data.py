@@ -4,8 +4,10 @@ import argparse
 import collections
 import functools
 import re
+import warnings
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
+from warnings import warn
 
 import numpy
 import pandas
@@ -85,7 +87,33 @@ class Region:
 
 
 def get_world(session, args, verbose=False):
-    """Returns data organized into a tree rooted at a World region."""
+    """Returns data organized into a tree rooted at a World region.
+    Warnings are captured, logged, and result in an exception."""
+
+    saved_showwarning, warning_count = warnings.showwarning, 0
+    def showwarning_and_count(message, category, filename, lineno, file, line):
+        # Allow known data glitches.
+        if 'underpop' in str(message):
+            print(f'*** {message}')
+        else:
+            nonlocal warning_count
+            warning_count += 1
+            saved_showwarning(message, category, filename, lineno)
+
+    try:
+        warnings.showwarning = showwarning_and_count
+        world = get_world_with_warnings(session, args, verbose)
+    finally:
+        warnings.showwarning = saved_showwarning
+
+    if warning_count:
+        print()
+        raise ValueError(f'{warning_count} warnings found combining data')
+    return world
+
+
+def get_world_with_warnings(session, args, verbose):
+    """Returns a World region, allowing warnings during assembly."""
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
     vprint('Loading place data...')
@@ -507,10 +535,15 @@ def _unified_skeleton(session):
     # Compute population from subregions if it's not set at the higher level.
     def roll_up_population(region):
         spop = sum(roll_up_population(r) for r in region.subregions.values())
-        rpop = region.totals['population']
-        rpop = spop if (pandas.isna(rpop) or not (rpop > 0)) else rpop
+        rpop = region.totals['population'] or numpy.nan
+        if pandas.notna(rpop) and pandas.notna(spop) and spop > rpop * 1.1:
+            warn(f'"{region.name}" underpopulated (pop={rpop} << sub={spop})')
+            rpop = spop
+
+        rpop = rpop if (pandas.notna(rpop) and rpop > 0) else spop
         if not (rpop > 0):
-            raise ValueError(f'No population for "{region.name}"')
+            raise ValueError(f'"{region.name}" population={rpop} '
+                             f'(sum(subregions)={spop})')
         region.totals['population'] = rpop
         return rpop
 
@@ -614,8 +647,10 @@ def _jhu_skeleton(session):
 if __name__ == '__main__':
     import argparse
     import itertools
+    import signal
     from covid import cache_policy
 
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
     parser.add_argument('--print_regex')
