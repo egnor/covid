@@ -64,8 +64,16 @@ def get_data(session):
         df[c] = df[c].astype(int)
 
     key_columns = ['ID', 'Type', 'Source', 'Age', 'Sex', 'Date']
+    df.drop_duplicates(subset=key_columns, inplace=True)  # Fix data error?
+
     df.sort_values(by=key_columns, inplace=True)
     df.set_index(key_columns, inplace=True)
+    if df.index.duplicated().any():
+        dups = df.index[df.index.duplicated(keep=False)]
+        raise ValueError(
+            'Duplicate rows:\n' +
+            '\n'.join(', '.join(str(p) for p in d) for d in dups))
+
     return df
 
 
@@ -79,9 +87,13 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     session = cache_policy.new_session(parser.parse_args())
+    csv = cache_policy.cached_derived_data_path(session, COVID19_RDATA_URL)
+    print(f'CSV cache: {csv}')
+
     places = get_places(session)
     data = get_data(session)
 
+    print()
     print('=== SOURCES ===')
     codes = {}
     for (source, type), origin_data in data.groupby(level=['Source', 'Type']):

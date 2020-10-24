@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy
 import pandas
+import pandas.api.types
 import pycountry
 import us
 
@@ -115,6 +116,11 @@ def get_world(session, args, verbose=False):
     #
 
     def trend_metric(color, emphasis, credits, values):
+        if not pandas.api.types.is_datetime64_any_dtype(values.index.dtype):
+            raise ValueError(f'Bad trend dtype "{values.index.dtype}"')
+        if values.index.duplicated().any():
+            dups = values.index.duplicated(keep=False)
+            raise ValueError(f'Dup trend dates: {values.index[dups]}')
         nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
         first_i = max(0, min(first_i, len(values) - 14))
@@ -140,7 +146,6 @@ def get_world(session, args, verbose=False):
                 continue  # Filtered out for one reason or another.
 
             df.reset_index(level='ID', drop=True, inplace=True)
-
             def best_source(type):
                 # TODO: Pick the best source, not just the first one!
                 for_type = df.xs(type)
