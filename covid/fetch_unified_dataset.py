@@ -40,20 +40,19 @@ def get_places(session):
 
 
 def get_data(session):
-    url = COVID19_RDATA_URL
-    csv_cache = cache_policy.cached_derived_data_path(session, url)
+    csv_cache = cache_policy.cached_path(session, f'{COVID19_RDATA_URL}.csv')
     if csv_cache.exists():
         df = pandas.read_csv(csv_cache, keep_default_na=False, na_values=[''])
     else:
-        response = session.get(url)
+        response = session.get(COVID19_RDATA_URL)
         response.raise_for_status()
 
-        csv_cache.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile() as temp:
             temp.write(response.content)
             temp.flush()
             df = pyreadr.read_r(temp.name)['COVID19']
 
+        csv_cache.parent.mkdir(parents=True, exist_ok=True)
         temp = csv_cache.parent / ('tmp.' + csv_cache.name)
         df.to_csv(temp, index=False)
         temp.rename(csv_cache)
@@ -87,7 +86,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     session = cache_policy.new_session(parser.parse_args())
-    csv = cache_policy.cached_derived_data_path(session, COVID19_RDATA_URL)
+    csv = cache_policy.cached_path(session, f'{COVID19_RDATA_URL}.csv')
     print(f'CSV cache: {csv}')
 
     places = get_places(session)

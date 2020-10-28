@@ -3,7 +3,11 @@
 import argparse
 import collections
 import functools
+import os.path
+import pickle
 import re
+import sys
+import traceback
 import warnings
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
@@ -15,6 +19,7 @@ import pandas.api.types
 import pycountry
 import us
 
+from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_mortality
 from covid import fetch_covid_tracking
@@ -39,11 +44,13 @@ argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
 @dataclass(frozen=True)
 class Metric:
-    color: str
-    emphasis: int
-    peak: Optional[Tuple[pandas.Timestamp, float]]
     frame: pandas.DataFrame
-    credits: Dict[str, str]
+    color: str
+    emphasis: int = 0
+    increase_color: Optional[str] = None
+    decrease_color: Optional[str] = None
+    peak: Optional[Tuple[pandas.Timestamp, float]] = None
+    credits: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,42 +85,73 @@ class Region:
         return f'{r.parent.path()}/{r.short_name}' if r.parent else r.name
 
     def matches_regex(r, rx):
-        rx = rx if isinstance(
-            rx, re.Pattern) else (
-            rx and re.compile(
-                rx, re.I))
+        rx = rx if isinstance(rx, re.Pattern) else (
+            rx and re.compile(rx, re.I))
         return bool(not rx or rx.search(r.name) or rx.search(r.path()) or
                     rx.search(r.path().replace(' ', '_')))
+
+    def lookup_path(r, p):
+        p = p.strip('/ ').lower()
+        n = (p[len(r.short_name):] if p.startswith(r.short_name.lower()) else
+             p[len(r.name):] if p.startswith(r.name.lower()) else None)
+        return r if (n == '') else None if (n is None) else next(
+            (y for s in r.subregions.values()
+             for y in [s.lookup_path(n)] if y), None)
 
 
 def get_world(session, args, verbose=False):
     """Returns data organized into a tree rooted at a World region.
-    Warnings are captured, logged, and result in an exception."""
+    Warnings are captured and printed, then raise a ValueError exception."""
 
-    saved_showwarning, warning_count = warnings.showwarning, 0
-    def showwarning_and_count(message, category, filename, lineno, file, line):
+    vprint = lambda *a, **k: print(*a, **k) if verbose else None
+    cache_path = cache_policy.cached_path(session, _world_cache_key(args))
+    if cache_path.exists():
+        vprint(f'Loading cached world: {cache_path}')
+        with cache_path.open(mode='rb') as cache_file:
+            return pickle.load(cache_file)
+
+    warning_count = 0
+
+    def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if 'underpop' in str(message):
-            print(f'*** {message}')
+        if 'overstuffed' in str(message):
+            print(f'=== {str(message).strip()}')
         else:
             nonlocal warning_count
             warning_count += 1
-            saved_showwarning(message, category, filename, lineno)
+            where = f'{os.path.basename(filename)}:{lineno}'
+            print(f'*** #{warning_count} ({where}) {str(message).strip()}')
+            traceback.print_stack(file=sys.stdout)
+            print()
 
     try:
-        warnings.showwarning = showwarning_and_count
-        world = get_world_with_warnings(session, args, verbose)
+        warnings.showwarning, saved = show_and_count, warnings.showwarning
+        world = _compute_world(session, args, verbose)
     finally:
-        warnings.showwarning = saved_showwarning
+        warnings.showwarning = saved
 
     if warning_count:
         print()
         raise ValueError(f'{warning_count} warnings found combining data')
+
+    vprint(f'Saving cached world: {cache_path}')
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = cache_path.parent / ('tmp.' + cache_path.name)
+    with temp_path.open(mode='wb') as cache_file:
+        pickle.dump(world, cache_file)
+    temp_path.rename(cache_path)
     return world
 
 
-def get_world_with_warnings(session, args, verbose):
-    """Returns a World region, allowing warnings during assembly."""
+def _world_cache_key(args):
+    # Only include args understood by this module.
+    ks = list(sorted(vars(argument_parser.parse_args([])).keys()))
+    return ('https://plague.wtf/world' +
+            ''.join(f':{k}={getattr(args, k)}' for k in ks))
+
+
+def _compute_world(session, args, verbose):
+    """Assembles a World region from data, allowing warnings."""
 
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
     vprint('Loading place data...')
@@ -157,7 +195,7 @@ def get_world_with_warnings(session, args, verbose):
         peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
         frame = pandas.DataFrame({'raw': values, 'value': smooth})
         return Metric(
-            color=color, emphasis=emphasis, peak=peak, frame=frame,
+            frame=frame, color=color, emphasis=emphasis, peak=peak,
             credits=credits)
 
     if not args.no_unified_dataset:
@@ -174,6 +212,7 @@ def get_world_with_warnings(session, args, verbose):
                 continue  # Filtered out for one reason or another.
 
             df.reset_index(level='ID', drop=True, inplace=True)
+
             def best_source(type):
                 # TODO: Pick the best source, not just the first one!
                 for_type = df.xs(type)
@@ -306,7 +345,7 @@ def get_world_with_warnings(session, args, verbose):
             mort_1M = mort.Deaths / 365 * 1e6 / region.totals['population']
             region.covid_metrics.update({
                 'historical deaths / 1Mp': Metric(
-                    color='black', emphasis=-1, peak=None, credits=cdc_credits,
+                    color='black', emphasis=-1, credits=cdc_credits,
                     frame=pandas.DataFrame(
                         {'value': [mort_1M] * 2}, index=y2020))})
 
@@ -332,26 +371,21 @@ def get_world_with_warnings(session, args, verbose):
         vprint('Loading and merging California blueprint data chart...')
         cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
-        cols = list(enumerate(['FIPS'] + list(cal_counties.columns)))
-        tier_col = next(i for i, c in cols if 'Updated Tier Assignment' in c)
-        prev_col = next(i for i, c in cols if 'Previous Tier Assignment' in c)
-        date_col = next(i for i, c in cols if 'First Date in Current' in c)
-        for row in cal_counties.itertuples(index=True, name=None):
-            region = region_by_fips.get(row[0])
+        for county in cal_counties.values():
+            region = region_by_fips.get(county.fips)
             if region is None:
+                warnings.warn(f'FIPS {county.fips} (CA {county.name}) missing')
                 continue
 
-            tier, prev, date = (row[c] for c in (tier_col, prev_col, date_col))
-            td = fetch_california_blueprint.TIER_DESCRIPTION[tier]
-            pd = fetch_california_blueprint.TIER_DESCRIPTION[prev]
-            text = f'Entered {td.color} tier ({td.name})'
-            if td.color != pd.color:
-                text += f'; was {pd.emoji} {pd.color} ({pd.name})'
-
-            region.current_policy = PolicyChange(
-                date=date, score=3 * numpy.sign(tier - prev),
-                emoji=td.emoji, credits=cal_credits, text=text)
-            region.policy_changes.append(region.current_policy)
+            prev = None
+            for date, tier in sorted(county.tier_history.items()):
+                region.current_policy = PolicyChange(
+                    date=date, emoji=tier.emoji,
+                    score=(-3 if tier.number <= 2 else +3),
+                    text=f'Entered {tier.color} tier ({tier.name})',
+                    credits=cal_credits)
+                region.policy_changes.append(region.current_policy)
+                prev = tier
 
     def sort_policy_changes(r):
         def sort_key(p): return (p.date.date(), -abs(p.score), p.score)
@@ -456,14 +490,15 @@ def get_world_with_warnings(session, args, verbose):
     latest = max((m.frame.index[-1] for m in world.covid_metrics.values()),
                  default=None)
 
-    def map_metric(color, m, mul):
+    def map_metric(color, inc, dec, m, scale):
         first = m.frame.index[0].astimezone(latest.tz)
         weeks = (latest - first) // pandas.Timedelta(days=7)
         dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
-        value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
+        value = scale * numpy.interp(dates, m.frame.index, m.frame.value)
         return Metric(
-            color=color, emphasis=None, peak=None, credits=m.credits,
-            frame=pandas.DataFrame({'value': value}, index=dates))
+            frame=pandas.DataFrame({'value': value}, index=dates),
+            color=color, increase_color=inc, decrease_color=dec,
+            credits=m.credits)
 
     def make_map_metrics(region):
         for sub in region.subregions.values():
@@ -473,12 +508,14 @@ def get_world_with_warnings(session, args, verbose):
         pos = (region.covid_metrics or {}).get('positives / 100Kp')
         if pos is not None:
             region.map_metrics['positives x2K'] = map_metric(
-                '#0000FF50', pos, mul)
+                color='#0000FF50', inc='#0000FFA0', dec=None,
+                m=pos, scale=mul)
 
         death = (region.covid_metrics or {}).get('deaths / 1Mp')
         if death is not None:
             region.map_metrics['deaths x200K'] = map_metric(
-                '#FF000050', death, mul)
+                color='#FF000050', inc='#FF0000A0', dec=None,
+                m=death, scale=mul)
 
     make_map_metrics(world)
 
@@ -537,8 +574,7 @@ def _unified_skeleton(session):
         spop = sum(roll_up_population(r) for r in region.subregions.values())
         rpop = region.totals['population'] or numpy.nan
         if pandas.notna(rpop) and pandas.notna(spop) and spop > rpop * 1.1:
-            warn(f'"{region.name}" underpopulated (pop={rpop} << sub={spop})')
-            rpop = spop
+            warn(f'"{region.name}" overstuffed (sub={spop} >> pop={rpop})')
 
         rpop = rpop if (pandas.notna(rpop) and rpop > 0) else spop
         if not (rpop > 0):
@@ -646,9 +682,8 @@ def _jhu_skeleton(session):
 
 if __name__ == '__main__':
     import argparse
-    import itertools
     import signal
-    from covid import cache_policy
+    from covid import combine_data
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
@@ -656,10 +691,13 @@ if __name__ == '__main__':
     parser.add_argument('--print_regex')
     parser.add_argument('--print_data', action='store_true')
     args = parser.parse_args()
-    world = get_world(
-        session=cache_policy.new_session(args),
-        args=args, verbose=True)
+    session = cache_policy.new_session(args)
+    cache_key = _world_cache_key(args)
 
+    print(f'Cache key: {cache_key}')
+    print(f'Cache path: {cache_policy.cached_path(session, cache_key)}')
+    print()
+    world = combine_data.get_world(session=session, args=args, verbose=True)
     print_regex = args.print_regex and re.compile(args.print_regex, re.I)
 
     def print_tree(prefix, parents, key, r):

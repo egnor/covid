@@ -61,7 +61,8 @@ def get_events(session):
 
         tab_values = tab_json['values']
         header = tab_values[0]
-        header = header[:next((i for i, h in enumerate(header) if not h), None)]
+        header = header[:next(
+            (i for i, h in enumerate(header) if not h), None)]
         if header[:3] != ['State', 'State Abbreviation', 'State FIPS Code']:
             raise ValueError(
                 f'Unexpected columns in "{tab_title}": '

@@ -89,14 +89,14 @@ def make_region_html(region, args):
                     tags.button(i('repeat'), ' L', id='map_loop')
                     tags.button(i('backward'), ' R', id='map_rewind')
                     tags.button(i('step-backward'), ' [', id='map_prev')
-                    tags.input(type='range', id='map_slider')
+                    tags.input_(type='range', id='map_slider')
                     tags.button(i('step-forward'), ' ]', id='map_next')
                     tags.button(i('forward'), ' F', id='map_forward')
 
         tags.img(cls='graphic', src=doc_link(urls.chart_image(region)))
 
         cp = region.current_policy
-        notables = [p for p in region.policy_changes if p.score or p == cp]
+        notables = [p for p in region.policy_changes if p.score]
         if notables:
             tags.h2(
                 tags.span('Closing', cls='policy_close'), ' and ',
@@ -105,15 +105,17 @@ def make_region_html(region, args):
             with tags.div(cls='policies'):
                 last_date = None
                 for p in notables:
-                    date, score = str(p.date.date()), p.score
+                    date, s = str(p.date.date()), p.score
                     if date != last_date:
                         tags.div(date, cls=f'date')
                         last_date = date
+
                     tags.div(p.emoji, cls=f'emoji')
-                    tags.div(p.text, cls=f'text' +
-                        (' policy_close' if p.score < 0 else
-                         ' policy_open' if p.score else '') +
-                        (' policy_major' if abs(score) >= 2 or p == cp else ''))
+
+                    tags.div(p.text, cls='text' +
+                             ('policy_close ' if s < 0 else '') +
+                             ('policy_open ' if s > 0 else '') +
+                             ('policy_major ' if abs(s) >= 2 else ''))
 
         subs = [r for r in region.subregions.values()
                 if r.matches_regex(args.page_regex)]
@@ -157,10 +159,11 @@ def make_region_html(region, args):
 def make_subregion_html(doc_url, region):
     region_href = urls.link(doc_url, urls.region_page(region))
     with tags.a(cls='subregion', href=region_href):
-        with tags.div(region.name, cls='subregion_label', __pretty=False):
+        with tags.div(cls='subregion_label', __pretty=False):
             if region.current_policy and region.current_policy.emoji:
-                util.text('\xa0')
                 tags.span(region.current_policy.emoji, cls='emoji')
+                util.text('\xa0')
+            util.text(region.name)
             tags.div(
                 f'{region.totals["population"]:,.0f}\xa0pop, '
                 f'{region.totals.get("positives", 0):,.0f}\xa0pos, '

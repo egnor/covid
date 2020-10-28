@@ -65,7 +65,7 @@ def _write_chart_image(region, site_dir):
 
     if mobility_axes:
         _setup_xaxis(
-             mobility_axes, region, title=f'{region.short_name} mobility')
+            mobility_axes, region, title=f'{region.short_name} mobility')
         _plot_mobility_metrics(mobility_axes, region)
         _plot_policy_changes(mobility_axes, region, show_emoji=False)
         _add_plot_legend(mobility_axes)

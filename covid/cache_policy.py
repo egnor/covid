@@ -37,15 +37,15 @@ def new_session(args):
     return session
 
 
-def cached_derived_data_path(session, url, tag='derived'):
-    adapter = session.get_adapter(url)
+def cached_path(session, url_key):
+    adapter = session.get_adapter('https://example.com/')
     if isinstance(adapter, cachecontrol.CacheControlAdapter):
         cache, heuristic = adapter.cache, adapter.heuristic
         if (isinstance(cache, cachecontrol.caches.file_cache.FileCache) and
                 isinstance(heuristic, cachecontrol.heuristics.ExpiresAfter)):
             path = pathlib.Path(
                 cachecontrol.caches.file_cache.url_to_file_path(
-                    f'{url}:{tag}', cache))
+                    url_key, cache))
             if path.exists():
                 ft = datetime.datetime.fromtimestamp(path.stat().st_mtime)
                 keep_time = datetime.datetime.now() - heuristic.delta
