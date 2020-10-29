@@ -1,6 +1,7 @@
 """Common settings and defaults for requests_cache layer."""
 
 import argparse
+import contextlib
 import datetime
 import pathlib
 
@@ -55,3 +56,19 @@ def cached_path(session, url_key):
             return path
 
     return None
+
+
+@contextlib.contextmanager
+def temp_to_rename(path, mode=None):
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.parent / ('tmp.' + path.name)
+    try:
+        if mode:
+            with temp_path.open(mode=mode) as file:
+                yield file
+        else:
+            yield temp_path
+        temp_path.rename(path)
+    finally:
+        temp_path.unlink(missing_ok=True)

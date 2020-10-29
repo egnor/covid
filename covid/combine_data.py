@@ -1,4 +1,4 @@
-"""Functions that combine data sources into a unified representation."""
+"""Functions that combine data sources into a combined representation."""
 
 import argparse
 import collections
@@ -38,6 +38,7 @@ argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
 argument_group.add_argument('--no_unified_dataset', action='store_true')
+argument_group.add_argument('--use_unified_hydromet', action='store_true')
 argument_group.add_argument('--use_covid_tracking', action='store_true')
 argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
@@ -135,11 +136,8 @@ def get_world(session, args, verbose=False):
         raise ValueError(f'{warning_count} warnings found combining data')
 
     vprint(f'Saving cached world: {cache_path}')
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = cache_path.parent / ('tmp.' + cache_path.name)
-    with temp_path.open(mode='wb') as cache_file:
+    with cache_policy.temp_to_rename(cache_path, mode='wb') as cache_file:
         pickle.dump(world, cache_file)
-    temp_path.rename(cache_path)
     return world
 
 
@@ -181,7 +179,7 @@ def _compute_world(session, args, verbose):
     # Add metrics from the Unified COVID-19 Dataset.
     #
 
-    def trend_metric(color, emphasis, credits, values):
+    def trend_metric(color, emphasis, credits, values, mins=None, maxs=None):
         if not pandas.api.types.is_datetime64_any_dtype(values.index.dtype):
             raise ValueError(f'Bad trend dtype "{values.index.dtype}"')
         if values.index.duplicated().any():
@@ -190,35 +188,46 @@ def _compute_world(session, args, verbose):
         nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
         first_i = max(0, min(first_i, len(values) - 14))
-        smooth = values[first_i:].rolling(7).mean()
+        smooth = values.iloc[first_i:].rolling(7).mean()
         peak_x = smooth.idxmax()
         peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
         frame = pandas.DataFrame({'raw': values, 'value': smooth})
+        if mins is not None:
+            frame['min'] = mins.loc[first_i:].rolling(7).mean()
+        if maxs is not None:
+            frame['max'] = maxs.loc[first_i:].rolling(7).mean()
         return Metric(
             frame=frame, color=color, emphasis=emphasis, peak=peak,
             credits=credits)
 
     if not args.no_unified_dataset:
-        vprint('Loading Unified COVID-19 Dataset...')
+        vprint('Loading unified dataset (COVID)...')
         unified_credits = fetch_unified_dataset.credits()
-        unified_data = (
-            fetch_unified_dataset.get_data(session)
-            .xs(level='Age', key='Total').xs(level='Sex', key='Total'))
+        unified_covid = fetch_unified_dataset.get_covid(session)
+        unified_covid = unified_covid.xs(level='Age', key='Total')
+        unified_covid = unified_covid.xs(level='Sex', key='Total')
+
+        if args.use_unified_hydromet:
+            vprint('Loading unified dataset (hydromet)...')
+            unified_hydromet = fetch_unified_dataset.get_hydromet(session)
+            hydromet_by_uid = unified_hydromet.groupby(level='ID', sort=False)
+        else:
+            hydromet_by_uid = None
 
         vprint('Merging Unified COVID-19 Dataset...')
-        for uid, df in unified_data.groupby(level='ID', sort=False):
+        for uid, df in unified_covid.groupby(level='ID', sort=False):
             region = region_by_uid.get(uid)
             if not region:
                 continue  # Filtered out for one reason or another.
 
+            pop = region.totals['population']
             df.reset_index(level='ID', drop=True, inplace=True)
-
             def best_source(type):
                 # TODO: Pick the best source, not just the first one!
                 for_type = df.xs(type)
                 return for_type.xs(for_type.index[0][0])
 
-            pop = region.totals['population']
+            # COVID metrics
             if 'Confirmed' in df.index:
                 confirmed = best_source('Confirmed')
                 region.totals['positives'] = confirmed.Cases.iloc[-1]
@@ -243,6 +252,21 @@ def _compute_world(session, args, verbose):
                 region.covid_metrics['hosp current / 25Kp'] = trend_metric(
                     'tab:pink', 0, unified_credits,
                     best_source('Hospitalized_Now').Cases * 25e3 / pop)
+
+            # Hydrometeorological data
+            if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
+                hyd = hydromet_by_uid.get_group(uid)
+                hyd_by_source = hyd.groupby(level='Source')
+                best_hyd_source = hyd_by_source['T'].count().idxmax()
+                best_hyd = hyd_by_source.get_group(best_hyd_source)
+                best_hyd.reset_index(
+                    level=('ID', 'Source'), drop=True, inplace=True)
+
+                def f_from_c(c): return c * 1.8 + 32
+                region.mobility_metrics['Temp °F'] = trend_metric(
+                    'tab:gray', 1, unified_credits, values=f_from_c(best_hyd.T),
+                    mins=f_from_c(best_hyd.Tmin), maxs=f_from_c(best_hyd.Tmax))
+                    
 
     #
     # Add COVID metrics from JHU.
@@ -426,7 +450,7 @@ def _compute_world(session, args, verbose):
             pcfb = 'percent_change_from_baseline'  # common, long suffix
             region.mobility_metrics.update({
                 'residential': trend_metric(
-                    'tab:gray', 1, mobility_credits,
+                    'tab:brown', 1, mobility_credits,
                     100 + m[f'residential_{pcfb}']),
                 'retail / recreation': trend_metric(
                     'tab:orange', 1, mobility_credits,
@@ -468,16 +492,17 @@ def _compute_world(session, args, verbose):
             if abs(sum(p for p, t in poptotals or []) - pop) < pop * 0.1:
                 r.totals[name] = sum(t for p, t in poptotals)
 
-        for name, popmetrics in name_popmetrics.items():
-            if abs(sum(p for p, m in popmetrics or []) - pop) < pop * 0.1:
-                popmetrics.sort(reverse=True)
+        for name, pms in name_popmetrics.items():
+            if abs(sum(p for p, m in pms or []) - pop) < pop * 0.1:
+                pms.sort(reverse=True)  # Highest population first
+                latest = list(sorted(m.frame.index[-1] for p, m in pms))
+                latest = latest[len(latest) // 2]  # Use median end date.
                 r.covid_metrics[name] = replace(
-                    popmetrics[0][1],
-                    credits=dict(
-                        c for p, m in popmetrics for c in m.credits.items()),
+                    pms[0][1],  # Take metadata fields from most populated.
+                    credits=dict(c for p, m in pms for c in m.credits.items()),
                     frame=functools.reduce(
                         lambda a, b: a.add(b, fill_value=0.0),
-                        (p * m.frame for p, m in popmetrics)) / pop)
+                        (p * m.frame.loc[:latest] for p, m in pms)) / pop)
 
     vprint('Rolling up metrics...')
     roll_up_metrics(world)
@@ -720,8 +745,8 @@ if __name__ == '__main__':
                     ('map', r.map_metrics),
                     ('mob', r.mobility_metrics)):
                 for name, m in metrics.items():
-                    max = (' ' * 20 if not m.peak else
-                           f' peak={m.peak[1]:<2.0f} @{m.peak[0].date()}')
+                    max = (' ' * 21 if not m.peak else
+                           f' peak={m.peak[1]:<3.0f} @{m.peak[0].date()}')
                     print(f'{prefix}    {len(m.frame):3d}d '
                           f'=>{m.frame.index.max().date()}{max} {cat}: {name}')
                     if args.print_data:

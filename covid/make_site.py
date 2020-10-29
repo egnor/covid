@@ -113,9 +113,9 @@ def make_region_html(region, args):
                     tags.div(p.emoji, cls=f'emoji')
 
                     tags.div(p.text, cls='text' +
-                             ('policy_close ' if s < 0 else '') +
-                             ('policy_open ' if s > 0 else '') +
-                             ('policy_major ' if abs(s) >= 2 else ''))
+                             (' policy_close' if s < 0 else '') +
+                             (' policy_open' if s > 0 else '') +
+                             (' policy_major' if abs(s) >= 2 else ''))
 
         subs = [r for r in region.subregions.values()
                 if r.matches_regex(args.page_regex)]
