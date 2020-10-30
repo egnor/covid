@@ -38,7 +38,7 @@ argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
 argument_group.add_argument('--no_unified_dataset', action='store_true')
-argument_group.add_argument('--use_unified_hydromet', action='store_true')
+argument_group.add_argument('--no_unified_hydromet', action='store_true')
 argument_group.add_argument('--use_covid_tracking', action='store_true')
 argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
@@ -181,7 +181,7 @@ def _compute_world(session, args, verbose):
 
     def trend_metric(color, emphasis, credits, values, mins=None, maxs=None):
         if not pandas.api.types.is_datetime64_any_dtype(values.index.dtype):
-            raise ValueError(f'Bad trend dtype "{values.index.dtype}"')
+            raise ValueError(f'Bad trend index dtype "{values.index.dtype}"')
         if values.index.duplicated().any():
             dups = values.index.duplicated(keep=False)
             raise ValueError(f'Dup trend dates: {values.index[dups]}')
@@ -193,9 +193,11 @@ def _compute_world(session, args, verbose):
         peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
         frame = pandas.DataFrame({'raw': values, 'value': smooth})
         if mins is not None:
-            frame['min'] = mins.loc[first_i:].rolling(7).mean()
+            assert mins.index is values.index
+            frame['min'] = mins.iloc[first_i:].rolling(7).mean()
         if maxs is not None:
-            frame['max'] = maxs.loc[first_i:].rolling(7).mean()
+            assert maxs.index is values.index
+            frame['max'] = maxs.iloc[first_i:].rolling(7).mean()
         return Metric(
             frame=frame, color=color, emphasis=emphasis, peak=peak,
             credits=credits)
@@ -207,14 +209,14 @@ def _compute_world(session, args, verbose):
         unified_covid = unified_covid.xs(level='Age', key='Total')
         unified_covid = unified_covid.xs(level='Sex', key='Total')
 
-        if args.use_unified_hydromet:
+        if args.no_unified_hydromet:
+            hydromet_by_uid = None
+        else:
             vprint('Loading unified dataset (hydromet)...')
             unified_hydromet = fetch_unified_dataset.get_hydromet(session)
             hydromet_by_uid = unified_hydromet.groupby(level='ID', sort=False)
-        else:
-            hydromet_by_uid = None
 
-        vprint('Merging Unified COVID-19 Dataset...')
+        vprint('Merging unified dataset...')
         for uid, df in unified_covid.groupby(level='ID', sort=False):
             region = region_by_uid.get(uid)
             if not region:
@@ -222,6 +224,7 @@ def _compute_world(session, args, verbose):
 
             pop = region.totals['population']
             df.reset_index(level='ID', drop=True, inplace=True)
+
             def best_source(type):
                 # TODO: Pick the best source, not just the first one!
                 for_type = df.xs(type)
@@ -254,19 +257,14 @@ def _compute_world(session, args, verbose):
                     best_source('Hospitalized_Now').Cases * 25e3 / pop)
 
             # Hydrometeorological data
+            def f_from_c(c): return c * 1.8 + 32
             if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
-                hyd = hydromet_by_uid.get_group(uid)
-                hyd_by_source = hyd.groupby(level='Source')
-                best_hyd_source = hyd_by_source['T'].count().idxmax()
-                best_hyd = hyd_by_source.get_group(best_hyd_source)
-                best_hyd.reset_index(
-                    level=('ID', 'Source'), drop=True, inplace=True)
-
-                def f_from_c(c): return c * 1.8 + 32
-                region.mobility_metrics['Temp °F'] = trend_metric(
-                    'tab:gray', 1, unified_credits, values=f_from_c(best_hyd.T),
-                    mins=f_from_c(best_hyd.Tmin), maxs=f_from_c(best_hyd.Tmax))
-                    
+                all = hydromet_by_uid.get_group(uid).groupby(level='Source')
+                df = all.get_group(all['T'].count().idxmax())
+                df.reset_index(level=('ID', 'Source'), drop=True, inplace=True)
+                region.mobility_metrics['temp °F'] = trend_metric(
+                    'tab:gray', 1, unified_credits, values=f_from_c(df['T']),
+                    mins=f_from_c(df.Tmin), maxs=f_from_c(df.Tmax))
 
     #
     # Add COVID metrics from JHU.
@@ -474,35 +472,35 @@ def _compute_world(session, args, verbose):
     #
 
     def roll_up_metrics(r):
-        name_popmetrics = {}
-        name_poptotals = {}
+        fieldname_popvals = {}
         for sub in r.subregions.values():
             roll_up_metrics(sub)
-            pop = sub.totals['population']
-            for name, total in sub.totals.items():
-                if name not in r.totals:
-                    name_poptotals.setdefault(name, []).append((pop, total))
-            for name, metric in sub.covid_metrics.items():
-                if name not in r.covid_metrics:
-                    name_popmetrics.setdefault(name, []).append((pop, metric))
+            sub_pop = sub.totals['population']
+            for field in ('totals', 'covid_metrics', 'mobility_metrics'):
+                for name, value in getattr(sub, field).items():
+                    if name not in getattr(r, field):
+                        fn, pv = (field, name), (sub_pop, value)
+                        l = fieldname_popvals.setdefault(fn, []).append(pv)
 
-        # Combine totals & metrics if population sums ~match.
-        pop = r.totals['population']
-        for name, poptotals in name_poptotals.items():
-            if abs(sum(p for p, t in poptotals or []) - pop) < pop * 0.1:
-                r.totals[name] = sum(t for p, t in poptotals)
+        for (field, name), popvals in fieldname_popvals.items():
+            if abs(sum(p for p, v in popvals) - pop) > pop * 0.1:
+                continue  # Don't synthesize if population doesn't match.
 
-        for name, pms in name_popmetrics.items():
-            if abs(sum(p for p, m in pms or []) - pop) < pop * 0.1:
-                pms.sort(reverse=True)  # Highest population first
-                latest = list(sorted(m.frame.index[-1] for p, m in pms))
-                latest = latest[len(latest) // 2]  # Use median end date.
-                r.covid_metrics[name] = replace(
-                    pms[0][1],  # Take metadata fields from most populated.
-                    credits=dict(c for p, m in pms for c in m.credits.items()),
-                    frame=functools.reduce(
-                        lambda a, b: a.add(b, fill_value=0.0),
-                        (p * m.frame.loc[:latest] for p, m in pms)) / pop)
+            if field == 'totals':
+                r.totals[name] = sum(v for p, v in popvals)
+                continue
+
+            popvals.sort(reverse=True)  # Highest population first.
+            credits = dict(c for p, v in popvals for c in v.credits.items())
+            ends = list(sorted(v.frame.index[-1] for p, v in popvals))
+            end = end[len(end) // 2]  # Use the median end date.
+
+            first_pop, first_val = popvals[0]  # Most populated entry.
+            frame = first_pop * first_val.frame.loc[:end]
+            for next_pop, next_val in popvals[1:]:
+                frame = frame.add(next_pop * next_val.frame.loc[:end])
+            new_value = replace(first_val, frame=frame / pop, credits=credits)
+            getattr(r, field)[name] = new_value
 
     vprint('Rolling up metrics...')
     roll_up_metrics(world)
@@ -512,8 +510,7 @@ def _compute_world(session, args, verbose):
     #
 
     # Sync map metric weekly data points to this end date.
-    latest = max((m.frame.index[-1] for m in world.covid_metrics.values()),
-                 default=None)
+    latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
 
     def map_metric(color, inc, dec, m, scale):
         first = m.frame.index[0].astimezone(latest.tz)
@@ -715,13 +712,9 @@ if __name__ == '__main__':
         parents=[cache_policy.argument_parser, argument_parser])
     parser.add_argument('--print_regex')
     parser.add_argument('--print_data', action='store_true')
+
     args = parser.parse_args()
     session = cache_policy.new_session(args)
-    cache_key = _world_cache_key(args)
-
-    print(f'Cache key: {cache_key}')
-    print(f'Cache path: {cache_policy.cached_path(session, cache_key)}')
-    print()
     world = combine_data.get_world(session=session, args=args, verbose=True)
     print_regex = args.print_regex and re.compile(args.print_regex, re.I)
 
