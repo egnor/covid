@@ -47,6 +47,7 @@ class Metric:
     frame: pandas.DataFrame
     color: str
     emphasis: int = 0
+    order: float = 0
     increase_color: Optional[str] = None
     decrease_color: Optional[str] = None
     peak: Optional[Tuple[pandas.Timestamp, float]] = None
@@ -178,28 +179,27 @@ def _compute_world(session, args, verbose):
     # Add metrics from the Unified COVID-19 Dataset.
     #
 
-    def trend_metric(color, emphasis, credits, values, mins=None, maxs=None):
-        if not pandas.api.types.is_datetime64_any_dtype(values.index.dtype):
-            raise ValueError(f'Bad trend index dtype "{values.index.dtype}"')
-        if values.index.duplicated().any():
-            dups = values.index.duplicated(keep=False)
-            raise ValueError(f'Dup trend dates: {values.index[dups]}')
-        nonzero_is, = (values.values > 0).nonzero()  # Skip first nonzero.
-        first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(values)
-        first_i = max(0, min(first_i, len(values) - 14))
-        smooth = values.iloc[first_i:].rolling(7).mean()
+    def trend_metric(c, em, ord, cred, v, mins=None, maxs=None):
+        if not pandas.api.types.is_datetime64_any_dtype(v.index.dtype):
+            raise ValueError(f'Bad trend index dtype "{v.index.dtype}"')
+        if v.index.duplicated().any():
+            dups = v.index.duplicated(keep=False)
+            raise ValueError(f'Dup trend dates: {v.index[dups]}')
+        nonzero_is, = (v.values > 0).nonzero()  # Skip first nonzero.
+        first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(v)
+        first_i = max(0, min(first_i, len(v) - 14))
+        smooth = v.iloc[first_i:].rolling(7).mean()
         peak_x = smooth.idxmax()
         peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
-        frame = pandas.DataFrame({'raw': values, 'value': smooth})
+        df = pandas.DataFrame({'raw': v, 'value': smooth})
         if mins is not None:
-            assert mins.index is values.index
-            frame['min'] = mins.iloc[first_i:].rolling(7).mean()
+            assert mins.index is v.index
+            df['min'] = mins.iloc[first_i:].rolling(7).mean()
         if maxs is not None:
-            assert maxs.index is values.index
-            frame['max'] = maxs.iloc[first_i:].rolling(7).mean()
+            assert maxs.index is v.index
+            df['max'] = maxs.iloc[first_i:].rolling(7).mean()
         return Metric(
-            frame=frame, color=color, emphasis=emphasis, peak=peak,
-            credits=credits)
+            frame=df, color=c, emphasis=em, order=ord, credits=cred, peak=peak)
 
     if not args.no_unified_dataset:
         vprint('Loading unified dataset (COVID)...')
@@ -234,36 +234,36 @@ def _compute_world(session, args, verbose):
                 confirmed = best_source('Confirmed')
                 region.totals['positives'] = confirmed.Cases.iloc[-1]
                 region.covid_metrics['positives / 100Kp'] = trend_metric(
-                    'tab:blue', 1, unified_credits,
-                    confirmed.Cases_New * 1e5 / pop)
+                    c='tab:blue', em=1, ord=1.0, cred=unified_credits,
+                    v=confirmed.Cases_New * 1e5 / pop)
             if 'Deaths' in df.index:
                 deaths = best_source('Deaths')
                 region.totals['deaths'] = deaths.Cases.iloc[-1]
                 region.covid_metrics['deaths / 1Mp'] = trend_metric(
-                    'tab:red', 1, unified_credits,
-                    deaths.Cases_New * 1e6 / pop)
+                    c='tab:red', em=1, ord=1.1, cred=unified_credits,
+                    v=deaths.Cases_New * 1e6 / pop)
             if 'Tests' in df.index:
                 region.covid_metrics['tests / 10Kp'] = trend_metric(
-                    'tab:green', 0, unified_credits,
-                    best_source('Tests').Cases_New * 1e4 / pop)
+                    c='tab:green', em=0, ord=2.0, cred=unified_credits,
+                    v=best_source('Tests').Cases_New * 1e4 / pop)
             if 'Hospitalized' in df.index:
                 region.covid_metrics['hosp admit / 250Kp'] = trend_metric(
-                    'tab:orange', 0, unified_credits,
-                    best_source('Hospitalized').Cases_New * 25e4 / pop)
+                    c='tab:orange', em=0, ord=3.0, cred=unified_credits,
+                    v=best_source('Hospitalized').Cases_New * 25e4 / pop)
             if 'Hospitalized_Now' in df.index:
                 region.covid_metrics['hosp current / 25Kp'] = trend_metric(
-                    'tab:pink', 0, unified_credits,
-                    best_source('Hospitalized_Now').Cases * 25e3 / pop)
+                    c='tab:pink', em=0, ord=3.1, cred=unified_credits,
+                    v=best_source('Hospitalized_Now').Cases * 25e3 / pop)
 
             # Hydrometeorological data
-            def f_from_c(c): return c * 1.8 + 32
+            def to_f(c): return c * 1.8 + 32
             if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
                 all = hydromet_by_uid.get_group(uid).groupby(level='Source')
                 df = all.get_group(all['T'].count().idxmax())
                 df.reset_index(level=('ID', 'Source'), drop=True, inplace=True)
                 region.mobility_metrics['temp °F'] = trend_metric(
-                    'tab:gray', 1, unified_credits, values=f_from_c(df['T']),
-                    mins=f_from_c(df.Tmin), maxs=f_from_c(df.Tmax))
+                    c='tab:gray', em=1, ord=2.0, cred=unified_credits,
+                    v=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
 
     #
     # Add COVID metrics from JHU.
@@ -285,13 +285,13 @@ def _compute_world(session, args, verbose):
             # Convert total cases and deaths into daily cases and deaths.
             region.covid_metrics.update({
                 'positives / 100Kp': trend_metric(
-                    'tab:blue', 1, jhu_credits,
-                    (df.total_cases.iloc[1:] - df.total_cases.values[:-1]) *
-                    1e5 / region.totals['population']),
+                    c='tab:blue', em=1, ord=1.0, cred=jhu_credits,
+                    v=(df.total_cases.iloc[1:] - df.total_cases.iloc[:-1]) *
+                        1e5 / region.totals['population']),
                 'deaths / 1Mp': trend_metric(
-                    'tab:red', 1, jhu_credits,
-                    (df.total_deaths.iloc[1:] - df.total_deaths.values[:-1]) *
-                    1e6 / region.totals['population']),
+                    c='tab:red', em=1, ord=1.1, cred=jhu_credits,
+                    v=(df.total_deaths.iloc[1:] - df.total_deaths.iloc[:-1]) *
+                        1e6 / region.totals['population']),
             })
 
             region.totals['deaths'] = df.total_deaths.iloc[-1]
@@ -327,21 +327,21 @@ def _compute_world(session, args, verbose):
             # Take all covidtracking data where available, for consistency.
             pop = region.totals['population']
             region.covid_metrics.update({
-                'tests / 10Kp': trend_metric(
-                    'tab:green', 0, covid_credits,
-                    covid.totalTestResultsIncrease * 1e4 / pop),
                 'positives / 100Kp': trend_metric(
-                    'tab:blue', 1, covid_credits,
-                    covid.positiveIncrease * 1e5 / pop),
-                'hosp admit / 250Kp': trend_metric(
-                    'tab:orange', 0, covid_credits,
-                    covid.hospitalizedIncrease * 25e4 / pop),
-                'hosp current / 25Kp': trend_metric(
-                    'tab:pink', 0, covid_credits,
-                    covid.hospitalizedCurrently * 25e3 / pop),
+                    c='tab:blue', em=1, ord=1.0, cred=covid_credits,
+                    v=covid.positiveIncrease * 1e5 / pop),
                 'deaths / 1Mp': trend_metric(
-                    'tab:red', 1, covid_credits,
-                    covid.deathIncrease * 1e6 / pop),
+                    c='tab:red', em=1, ord=1.1, cred=covid_credits,
+                    v=covid.deathIncrease * 1e6 / pop),
+                'tests / 10Kp': trend_metric(
+                    c='tab:green', em=0, ord=2.0, cred=covid_credits,
+                    v=covid.totalTestResultsIncrease * 1e4 / pop),
+                'hosp admit / 250Kp': trend_metric(
+                    c='tab:orange', em=0, ord=3.0, cred=covid_credits,
+                    v=covid.hospitalizedIncrease * 25e4 / pop),
+                'hosp current / 25Kp': trend_metric(
+                    c='tab:pink', em=0, ord=3.1, cred=covid_credits,
+                    v=covid.hospitalizedCurrently * 25e3 / pop),
             })
 
             region.totals['deaths'] = covid.death.iloc[-1]
@@ -366,7 +366,7 @@ def _compute_world(session, args, verbose):
             mort_1M = mort.Deaths / 365 * 1e6 / region.totals['population']
             region.covid_metrics.update({
                 'historical deaths / 1Mp': Metric(
-                    color='black', emphasis=-1, credits=cdc_credits,
+                    color='black', emphasis=-1, order=4.0, credits=cdc_credits,
                     frame=pandas.DataFrame(
                         {'value': [mort_1M] * 2}, index=y2020))})
 
@@ -447,23 +447,23 @@ def _compute_world(session, args, verbose):
             pcfb = 'percent_change_from_baseline'  # common, long suffix
             region.mobility_metrics.update({
                 'residential': trend_metric(
-                    'tab:brown', 1, mobility_credits,
-                    100 + m[f'residential_{pcfb}']),
+                    c='tab:brown', em=1, ord=1.0, cred=mobility_credits,
+                    v=100 + m[f'residential_{pcfb}']),
                 'retail / recreation': trend_metric(
-                    'tab:orange', 1, mobility_credits,
-                    100 + m[f'retail_and_recreation_{pcfb}']),
+                    c='tab:orange', em=1, ord=1.1, cred=mobility_credits,
+                    v=100 + m[f'retail_and_recreation_{pcfb}']),
                 'workplaces': trend_metric(
-                    'tab:red', 1, mobility_credits,
-                    100 + m[f'workplaces_{pcfb}']),
+                    c='tab:red', em=1, ord=1.2, cred=mobility_credits,
+                    v=100 + m[f'workplaces_{pcfb}']),
                 'parks': trend_metric(
-                    'tab:green', 0, mobility_credits,
-                    100 + m[f'parks_{pcfb}']),
+                    c='tab:green', em=0, ord=1.3, cred=mobility_credits,
+                    v=100 + m[f'parks_{pcfb}']),
                 'grocery / pharmacy': trend_metric(
-                    'tab:blue', 0, mobility_credits,
-                    100 + m[f'grocery_and_pharmacy_{pcfb}']),
+                    c='tab:blue', em=0, ord=1.4, cred=mobility_credits,
+                    v=100 + m[f'grocery_and_pharmacy_{pcfb}']),
                 'transit stations': trend_metric(
-                    'tab:purple', 0, mobility_credits,
-                    100 + m[f'transit_stations_{pcfb}']),
+                    'tab:purple', em=0, ord=1.5, cred=mobility_credits,
+                    v=100 + m[f'transit_stations_{pcfb}']),
             })
 
     #
@@ -527,10 +527,9 @@ def _compute_world(session, args, verbose):
         weeks = (latest - first) // pandas.Timedelta(days=7)
         dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
         value = scale * numpy.interp(dates, m.frame.index, m.frame.value)
-        return Metric(
-            frame=pandas.DataFrame({'value': value}, index=dates),
-            color=color, increase_color=inc, decrease_color=dec,
-            credits=m.credits)
+        return replace(
+            m, frame=pandas.DataFrame({'value': value}, index=dates),
+            color=color, increase_color=inc, decrease_color=dec)
 
     def make_map_metrics(region):
         for sub in region.subregions.values():

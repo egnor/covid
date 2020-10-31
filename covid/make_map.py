@@ -219,12 +219,12 @@ def _setup_axes(figure, region):
     axes.legend(loc='lower left', handles=[
         L2D([], [], color=(0.0, 0.0, 0.0, 0.1),
             ls='none', marker='o', ms=12, label='population'),
-        L2D([], [], mfc=(0.0, 0.0, 1.0, 0.2), mec=(0.0, 0.0, 1.0, 0.6), mew=3,
-            ls='none', marker='o', ms=10, label='increasing positives x2K'),
-        L2D([], [], mfc=(0.0, 0.0, 1.0, 0.2), mec=(0.0, 1.0, 0.0, 0.6), mew=3,
-            ls='none', marker='o', ms=10, label='decreasing positives x2K'),
-        L2D([], [], color=(1.0, 0.0, 0.0, 0.2),
-            ls='none', marker='o', ms=12, label='deaths x200K')])
+        L2D([], [], mfc=(0.0, 0.0, 1.0, 0.2), mec=(0.0, 0.0, 1.0, 0.6), mew=2,
+            ls='none', marker='o', ms=11, label='positives x2K (incr.)'),
+        L2D([], [], mfc=(0.0, 0.0, 1.0, 0.2), mec=(0.0, 1.0, 0.0, 0.6), mew=2,
+            ls='none', marker='o', ms=11, label='positives x2K (decr.)'),
+        L2D([], [], color=(1.0, 0.0, 0.0, 0.2), mec=(1.0, 0.0, 0.0, 0.6),
+            mew=2, ls='none', marker='o', ms=11, label='deaths x200K')])
 
     return axes
 

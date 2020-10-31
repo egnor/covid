@@ -110,8 +110,7 @@ def _plot_covid_metrics(axes, region):
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-    for name, metric in region.covid_metrics.items():
-        _plot_metric(axes, name, metric)
+    _plot_metrics(axes, region.covid_metrics)
 
 
 def _plot_mobility_metrics(axes, region):
@@ -125,29 +124,33 @@ def _plot_mobility_metrics(axes, region):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    for name, metric in region.mobility_metrics.items():
-        _plot_metric(axes, name, metric)
+    _plot_metrics(axes, region.mobility_metrics)
 
 
-def _plot_metric(axes, name, metric):
-    width = 4 if metric.emphasis >= 1 else 2
-    style = '-' if metric.emphasis >= 0 else '--'
-    alpha = 1.0 if metric.emphasis >= 0 else 0.5
-    if 'raw' in metric.frame.columns:
-        axes.plot(metric.frame.index, metric.frame.raw,
-                  c=metric.color, alpha=alpha * 0.5, lw=1, ls=style)
-    if 'min' in metric.frame.columns and 'max' in metric.frame.columns:
-        axes.fill_between(x=metric.frame.index, y1=metric.frame['min'],
-                          y2=metric.frame['max'], color=metric.color,
-                          alpha=0.2)
-    if 'value' in metric.frame.columns and metric.frame.value.any():
-        last_date = metric.frame.value.last_valid_index()
-        axes.scatter(
-            [last_date], [metric.frame.value.loc[last_date]],
-            c=metric.color, alpha=alpha, s=(width * 2) ** 2, zorder=3)
-        _add_to_legend(axes, *axes.plot(
-            metric.frame.index, metric.frame.value, label=name,
-            c=metric.color, alpha=alpha, lw=width, ls=style))
+def _plot_metrics(axes, metrics):
+    for name, m in sorted(metrics.items(), key=lambda nm: nm[1].order):
+        width = 4 if m.emphasis >= 1 else 2
+        style = '-' if m.emphasis >= 0 else '--'
+        alpha = 1.0 if m.emphasis >= 0 else 0.5
+        zorder = 2.0 - m.order / 100
+        if 'raw' in m.frame.columns:
+            axes.plot(
+                m.frame.index, m.frame.raw,
+                c=m.color, alpha=alpha * 0.5, zorder=zorder + 0.001,
+                lw=1, ls=style)
+        if 'min' in m.frame.columns and 'max' in m.frame.columns:
+            axes.fill_between(
+                x=m.frame.index, y1=m.frame['min'], y2=m.frame['max'],
+                color=m.color, alpha=0.2, zorder=zorder - 1)
+        if 'value' in m.frame.columns and m.frame.value.any():
+            last_date = m.frame.value.last_valid_index()
+            blot_size = (width * 2) ** 2
+            axes.scatter(
+                [last_date], [m.frame.value.loc[last_date]],
+                c=m.color, alpha=alpha, zorder=zorder + 0.002, s=blot_size)
+            _add_to_legend(axes, *axes.plot(
+                m.frame.index, m.frame.value, label=name,
+                c=m.color, alpha=alpha, zorder=zorder, lw=width, ls=style))
 
 
 def _plot_policy_changes(axes, region, show_emoji):
