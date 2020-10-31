@@ -2,7 +2,6 @@
 
 import argparse
 import collections
-import functools
 import os.path
 import pickle
 import re
@@ -115,7 +114,7 @@ def get_world(session, args, verbose=False):
 
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if 'overstuffed' in str(message):
+        if 'Mispopulation' in str(message):
             print(f'=== {str(message).strip()}')
         else:
             nonlocal warning_count
@@ -472,35 +471,46 @@ def _compute_world(session, args, verbose):
     #
 
     def roll_up_metrics(r):
-        fieldname_popvals = {}
+        fieldname_popvals, sub_pop_total = {}, 0
         for sub in r.subregions.values():
             roll_up_metrics(sub)
             sub_pop = sub.totals['population']
+            sub_pop_total += sub_pop
             for field in ('totals', 'covid_metrics', 'mobility_metrics'):
                 for name, value in getattr(sub, field).items():
                     if name not in getattr(r, field):
                         fn, pv = (field, name), (sub_pop, value)
-                        l = fieldname_popvals.setdefault(fn, []).append(pv)
+                        fieldname_popvals.setdefault(fn, []).append(pv)
+
+        pop = r.totals['population']
+        if sub_pop_total > 0 and abs(sub_pop_total - pop) > pop * 0.1:
+            warn(f'Mispopulation: {pop}p in "{r.path()}", '
+                 f'{sub_pop_total}p in parts')
 
         for (field, name), popvals in fieldname_popvals.items():
-            if abs(sum(p for p, v in popvals) - pop) > pop * 0.1:
+            metric_pop = sum(p for p, v in popvals)
+            if abs(metric_pop - pop) > pop * 0.1:
                 continue  # Don't synthesize if population doesn't match.
 
             if field == 'totals':
                 r.totals[name] = sum(v for p, v in popvals)
                 continue
 
-            popvals.sort(reverse=True)  # Highest population first.
+            popvals.sort(reverse=True, key=lambda pv: pv[0])  # Highest first.
             credits = dict(c for p, v in popvals for c in v.credits.items())
             ends = list(sorted(v.frame.index[-1] for p, v in popvals))
-            end = end[len(end) // 2]  # Use the median end date.
+            end = ends[len(ends) // 2]  # Use the median end date.
 
             first_pop, first_val = popvals[0]  # Most populated entry.
             frame = first_pop * first_val.frame.loc[:end]
             for next_pop, next_val in popvals[1:]:
-                frame = frame.add(next_pop * next_val.frame.loc[:end])
-            new_value = replace(first_val, frame=frame / pop, credits=credits)
-            getattr(r, field)[name] = new_value
+                next_frame = next_pop * next_val.frame.loc[:end]
+                frame = frame.add(next_frame, fill_value=0)
+            getattr(r, field)[name] = replace(
+                first_val, frame=frame / metric_pop, credits=credits)
+
+        if not r.covid_metrics:
+            warn(f'No COVID metrics for "{r.path()}"!')
 
     vprint('Rolling up metrics...')
     roll_up_metrics(world)
@@ -591,21 +601,8 @@ def _unified_skeleton(session):
         if p.Latitude or p.Longitude:
             region.lat_lon = (p.Latitude, p.Longitude)
 
-    # Compute population from subregions if it's not set at the higher level.
-    def roll_up_population(region):
-        spop = sum(roll_up_population(r) for r in region.subregions.values())
-        rpop = region.totals['population'] or numpy.nan
-        if pandas.notna(rpop) and pandas.notna(spop) and spop > rpop * 1.1:
-            warn(f'"{region.name}" overstuffed (sub={spop} >> pop={rpop})')
-
-        rpop = rpop if (pandas.notna(rpop) and rpop > 0) else spop
-        if not (rpop > 0):
-            raise ValueError(f'"{region.name}" population={rpop} '
-                             f'(sum(subregions)={spop})')
-        region.totals['population'] = rpop
-        return rpop
-
-    roll_up_population(world)
+    world.totals['population'] = sum(
+        s.totals['population'] for s in world.subregions.values())
     return world
 
 
@@ -688,17 +685,8 @@ def _jhu_skeleton(session):
         region.totals['population'] = place.Population
         region.lat_lon = (place.Lat, place.Long_)
 
-    # Compute population from subregions if it's not set at the higher level.
-    def roll_up_population(region):
-        spop = sum(roll_up_population(r) for r in region.subregions.values())
-        rpop = region.totals['population']
-        rpop = spop if (pandas.isna(rpop) or not (rpop > 0)) else rpop
-        if not (rpop > 0):
-            raise ValueError(f'No population for "{region.name}"')
-        region.totals['population'] = rpop
-        return rpop
-
-    roll_up_population(world)
+    world.totals['population'] = sum(
+        s.totals['population'] for s in world.subregions.values())
     return world
 
 
