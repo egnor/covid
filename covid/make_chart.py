@@ -133,9 +133,13 @@ def _plot_metric(axes, name, metric):
     width = 4 if metric.emphasis >= 1 else 2
     style = '-' if metric.emphasis >= 0 else '--'
     alpha = 1.0 if metric.emphasis >= 0 else 0.5
-    if 'raw' in metric.frame.columns and metric.frame.raw.any():
+    if 'raw' in metric.frame.columns:
         axes.plot(metric.frame.index, metric.frame.raw,
                   c=metric.color, alpha=alpha * 0.5, lw=1, ls=style)
+    if 'min' in metric.frame.columns and 'max' in metric.frame.columns:
+        axes.fill_between(x=metric.frame.index, y1=metric.frame['min'],
+                          y2=metric.frame['max'], color=metric.color,
+                          alpha=0.2)
     if 'value' in metric.frame.columns and metric.frame.value.any():
         last_date = metric.frame.value.last_valid_index()
         axes.scatter(
@@ -222,3 +226,23 @@ def _add_plot_legend(axes):
     axes.legend(loc='upper left', handles=[
         artist for order, artists in sorted(order_artists.items())
         for artist in artists])
+
+
+if __name__ == '__main__':
+    import argparse
+    import signal
+    from covid import cache_policy
+    from covid import combine_data
+    from pathlib import Path
+
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
+    arg_parents = [cache_policy.argument_parser, combine_data.argument_parser]
+    parser = argparse.ArgumentParser(parents=arg_parents)
+    parser.add_argument('--region', required=True)
+    parser.add_argument('--site_dir', type=Path, default=Path('site_out'))
+    args = parser.parse_args()
+
+    session = cache_policy.new_session(args)
+    world = combine_data.get_world(session=session, args=args, verbose=True)
+    region = world.lookup_path(args.region)
+    write_images(region=region, site_dir=args.site_dir)
