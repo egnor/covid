@@ -540,7 +540,7 @@ def _compute_world(session, args, verbose):
         pos = (region.covid_metrics or {}).get('positives / 100Kp')
         if pos is not None:
             region.map_metrics['positives x2K'] = map_metric(
-                color='#0000FF50', inc='#0000FFA0', dec=None,
+                color='#0000FF50', inc='#0000FFA0', dec='#00FF00A0',
                 m=pos, scale=mul)
 
         death = (region.covid_metrics or {}).get('deaths / 1Mp')
