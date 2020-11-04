@@ -124,10 +124,15 @@ def credits():
 
 if __name__ == '__main__':
     import argparse
+    import signal
     from covid import cache_policy
 
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    session = cache_policy.new_session(parser.parse_args())
+    parser.add_argument('--print_regex')
+    parser.add_argument('--print_data', action='store_true')
+    args = parser.parse_args()
+    session = cache_policy.new_session(args)
 
     print('Loading places...')
     places = get_places(session)
@@ -157,20 +162,32 @@ if __name__ == '__main__':
 
     print()
     print('=== REGIONS ===')
+    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
     hydromet_by_id = hydromet.groupby(level='ID')
-    for id, id_data in covid.groupby(level='ID'):
+    for id, c_data in covid.groupby(level='ID'):
+        if print_regex and not print_regex.match(id):
+            continue
+
         p = places[id]
-        days = id_data.index.unique(level='Date')
-        by_type = id_data.groupby(level=['Source', 'Type'])
-        refs = [codes[s] for s, d in by_type]
-        h_refs = ([codes[s] for s, h in
-                   hydromet_by_id.get_group(id).groupby(level='HydrometSource')]
-                  if (id in hydromet_by_id.groups) else [])
+        days = c_data.index.unique(level='Date')
+        c_by_type = c_data.groupby(level=['Source', 'Type'])
+        c_refs = [codes[s] for s in c_by_type.groups]
+
+        h_data, h_by_type, h_refs = None, None, []
+        if id in hydromet_by_id.groups:
+            h_data = hydromet_by_id.get_group(id)
+            h_by_type = h_data.groupby(level='HydrometSource')
+            h_refs = [codes[s] for s in h_by_type.groups]
 
         line = f'{p.ID:<11} {p.Population:9d}p {len(days):>3d}d {p.ISO2_UID}'
-        line += f' [{",".join(str(r) for r in refs)}]' if refs else ''
+        line += f' [{",".join(str(r) for r in c_refs)}]' if c_refs else ''
         line += f' <{",".join(str(h) for h in h_refs)}>' if h_refs else ''
         line += f' f={p.FIPS}' if p.FIPS else ''
         line += f' z={p.ZCTA}' if p.ZCTA else ''
         line += ' ' + ': '.join(a for a in (p.Admin2, p.Admin3) if a)
         print(line)
+
+        if args.print_data:
+            for by_type in (c_by_type, h_by_type):
+                for type, data in by_type:
+                    print(data)

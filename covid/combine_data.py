@@ -232,13 +232,13 @@ def _compute_world(session, args, verbose):
             # COVID metrics
             if 'Confirmed' in df.index:
                 confirmed = best_source('Confirmed')
-                region.totals['positives'] = confirmed.Cases.iloc[-1]
+                region.totals['positives'] = confirmed.Cases.max()  # glitch
                 region.covid_metrics['positives / 100Kp'] = trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=unified_credits,
                     v=confirmed.Cases_New * 1e5 / pop)
             if 'Deaths' in df.index:
                 deaths = best_source('Deaths')
-                region.totals['deaths'] = deaths.Cases.iloc[-1]
+                region.totals['deaths'] = deaths.Cases.max()  # glitch
                 region.covid_metrics['deaths / 1Mp'] = trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=unified_credits,
                     v=deaths.Cases_New * 1e6 / pop)
@@ -289,11 +289,11 @@ def _compute_world(session, args, verbose):
                 'positives / 100Kp': trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=jhu_credits,
                     v=(df.total_cases.iloc[1:] - df.total_cases.iloc[:-1]) *
-                        1e5 / region.totals['population']),
+                    1e5 / region.totals['population']),
                 'deaths / 1Mp': trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=jhu_credits,
                     v=(df.total_deaths.iloc[1:] - df.total_deaths.iloc[:-1]) *
-                        1e6 / region.totals['population']),
+                    1e6 / region.totals['population']),
             })
 
             region.totals['deaths'] = df.total_deaths.iloc[-1]
@@ -722,6 +722,8 @@ if __name__ == '__main__':
             if r.name not in (key, r.short_name):
                 line = f'{line} ({r.name})'
             print(line)
+            print(f'{prefix}    ' + ' '.join(
+                f'{k}={v}' for k, v in sorted(r.totals.items())))
             for cat, metrics in (
                     ('cov', r.covid_metrics),
                     ('map', r.map_metrics),
