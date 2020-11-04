@@ -261,7 +261,8 @@ def _compute_world(session, args, verbose):
                 for_uid = hydromet_by_uid.get_group(uid)
                 by_source = for_uid.groupby(level='HydrometSource')
                 df = by_source.get_group(by_source['T'].count().idxmax())
-                df.reset_index(level=('ID', 'Source'), drop=True, inplace=True)
+                df.reset_index(level=('ID', 'HydrometSource'),
+                               drop=True, inplace=True)
                 region.mobility_metrics['temp °F'] = trend_metric(
                     c='tab:gray', em=1, ord=2.0, cred=unified_credits,
                     v=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
