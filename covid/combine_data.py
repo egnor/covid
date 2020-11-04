@@ -258,8 +258,9 @@ def _compute_world(session, args, verbose):
             # Hydrometeorological data
             def to_f(c): return c * 1.8 + 32
             if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
-                all = hydromet_by_uid.get_group(uid).groupby(level='Source')
-                df = all.get_group(all['T'].count().idxmax())
+                for_uid = hydromet_by_uid.get_group(uid)
+                by_source = for_uid.groupby(level='HydrometSource')
+                df = by_source.get_group(by_source['T'].count().idxmax())
                 df.reset_index(level=('ID', 'Source'), drop=True, inplace=True)
                 region.mobility_metrics['temp °F'] = trend_metric(
                     c='tab:gray', em=1, ord=2.0, cred=unified_credits,

@@ -88,7 +88,7 @@ def get_hydromet(session):
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
-    key_columns = ['ID', 'Date', 'Source']
+    key_columns = ['ID', 'Date', 'HydrometSource']
     df.sort_values(by=key_columns, inplace=True)
     df.set_index(key_columns, inplace=True)
     if df.index.duplicated().any():
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     print('=== HYDROMET DATA ===')
     hydromet.info(null_counts=True)
     print()
-    for source, source_data in hydromet.groupby(level=['Source']):
+    for source, source_data in hydromet.groupby(level=['HydrometSource']):
         codes[source] = code = len(codes) + 1
         place_count = len(source_data.index.unique(level='ID'))
         print(f'{f"<{code}>":>4} {place_count:4d}p {source:<3}')
@@ -161,9 +161,10 @@ if __name__ == '__main__':
     for id, id_data in covid.groupby(level='ID'):
         p = places[id]
         days = id_data.index.unique(level='Date')
-        refs = [codes[s] for s, d in id_data.groupby(level=['Source', 'Type'])]
+        by_type = id_data.groupby(level=['Source', 'Type'])
+        refs = [codes[s] for s, d in by_type]
         h_refs = ([codes[s] for s, h in
-                   hydromet_by_id.get_group(id).groupby(level='Source')]
+                   hydromet_by_id.get_group(id).groupby(level='HydrometSource')]
                   if (id in hydromet_by_id.groups) else [])
 
         line = f'{p.ID:<11} {p.Population:9d}p {len(days):>3d}d {p.ISO2_UID}'
