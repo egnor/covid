@@ -479,10 +479,11 @@ def _compute_world(session, args, verbose):
             sub_pop = sub.totals['population']
             sub_pop_total += sub_pop
             for field in ('totals', 'covid_metrics', 'mobility_metrics'):
-                for name, value in getattr(sub, field).items():
-                    if name not in getattr(r, field):
-                        fn, pv = (field, name), (sub_pop, value)
-                        fieldname_popvals.setdefault(fn, []).append(pv)
+                if not (field == 'mobility_metrics' and not r.parent):
+                    for name, value in getattr(sub, field).items():
+                        if name not in getattr(r, field):
+                            fn, pv = (field, name), (sub_pop, value)
+                            fieldname_popvals.setdefault(fn, []).append(pv)
 
         pop = r.totals['population']
         if sub_pop_total > 0 and abs(sub_pop_total - pop) > pop * 0.1:

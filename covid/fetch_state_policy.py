@@ -84,6 +84,7 @@ def get_events(session):
             area_norm, norm = tab_title.lower(), name.lower()
 
             # Hacks for data glitches go here!
+            name = name.replace('Stay at home order\'', 'Stay at home order')
 
             if all(r[c] in ('0', '') for r in rows):
                 continue  # Empty data
@@ -130,12 +131,13 @@ def get_events(session):
                 '💊' if 'dea registration' in norm else
                 '⚕️' if 'medicaid' in norm else
                 '🩺' if 'medical' in norm else
-                '👮' if 'prisons' in norm else
+                '👮' if ('prisons' in norm or 'incarcerated' in area_norm) else
                 '💼' if 'unemployment' in area_norm else
                 '')
 
             score = (
                 +3 if ('stay at home' in norm and 'reopen' in area_norm) else
+                +3 if 'end stay at home' in norm else
                 -3 if 'stay at home' in norm else
                 -2 if 'state of emergency' == norm else
                 -1 if 'begin to re-close' in norm else
@@ -161,7 +163,8 @@ def get_events(session):
                 +1 if 'quarantines ended' in norm else
                 -1 if 'quarantine rules' in area_norm else
                 -1 if 'suspended elective' in norm else
-                -1 if 'incarcerated' in area_norm else
+                -1 if ('stop' in norm and 'incarcerated' in area_norm) else
+                +1 if ('resume' in norm and 'incarcerated' in area_norm) else
                 0)
 
             if name[:5].lower() == 'date ':
