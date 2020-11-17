@@ -94,45 +94,46 @@ def _counties_from_xlsx(session, xlsx_url):
         xlsx = xlsx.loc[:empty[0]].iloc[:-1]
 
     # Find important columns.
-    def rename_col(name, *regexes):
-        for rx in regexes:
-            rep = [name if re.search(rx, c, re.I) else c for c in xlsx.columns]
-            if rep.count(name) > 1:
-                raise ValueError(f'Multiple /{rx}/ in header: {xlsx.columns}')
-            elif rep.count(name) == 1:
-                xlsx.columns = rep
+    def rename_col(name, *regexes, missing_ok=False):
+        for r in regexes:
+            cols = [name if re.search(r, c, re.I) else c for c in xlsx.columns]
+            if cols.count(name) > 1:
+                raise ValueError(f'Multiple /{r}/ in header {xlsx.columns}')
+            elif cols.count(name) == 1:
+                xlsx.columns = cols
                 return
-        raise ValueError(f'No {regexes} in header: {xlsx.columns}')
+        if name not in xlsx.columns and not missing_ok:
+            raise ValueError(f'No match for {regexes} in {xlsx.columns}')
 
     rename_col('County', '^county$', '^location$')
-    rename_col('Date', '^first date in current ',
-               '^date of tier ass(ess|ign)ment')
+    rename_col('Date', '^first date in current ', '^date of tier ass(ess|ign)')
+    rename_col('LastTier', '^tier (ass(ign|ass)ment) on ', missing_ok=True)
     rename_col('Tier', '^final tier ',
-               '^(updated )?(overall )?tier (status|ass(ign|ass)ment)')
-
-    # Clean up county names.
-    county_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
-    xlsx.County = xlsx.County.str.replace(county_regex, r'\1')
-
-    # Assign county FIPS codes.
-    add_fips = addfips.AddFIPS()
-    def get_county_fips(county):
-        try:
-            return int(add_fips.get_county_fips(county, 'CA'))
-        except BaseException:
-            raise ValueError(f'Error looking up county "{county}"')
-
-    xlsx['FIPS'] = xlsx.County.apply(get_county_fips)
+               '^(updated )?(overall )?tier (status|ass(ign|ass))')
 
     # Convert dates.
     xlsx.Date = pandas.to_datetime(xlsx.Date)
 
+    # Clean up county names and add FIPS codes.
+    county_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
+    xlsx.County = xlsx.County.str.replace(county_regex, r'\1')
+    xlsx['FIPS'] = xlsx.County.apply(_fips_from_county)
+
     # Return CountyData based on all the work above.
     return {
-        row.FIPS: CountyData(fips=row.FIPS, name=row.County,
-                             tier_history={row.Date: TIERS[row.Tier]})
+        row.FIPS: CountyData(
+            fips=row.FIPS, name=row.County,
+            tier_history={row.Date: TIERS[row.Tier]})
         for row in xlsx.itertuples()
     }
+
+
+_add_fips = addfips.AddFIPS()
+def _fips_from_county(county):
+    try:
+        return int(_add_fips.get_county_fips(county, 'CA'))
+    except BaseException:
+        raise ValueError(f'Error looking up county "{county}"')
 
 
 def credits():
