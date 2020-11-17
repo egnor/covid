@@ -189,5 +189,5 @@ if __name__ == '__main__':
 
         if args.print_data:
             for by_type in (c_by_type, h_by_type):
-                for type, data in by_type:
+                for type, data in by_type or []:
                     print(data)

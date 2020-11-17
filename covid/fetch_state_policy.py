@@ -75,7 +75,8 @@ def get_events(session):
                     f'Unexpected data "{r[:3]}" in "{tab_title}" row {i + 2}')
             if len(r) < len(header):
                 raise ValueError(
-                    f'Short row {i + 2} ({r[1]}) in "{tab_title}"')
+                    f'Short row {i + 2} ({r[1]}) in "{tab_title}": '
+                    f'len={len(r)} < {header}')
 
         Col = collections.namedtuple('Col', 'index name ctype emoji score')
         coldefs = []

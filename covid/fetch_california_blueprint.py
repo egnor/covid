@@ -74,63 +74,64 @@ def get_counties(session):
 
 
 def _counties_from_xlsx(session, xlsx_url):
-    xlsx_response = session.get(xlsx_url)
-    xlsx_response.raise_for_status()
-    xlsx_data = pandas.read_excel(
-        io=xlsx_response.content, header=None, na_filter=False)
+    response = session.get(xlsx_url)
+    response.raise_for_status()
+    xlsx = pandas.read_excel(io=response.content, header=None, na_filter=False)
 
     # Find the header row.
-    header_rows = xlsx_data.index[xlsx_data[0] == 'County']
+    header_rows = xlsx.index[xlsx[0].isin(('County', 'Location'))]
     if len(header_rows) < 1:
         raise ValueError(f'No "County" in first column')
 
     # Assign column names and trim rows before the header row.
-    xlsx_data.columns = xlsx_data.iloc[header_rows[0]]
-    xlsx_data = xlsx_data.iloc[header_rows[0] + 1:]
+    xlsx.columns = xlsx.iloc[header_rows[0]]
+    xlsx = xlsx.iloc[header_rows[0] + 1:]
 
     # Trim rows after any null/footnote row.
     footnote = re.compile(r'[*^]|small county|red text|$', re.I)
-    empty = xlsx_data.index[xlsx_data.County.str.match(footnote)]
+    empty = xlsx.index[xlsx.iloc[:, 0].str.match(footnote)]
     if len(empty):
-        xlsx_data = xlsx_data.loc[:empty[0]].iloc[:-1]
+        xlsx = xlsx.loc[:empty[0]].iloc[:-1]
 
-    # Clean up data types.
-    nan_regex = re.compile(r'^\s*(-|NA|)\s*$', re.I)
-    xlsx_data.replace(nan_regex, numpy.nan, inplace=True)
-    for col in xlsx_data.columns:
-        if 'Date' in col:
-            xlsx_data[col] = pandas.to_datetime(xlsx_data[col])
-        elif 'Linear Adjustment Factor' in col:
-            xlsx_data[col] = xlsx_data[col].fillna(1.0)
-    xlsx_data = xlsx_data.convert_dtypes()
+    # Find important columns.
+    def rename_col(name, *regexes):
+        for rx in regexes:
+            rep = [name if re.search(rx, c, re.I) else c for c in xlsx.columns]
+            if rep.count(name) > 1:
+                raise ValueError(f'Multiple /{rx}/ in header: {xlsx.columns}')
+            elif rep.count(name) == 1:
+                xlsx.columns = rep
+                return
+        raise ValueError(f'No {regexes} in header: {xlsx.columns}')
+
+    rename_col('County', '^county$', '^location$')
+    rename_col('Date', '^first date in current ',
+               '^date of tier ass(ess|ign)ment')
+    rename_col('Tier', '^final tier ',
+               '^(updated )?(overall )?tier (status|ass(ign|ass)ment)')
+
+    # Clean up county names.
+    county_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
+    xlsx.County = xlsx.County.str.replace(county_regex, r'\1')
 
     # Assign county FIPS codes.
     add_fips = addfips.AddFIPS()
-
     def get_county_fips(county):
         try:
             return int(add_fips.get_county_fips(county, 'CA'))
         except BaseException:
             raise ValueError(f'Error looking up county "{county}"')
 
-    name_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
-    xlsx_data.County = xlsx_data.County.str.replace(name_regex, r'\1')
-    xlsx_data['FIPS'] = xlsx_data.County.apply(get_county_fips)
+    xlsx['FIPS'] = xlsx.County.apply(get_county_fips)
 
-    cols = list((i + 1, c) for i, c in enumerate(xlsx_data.columns))
-    try:
-        date_col = next(i for i, c in cols if re.search(
-            'first date in current|date of tier ass(ess|ign)ment', c, re.I))
-        tier_col = next(i for i, c in cols if re.search(
-            '^(updated )?(overall )?tier (status|assignment)', c, re.I))
-    except StopIteration:
-        raise ValueError(f'Column not found in {xlsx_data.columns}')
+    # Convert dates.
+    xlsx.Date = pandas.to_datetime(xlsx.Date)
 
+    # Return CountyData based on all the work above.
     return {
-        row.FIPS: CountyData(
-            fips=row.FIPS, name=row.County,
-            tier_history={row[date_col]: TIERS[row[tier_col]]})
-        for row in xlsx_data.itertuples()
+        row.FIPS: CountyData(fips=row.FIPS, name=row.County,
+                             tier_history={row.Date: TIERS[row.Tier]})
+        for row in xlsx.itertuples()
     }
 
 
