@@ -118,7 +118,7 @@ def make_region_html(region, args):
                              (' policy_major' if abs(s) >= 2 else ''))
 
         subs = [r for r in region.subregions.values()
-                if r.matches_regex(args.page_regex)]
+                if r.matches_regex(args.region_regex)]
         if subs:
             sub_pop = sum(s.totals['population'] for s in subs)
             if len(subs) >= 10 and sub_pop > 0.9 * region.totals['population']:
@@ -179,7 +179,7 @@ def main():
     parser.add_argument('--chunk_size', type=int)
     parser.add_argument('--site_dir', type=pathlib.Path,
                         default=pathlib.Path('site_out'))
-    parser.add_argument('--page_regex')
+    parser.add_argument('--region_regex')
     args = parser.parse_args()
     make_map.setup(args)
 
@@ -187,7 +187,7 @@ def main():
         session=cache_policy.new_session(args), args=args, verbose=True)
 
     def get_regions(r):
-        if r.matches_regex(args.page_regex):
+        if r.matches_regex(args.region_regex):
             yield r
         yield from (a for s in r.subregions.values() for a in get_regions(s))
     all_regions = list(get_regions(world))

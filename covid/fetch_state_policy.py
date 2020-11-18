@@ -186,6 +186,7 @@ def get_events(session):
                     date = date.replace('*', '')  # Footnote.
                     date = '1/1/2020' if date == '1/0/1900' else date
                     date = '1/1/2020' if date == '1' else date
+                    date = date + '/2020' if date.count('/') == 1 else date
                     date = '' if date == '0' else date
                     if not date:
                         continue

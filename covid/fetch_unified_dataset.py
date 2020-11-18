@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument('--print_regex')
+    parser.add_argument('--id_regex')
     parser.add_argument('--print_data', action='store_true')
     args = parser.parse_args()
     session = cache_policy.new_session(args)
@@ -162,10 +162,10 @@ if __name__ == '__main__':
 
     print()
     print('=== REGIONS ===')
-    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
+    id_regex = args.id_regex and re.compile(args.id_regex, re.I)
     hydromet_by_id = hydromet.groupby(level='ID')
     for id, c_data in covid.groupby(level='ID'):
-        if print_regex and not print_regex.match(id):
+        if id_regex and not id_regex.match(id):
             continue
 
         p = places[id]

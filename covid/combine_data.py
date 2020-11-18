@@ -31,7 +31,6 @@ from covid import fetch_unified_dataset
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data gathering')
-argument_group.add_argument('--data_regex')
 argument_group.add_argument('--no_california_blueprint', action='store_true')
 argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
@@ -127,7 +126,7 @@ def get_world(session, args, verbose=False):
 
     try:
         warnings.showwarning, saved = show_and_count, warnings.showwarning
-        world = _compute_world(session, args, verbose)
+        world = _compute_world(session, args, vprint)
     finally:
         warnings.showwarning = saved
 
@@ -148,10 +147,9 @@ def _world_cache_key(args):
             ''.join(f':{k}={getattr(args, k)}' for k in ks))
 
 
-def _compute_world(session, args, verbose):
+def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
-    vprint = lambda *a, **k: print(*a, **k) if verbose else None
     vprint('Loading place data...')
     if args.use_jhu_covid19 and args.no_unified_dataset:
         world = _jhu_skeleton(session)
@@ -525,31 +523,27 @@ def _compute_world(session, args, verbose):
     # Sync map metric weekly data points to this end date.
     latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
 
-    def map_metric(color, inc, dec, m, scale):
-        first = m.frame.index[0].astimezone(latest.tz)
-        weeks = (latest - first) // pandas.Timedelta(days=7)
-        dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
-        value = scale * numpy.interp(dates, m.frame.index, m.frame.value)
-        return replace(
-            m, frame=pandas.DataFrame({'value': value}, index=dates),
-            color=color, increase_color=inc, decrease_color=dec)
+    def add_map_metric(region, c_name, m_name, mul, col, i_col, d_col):
+        m = region.covid_metrics.get(c_name)
+        if m is not None:
+            first = m.frame.index[0].astimezone(latest.tz)
+            weeks = (latest - first) // pandas.Timedelta(days=7)
+            dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
+            value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
+            if (~numpy.isnan(value)).any():
+                region.map_metrics[m_name] = replace(
+                    m, frame=pandas.DataFrame({'value': value}, index=dates),
+                    color=col, increase_color=i_col, decrease_color=d_col)
 
     def make_map_metrics(region):
         for sub in region.subregions.values():
             make_map_metrics(sub)
 
         mul = region.totals['population'] / 50  # 100K => 2K, 1Mp => 200K
-        pos = (region.covid_metrics or {}).get('positives / 100Kp')
-        if pos is not None:
-            region.map_metrics['positives x2K'] = map_metric(
-                color='#0000FF50', inc='#0000FFA0', dec='#00FF00A0',
-                m=pos, scale=mul)
-
-        death = (region.covid_metrics or {}).get('deaths / 1Mp')
-        if death is not None:
-            region.map_metrics['deaths x200K'] = map_metric(
-                color='#FF000050', inc='#FF0000A0', dec=None,
-                m=death, scale=mul)
+        add_map_metric(region, 'positives / 100Kp', 'positives x2K', mul,
+                       '#0000FF50', '#0000FFA0', '#00FF00A0')
+        add_map_metric(region, 'deaths / 1Mp', 'deaths x200K', mul,
+                       '#FF000050', '#FF0000A0', None)
 
     make_map_metrics(world)
 
@@ -557,10 +551,6 @@ def _compute_world(session, args, verbose):
         sub = r.subregions
         region.subregions = {k: s for k, s in sub.items() if trim_tree(s, rx)}
         return (r.subregions or r.matches_regex(rx))
-
-    if args.data_regex:
-        vprint(f'Filtering by /{args.data_regex}/...')
-        trim_tree(world, re.compile(args.data_regex, re.I))
 
     return world
 
@@ -700,16 +690,16 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
-    parser.add_argument('--print_regex')
+    parser.add_argument('--region_regex')
     parser.add_argument('--print_data', action='store_true')
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = combine_data.get_world(session=session, args=args, verbose=True)
-    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
+    region_regex = args.region_regex and re.compile(args.region_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
-        if r.matches_regex(print_regex):
+        if r.matches_regex(region_regex):
             line = (
                 f'{prefix}{r.totals["population"] or -1:9.0f}p <' +
                 '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
