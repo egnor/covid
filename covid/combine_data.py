@@ -114,7 +114,7 @@ def get_world(session, args, verbose=False):
 
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if 'Mispopulation' in str(message):
+        if 'Underpopulation' in str(message):
             print(f'=== {str(message).strip()}')
         else:
             nonlocal warning_count
@@ -484,8 +484,11 @@ def _compute_world(session, args, vprint):
                             fieldname_popvals.setdefault(fn, []).append(pv)
 
         pop = r.totals['population']
-        if sub_pop_total > 0 and abs(sub_pop_total - pop) > pop * 0.1:
-            warn(f'Mispopulation: {pop}p in "{r.path()}", '
+        if sub_pop_total > pop * 1.1:
+            warn(f'Overpopulation: {pop}p in "{r.path()}", '
+                 f'{sub_pop_total}p in parts')
+        if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
+            warn(f'Underpopulation: {pop}p in "{r.path()}", '
                  f'{sub_pop_total}p in parts')
 
         for (field, name), popvals in fieldname_popvals.items():
@@ -559,11 +562,11 @@ def _unified_skeleton(session):
     """Returns a region tree for the world with no metrics populated."""
 
     def subregion(parent, key, name=None, short_name=None):
+        key = str(key)
         region = parent.subregions.get(key)
         if not region:
             region = parent.subregions[key] = Region(
-                name=name or str(key), short_name=short_name or str(key),
-                parent=parent)
+                name=name or key, short_name=short_name or key, parent=parent)
         return region
 
     world = Region(name='World', short_name='World')
@@ -576,17 +579,39 @@ def _unified_skeleton(session):
             region = subregion(region, p.Admin1, p.Admin1, p.ISO2)
         else:
             region.iso_code = p.ISO1_2C
-        if p.Admin2:
+
+        if p.ID[:7] in ('US36NYC', 'US36005', 'US36047',
+                        'US36061', 'US36081', 'US36085'):
+            region = subregion(region, 'NYC', 'New York City')
+        elif p.ID[:7] in ('US49003', 'US49005', 'US49033'):
+            region = subregion(region, 'Bear River', 'Bear River Area')
+        elif p.ID[:7] in ('US49023', 'US49027', 'US49039',
+                          'US49041', 'US49031', 'US49055'):
+            region = subregion(region, 'Central Utah', 'Central Utah Area')
+        elif p.ID[:7] in ('US49007', 'US49015', 'US49019'):
+            region = subregion(region, 'Southeast Utah', 'Southeast Utah Area')
+        elif p.ID[:7] in ('US49001', 'US49017', 'US49021',
+                          'US49025', 'US49053'):
+            region = subregion(region, 'Southwest Utah', 'Southwest Utah Area')
+        elif p.ID[:7] in ('US49009', 'US49013', 'US49047'):
+            region = subregion(region, 'TriCounty', 'TriCounty Area')
+        elif p.ID[:7] in ('US49057', 'US49029'):
+            region = subregion(region, 'Weber-Morgan', 'Weber-Morgan Area')
+
+        if p.Admin2 and p.ID != 'US36NYC':
             region = subregion(region, p.Admin2)
-        else:
-            region.iso_code = p.ISO2_UID
-        if p.Admin3:
-            region = subregion(region, p.Admin3)
+
+        if p.ZCTA[:4] == '0000':  # NYC borough pseudo-ZIP
+            region.name = region.short_name = p.Admin3  # Use borough name.
+        elif p.Admin3:
+            region = subregion(region, p.ZCTA or p.Admin3, p.Admin3)
 
         if p.ZCTA:
             region.zip_code = int(p.ZCTA)
         elif p.FIPS and p.FIPS.isdigit():
             region.fips_code = int(p.FIPS)
+        elif not p.Admin2:
+            region.iso_code = p.ISO2_UID
 
         region.unified_id = p.ID
         region.totals['population'] = p.Population

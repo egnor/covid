@@ -60,9 +60,7 @@ def make_region_html(region, args):
                     util.text(' » ')
 
             write_breadcrumbs(region.parent)
-            util.text(region.short_name)
-            if region.name != region.short_name:
-                util.text(f' / {region.name}')
+            util.text(region.name)
             if region.current_policy and region.current_policy.emoji:
                 util.text(' ')
                 tags.span(region.current_policy.emoji, cls='emoji')
