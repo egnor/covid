@@ -31,7 +31,6 @@ from covid import fetch_unified_dataset
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data gathering')
-argument_group.add_argument('--data_regex')
 argument_group.add_argument('--no_california_blueprint', action='store_true')
 argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
@@ -115,7 +114,7 @@ def get_world(session, args, verbose=False):
 
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if 'Mispopulation' in str(message):
+        if 'Underpopulation' in str(message):
             print(f'=== {str(message).strip()}')
         else:
             nonlocal warning_count
@@ -127,7 +126,7 @@ def get_world(session, args, verbose=False):
 
     try:
         warnings.showwarning, saved = show_and_count, warnings.showwarning
-        world = _compute_world(session, args, verbose)
+        world = _compute_world(session, args, vprint)
     finally:
         warnings.showwarning = saved
 
@@ -148,10 +147,9 @@ def _world_cache_key(args):
             ''.join(f':{k}={getattr(args, k)}' for k in ks))
 
 
-def _compute_world(session, args, verbose):
+def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
-    vprint = lambda *a, **k: print(*a, **k) if verbose else None
     vprint('Loading place data...')
     if args.use_jhu_covid19 and args.no_unified_dataset:
         world = _jhu_skeleton(session)
@@ -486,8 +484,11 @@ def _compute_world(session, args, verbose):
                             fieldname_popvals.setdefault(fn, []).append(pv)
 
         pop = r.totals['population']
-        if sub_pop_total > 0 and abs(sub_pop_total - pop) > pop * 0.1:
-            warn(f'Mispopulation: {pop}p in "{r.path()}", '
+        if sub_pop_total > pop * 1.1:
+            warn(f'Overpopulation: {pop}p in "{r.path()}", '
+                 f'{sub_pop_total}p in parts')
+        if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
+            warn(f'Underpopulation: {pop}p in "{r.path()}", '
                  f'{sub_pop_total}p in parts')
 
         for (field, name), popvals in fieldname_popvals.items():
@@ -525,31 +526,27 @@ def _compute_world(session, args, verbose):
     # Sync map metric weekly data points to this end date.
     latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
 
-    def map_metric(color, inc, dec, m, scale):
-        first = m.frame.index[0].astimezone(latest.tz)
-        weeks = (latest - first) // pandas.Timedelta(days=7)
-        dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
-        value = scale * numpy.interp(dates, m.frame.index, m.frame.value)
-        return replace(
-            m, frame=pandas.DataFrame({'value': value}, index=dates),
-            color=color, increase_color=inc, decrease_color=dec)
+    def add_map_metric(region, c_name, m_name, mul, col, i_col, d_col):
+        m = region.covid_metrics.get(c_name)
+        if m is not None:
+            first = m.frame.index[0].astimezone(latest.tz)
+            weeks = (latest - first) // pandas.Timedelta(days=7)
+            dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
+            value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
+            if (~numpy.isnan(value)).any():
+                region.map_metrics[m_name] = replace(
+                    m, frame=pandas.DataFrame({'value': value}, index=dates),
+                    color=col, increase_color=i_col, decrease_color=d_col)
 
     def make_map_metrics(region):
         for sub in region.subregions.values():
             make_map_metrics(sub)
 
         mul = region.totals['population'] / 50  # 100K => 2K, 1Mp => 200K
-        pos = (region.covid_metrics or {}).get('positives / 100Kp')
-        if pos is not None:
-            region.map_metrics['positives x2K'] = map_metric(
-                color='#0000FF50', inc='#0000FFA0', dec='#00FF00A0',
-                m=pos, scale=mul)
-
-        death = (region.covid_metrics or {}).get('deaths / 1Mp')
-        if death is not None:
-            region.map_metrics['deaths x200K'] = map_metric(
-                color='#FF000050', inc='#FF0000A0', dec=None,
-                m=death, scale=mul)
+        add_map_metric(region, 'positives / 100Kp', 'positives x2K', mul,
+                       '#0000FF50', '#0000FFA0', '#00FF00A0')
+        add_map_metric(region, 'deaths / 1Mp', 'deaths x200K', mul,
+                       '#FF000050', '#FF0000A0', None)
 
     make_map_metrics(world)
 
@@ -558,10 +555,6 @@ def _compute_world(session, args, verbose):
         region.subregions = {k: s for k, s in sub.items() if trim_tree(s, rx)}
         return (r.subregions or r.matches_regex(rx))
 
-    if args.data_regex:
-        vprint(f'Filtering by /{args.data_regex}/...')
-        trim_tree(world, re.compile(args.data_regex, re.I))
-
     return world
 
 
@@ -569,11 +562,11 @@ def _unified_skeleton(session):
     """Returns a region tree for the world with no metrics populated."""
 
     def subregion(parent, key, name=None, short_name=None):
+        key = str(key)
         region = parent.subregions.get(key)
         if not region:
             region = parent.subregions[key] = Region(
-                name=name or str(key), short_name=short_name or str(key),
-                parent=parent)
+                name=name or key, short_name=short_name or key, parent=parent)
         return region
 
     world = Region(name='World', short_name='World')
@@ -586,17 +579,39 @@ def _unified_skeleton(session):
             region = subregion(region, p.Admin1, p.Admin1, p.ISO2)
         else:
             region.iso_code = p.ISO1_2C
-        if p.Admin2:
+
+        if p.ID[:7] in ('US36NYC', 'US36005', 'US36047',
+                        'US36061', 'US36081', 'US36085'):
+            region = subregion(region, 'NYC', 'New York City')
+        elif p.ID[:7] in ('US49003', 'US49005', 'US49033'):
+            region = subregion(region, 'Bear River', 'Bear River Area')
+        elif p.ID[:7] in ('US49023', 'US49027', 'US49039',
+                          'US49041', 'US49031', 'US49055'):
+            region = subregion(region, 'Central Utah', 'Central Utah Area')
+        elif p.ID[:7] in ('US49007', 'US49015', 'US49019'):
+            region = subregion(region, 'Southeast Utah', 'Southeast Utah Area')
+        elif p.ID[:7] in ('US49001', 'US49017', 'US49021',
+                          'US49025', 'US49053'):
+            region = subregion(region, 'Southwest Utah', 'Southwest Utah Area')
+        elif p.ID[:7] in ('US49009', 'US49013', 'US49047'):
+            region = subregion(region, 'TriCounty', 'TriCounty Area')
+        elif p.ID[:7] in ('US49057', 'US49029'):
+            region = subregion(region, 'Weber-Morgan', 'Weber-Morgan Area')
+
+        if p.Admin2 and p.ID != 'US36NYC':
             region = subregion(region, p.Admin2)
-        else:
-            region.iso_code = p.ISO2_UID
-        if p.Admin3:
-            region = subregion(region, p.Admin3)
+
+        if p.ZCTA[:4] == '0000':  # NYC borough pseudo-ZIP
+            region.name = region.short_name = p.Admin3  # Use borough name.
+        elif p.Admin3:
+            region = subregion(region, p.ZCTA or p.Admin3, p.Admin3)
 
         if p.ZCTA:
             region.zip_code = int(p.ZCTA)
         elif p.FIPS and p.FIPS.isdigit():
             region.fips_code = int(p.FIPS)
+        elif not p.Admin2:
+            region.iso_code = p.ISO2_UID
 
         region.unified_id = p.ID
         region.totals['population'] = p.Population
@@ -700,16 +715,16 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
-    parser.add_argument('--print_regex')
+    parser.add_argument('--region_regex')
     parser.add_argument('--print_data', action='store_true')
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = combine_data.get_world(session=session, args=args, verbose=True)
-    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
+    region_regex = args.region_regex and re.compile(args.region_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
-        if r.matches_regex(print_regex):
+        if r.matches_regex(region_regex):
             line = (
                 f'{prefix}{r.totals["population"] or -1:9.0f}p <' +
                 '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +

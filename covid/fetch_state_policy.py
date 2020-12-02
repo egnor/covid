@@ -56,10 +56,14 @@ def get_events(session):
     for tab_json in fetch_json['valueRanges']:
         # Skip tabs with general info or odd formatting (Racial Disparities)
         tab_title = tab_json['range'].split('!')[0].strip("'").strip()
-        if tab_title in skip_tabs:
+        if tab_title in skip_tabs or re.fullmatch(r'Sheet\d+', tab_title):
             continue
 
-        tab_values = tab_json['values']
+        try:
+            tab_values = tab_json['values']
+        except KeyError:
+            raise ValueError(f'No values in "{tab_title}"')
+
         header = tab_values[0]
         header_end = next((
             i for i, h in enumerate(header)
@@ -189,6 +193,7 @@ def get_events(session):
                     date = date.replace('*', '')  # Footnote.
                     date = '1/1/2020' if date == '1/0/1900' else date
                     date = '1/1/2020' if date == '1' else date
+                    date = date + '/2020' if date.count('/') == 1 else date
                     date = '' if date == '0' else date
                     if not date:
                         continue
