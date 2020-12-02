@@ -142,15 +142,7 @@ def get_covid(session):
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
-    key_columns = ['ID', 'Type', 'Source', 'Age', 'Sex', 'Date']
-    df.sort_values(by=key_columns, inplace=True)
-    df.set_index(key_columns, inplace=True)
-    if df.index.duplicated().any():
-        dups = df.index[df.index.duplicated(keep=False)]
-        raise ValueError(
-            'Dups:\n' + '\n'.join(', '.join(str(p) for p in d) for d in dups))
-
-    return df
+    return df.groupby(['ID', 'Type', 'Source', 'Age', 'Sex', 'Date']).first()
 
 
 def get_hydromet(session):
@@ -164,7 +156,8 @@ def get_hydromet(session):
             for month in range(120):
                 yyyymm = f'{2020 + month // 12}{1 + month % 12:02d}'
                 url = HYDROMET_RDATA_URL.replace('YYYYMM', yyyymm)
-                frames.append(_read_rdata_url(session, url))
+                frame = _read_rdata_url(session, url)
+                frames.append(frame)
         except requests.exceptions.HTTPError as e:
             if e.response.status_code != 404:
                 raise
@@ -174,15 +167,7 @@ def get_hydromet(session):
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
-    key_columns = ['ID', 'Date', 'HydrometSource']
-    df.sort_values(by=key_columns, inplace=True)
-    df.set_index(key_columns, inplace=True)
-    if df.index.duplicated().any():
-        dups = df.index[df.index.duplicated(keep=False)]
-        raise ValueError(
-            'Dups:\n' + '\n'.join(', '.join(str(p) for p in d) for d in dups))
-
-    return df
+    return df.groupby(['ID', 'Date', 'HydrometSource']).first()
 
 
 def _read_rdata_url(session, url):
@@ -201,7 +186,9 @@ def _read_rdata_url(session, url):
             objects = ', '.join(f'"{k}"' for k in rdata.keys())
             raise ValueError('Multiple R objects ({objects}): {url}')
 
-        return next(iter(rdata.values()))
+        frame = next(iter(rdata.values()))
+        # frame['url'] = url.split('/')[-1]
+        return frame
 
 
 def credits():

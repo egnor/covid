@@ -103,8 +103,8 @@ def _counties_from_xlsx(session, xlsx_url):
 
     # Find important columns.
     def rename_col(name, *regexes, required=False):
-        for r in regexes:
-            cols = [name if re.search(r, c, re.I) else c for c in xlsx.columns]
+        for rx in (re.compile(r, re.I) for r in regexes):
+            cols = [name if rx.search(c.strip()) else c for c in xlsx.columns]
             if cols.count(name) > 1:
                 raise ValueError(f'Multiple /{r}/ in header {xlsx.columns}')
             elif cols.count(name) == 1:
@@ -115,9 +115,9 @@ def _counties_from_xlsx(session, xlsx_url):
 
     rename_col('County', '^county$', '^location$', required=True)
     rename_col('Date', '^first date in current ', '^date of tier ass(ess|ign)')
-    rename_col('LastTier', '^tier (ass(ign|ass)ment) on ')
-    rename_col('Tier', '^(updated )?(overall )?tier (status|ass(ign|ass))',
-               '^final tier ', required=True)
+    rename_col('LastTier', r'^tier (ass(ign|ass)ment) on ')
+    rename_col('Tier', r'^(updated )?(overall )?tier (status|ass(ign|ass))',
+               r'^final tier ', required=True)
 
     # Fill or convert date values.
     if 'Date' not in xlsx.columns:
