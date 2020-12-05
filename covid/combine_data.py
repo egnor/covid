@@ -580,7 +580,7 @@ def _unified_skeleton(session):
         else:
             region.iso_code = p.ISO1_2C
 
-        if p.ID[:7] in ('US36NYC', 'US36005', 'US36047',
+        if p.ID[:7] in ('US36666', 'US36005', 'US36047',
                         'US36061', 'US36081', 'US36085'):
             region = subregion(region, 'NYC', 'New York City')
         elif p.ID[:7] in ('US49003', 'US49005', 'US49033'):
@@ -598,7 +598,7 @@ def _unified_skeleton(session):
         elif p.ID[:7] in ('US49057', 'US49029'):
             region = subregion(region, 'Weber-Morgan', 'Weber-Morgan Area')
 
-        if p.Admin2 and p.ID != 'US36NYC':
+        if p.Admin2 and p.ID != 'US36666':
             region = subregion(region, p.Admin2)
 
         if p.ZCTA[:4] == '0000':  # NYC borough pseudo-ZIP
