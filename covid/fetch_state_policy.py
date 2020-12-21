@@ -64,12 +64,14 @@ def get_events(session):
         except KeyError:
             raise ValueError(f'No values in "{tab_title}"')
 
-        header = tab_values[0]
-        header_end = next((
-            i for i, h in enumerate(header)
-            if not h or h == 'Begin to reclose bars'), None)
+        header, header_seen = [], {''}
+        for f in tab_values[0]:
+            norm = re.sub(r'[^\w\s]', '', f.lower()).strip()
+            if norm in header_seen:
+                break
+            header.append(f)
+            header_seen.add(norm)
 
-        header = header[:header_end]
         if header[:3] != ['State', 'State Abbreviation', 'State FIPS Code']:
             raise ValueError(
                 f'Unexpected columns in "{tab_title}": '
