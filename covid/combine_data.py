@@ -237,21 +237,21 @@ def _compute_world(session, args, vprint):
             if 'Deaths' in df.index:
                 deaths = best_source('Deaths')
                 region.totals['deaths'] = deaths.Cases.max()  # glitch
-                region.covid_metrics['deaths / 1Mp'] = trend_metric(
+                region.covid_metrics['deaths / 10Mp'] = trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=unified_credits,
-                    v=deaths.Cases_New * 1e6 / pop)
+                    v=deaths.Cases_New * 1e7 / pop)
             if 'Tests' in df.index:
                 region.covid_metrics['tests / 10Kp'] = trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=unified_credits,
                     v=best_source('Tests').Cases_New * 1e4 / pop)
             if 'Hospitalized' in df.index:
-                region.covid_metrics['hosp admit / 250Kp'] = trend_metric(
+                region.covid_metrics['hosp admit / 1Mp'] = trend_metric(
                     c='tab:orange', em=0, ord=3.0, cred=unified_credits,
-                    v=best_source('Hospitalized').Cases_New * 25e4 / pop)
+                    v=best_source('Hospitalized').Cases_New * 1e6 / pop)
             if 'Hospitalized_Now' in df.index:
-                region.covid_metrics['hosp current / 25Kp'] = trend_metric(
+                region.covid_metrics['hosp current / 100Kp'] = trend_metric(
                     c='tab:pink', em=0, ord=3.1, cred=unified_credits,
-                    v=best_source('Hospitalized_Now').Cases * 25e3 / pop)
+                    v=best_source('Hospitalized_Now').Cases * 1e5 / pop)
 
             # Hydrometeorological data
             def to_f(c): return c * 1.8 + 32
@@ -288,10 +288,10 @@ def _compute_world(session, args, vprint):
                     c='tab:blue', em=1, ord=1.0, cred=jhu_credits,
                     v=(df.total_cases.iloc[1:] - df.total_cases.iloc[:-1]) *
                     1e5 / region.totals['population']),
-                'deaths / 1Mp': trend_metric(
+                'deaths / 10Mp': trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=jhu_credits,
                     v=(df.total_deaths.iloc[1:] - df.total_deaths.iloc[:-1]) *
-                    1e6 / region.totals['population']),
+                    1e7 / region.totals['population']),
             })
 
             region.totals['deaths'] = df.total_deaths.iloc[-1]
@@ -330,18 +330,18 @@ def _compute_world(session, args, vprint):
                 'positives / 100Kp': trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=covid_credits,
                     v=covid.positiveIncrease * 1e5 / pop),
-                'deaths / 1Mp': trend_metric(
+                'deaths / 10Mp': trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=covid_credits,
-                    v=covid.deathIncrease * 1e6 / pop),
+                    v=covid.deathIncrease * 1e7 / pop),
                 'tests / 10Kp': trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=covid_credits,
                     v=covid.totalTestResultsIncrease * 1e4 / pop),
-                'hosp admit / 250Kp': trend_metric(
+                'hosp admit / 1Mp': trend_metric(
                     c='tab:orange', em=0, ord=3.0, cred=covid_credits,
-                    v=covid.hospitalizedIncrease * 25e4 / pop),
-                'hosp current / 25Kp': trend_metric(
+                    v=covid.hospitalizedIncrease * 1e6 / pop),
+                'hosp current / 100Kp': trend_metric(
                     c='tab:pink', em=0, ord=3.1, cred=covid_credits,
-                    v=covid.hospitalizedCurrently * 25e3 / pop),
+                    v=covid.hospitalizedCurrently * 1e5 / pop),
             })
 
             region.totals['deaths'] = covid.death.iloc[-1]
@@ -363,12 +363,12 @@ def _compute_world(session, args, vprint):
             if region is None:
                 continue  # Filtered out for one reason or another.
 
-            mort_1M = mort.Deaths / 365 * 1e6 / region.totals['population']
+            mort_10M = mort.Deaths / 365 * 1e7 / region.totals['population']
             region.covid_metrics.update({
-                'historical deaths / 1Mp': Metric(
+                'historical deaths / 10Mp': Metric(
                     color='black', emphasis=-1, order=4.0, credits=cdc_credits,
                     frame=pandas.DataFrame(
-                        {'value': [mort_1M] * 2}, index=y2020))})
+                        {'value': [mort_10M] * 2}, index=y2020))})
 
     #
     # Add policy changes for US states from the state policy database.
@@ -455,9 +455,6 @@ def _compute_world(session, args, vprint):
                 'workplaces': trend_metric(
                     c='tab:red', em=1, ord=1.2, cred=mobility_credits,
                     v=100 + m[f'workplaces_{pcfb}']),
-                'parks': trend_metric(
-                    c='tab:green', em=0, ord=1.3, cred=mobility_credits,
-                    v=100 + m[f'parks_{pcfb}']),
                 'grocery / pharmacy': trend_metric(
                     c='tab:blue', em=0, ord=1.4, cred=mobility_credits,
                     v=100 + m[f'grocery_and_pharmacy_{pcfb}']),
@@ -542,10 +539,10 @@ def _compute_world(session, args, vprint):
         for sub in region.subregions.values():
             make_map_metrics(sub)
 
-        mul = region.totals['population'] / 50  # 100K => 2K, 1Mp => 200K
+        mul = region.totals['population'] / 50  # 100K => 2K, 10Mp => 200K
         add_map_metric(region, 'positives / 100Kp', 'positives x2K', mul,
                        '#0000FF50', '#0000FFA0', '#00FF00A0')
-        add_map_metric(region, 'deaths / 1Mp', 'deaths x200K', mul,
+        add_map_metric(region, 'deaths / 10Mp', 'deaths x200K', mul,
                        '#FF000050', '#FF0000A0', None)
 
     make_map_metrics(world)

@@ -45,13 +45,13 @@ def _write_thumb_image(region, site_dir):
 def _write_chart_image(region, site_dir):
     covid_max = max(m.frame.value.max() for m in region.covid_metrics.values())
     covid_max = min(200, max(30, (covid_max // 10 + 1) * 10))
-    covid_height = covid_max / 10
+    covid_height = covid_max / 25
 
     if region.mobility_metrics:
-        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 4), dpi=200)
+        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 3), dpi=200)
         covid_axes, mobility_axes = fig.subplots(
             nrows=2, ncols=1, sharex=True,
-            gridspec_kw=dict(height_ratios=[covid_height, 4]))
+            gridspec_kw=dict(height_ratios=[covid_height, 3]))
     else:
         fig = matplotlib.pyplot.figure(figsize=(10, covid_height), dpi=200)
         covid_axes, mobility_axes = fig.add_subplot(), None
@@ -108,7 +108,7 @@ def _plot_covid_metrics(axes, region):
     axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
     _plot_metrics(axes, region.covid_metrics)
 
@@ -117,7 +117,7 @@ def _plot_mobility_metrics(axes, region):
     """Plots metrics of population mobility."""
 
     axes.axhline(100, c='black', lw=1)  # Identity line.
-    axes.set_ylim(0, 250)
+    axes.set_ylim(0, 150)
     axes.set_ylabel('% of same weekday in January')
     axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
