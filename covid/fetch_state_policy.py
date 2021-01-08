@@ -48,8 +48,8 @@ def get_events(session):
     }
 
     skip_tabs = [
-        'Information', 'Vote By Mail', 'Racial Disparities',
-        'Codebook', 'Notes/Details',
+        'Information', 'Vaccine Distribution', 'Vote By Mail',
+        'Racial Disparities', 'Codebook', 'Notes/Details',
         'Pre-COVID UI Monetary Eligibility Thresholds', 'Minimum Wage',
     ]
 
