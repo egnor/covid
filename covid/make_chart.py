@@ -43,8 +43,13 @@ def _write_thumb_image(region, site_dir):
 
 
 def _write_chart_image(region, site_dir):
-    covid_max = max(m.frame.value.max() for m in region.covid_metrics.values())
-    covid_max = min(200, max(30, (covid_max // 10 + 1) * 10))
+    covid_max = max(
+        m.frame.value.max()
+        for m in region.covid_metrics.values()
+        if m.frame.size > 2
+    )
+
+    covid_max = min(200, max(60, (covid_max // 10 + 1) * 10))
     covid_height = covid_max / 25
 
     if region.mobility_metrics:
@@ -109,7 +114,6 @@ def _plot_covid_metrics(axes, region, show_raw):
     axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
     _plot_metrics(axes, region.covid_metrics, show_raw=show_raw)
 
 

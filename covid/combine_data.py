@@ -365,7 +365,7 @@ def _compute_world(session, args, vprint):
 
             mort_10M = mort.Deaths / 365 * 1e7 / region.totals['population']
             region.covid_metrics.update({
-                'historical deaths / 10Mp': Metric(
+                f'historical deaths / 10Mp ({mort_10M:.1f})': Metric(
                     color='black', emphasis=-1, order=4.0, credits=cdc_credits,
                     frame=pandas.DataFrame(
                         {'value': [mort_10M] * 2}, index=y2020))})
