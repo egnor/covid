@@ -13,8 +13,8 @@ from covid.cache_policy import cached_path, temp_to_rename
 
 REPO_DIR = 'https://raw.githubusercontent.com/hsbadr/COVID-19/master'
 LOOKUP_CSV_URL = f'{REPO_DIR}/COVID-19_LUT.csv'
-COVID19_RDATA_URL = f'{REPO_DIR}/COVID-19.RData'
-HYDROMET_RDATA_URL = f'{REPO_DIR}/Hydromet/Hydromet_YYYYMM.RData'
+COVID19_RDATA_URL = f'{REPO_DIR}/COVID-19.rds'
+HYDROMET_RDATA_URL = f'{REPO_DIR}/Hydromet/Hydromet_YYYYMM.rds'
 
 _place_by_id = None
 
