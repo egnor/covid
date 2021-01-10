@@ -29,8 +29,8 @@ def _write_thumb_image(region, site_dir):
     fig = matplotlib.pyplot.figure(figsize=(8, 8 / p), dpi=50)
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes, region)
-    thumb_axes.set_ylim(0, 50)
-    _plot_covid_metrics(thumb_axes, region)
+    thumb_axes.set_ylim(0, 100)
+    _plot_covid_metrics(thumb_axes, region, show_raw=False)
     _plot_policy_changes(thumb_axes, region, show_emoji=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
@@ -43,22 +43,27 @@ def _write_thumb_image(region, site_dir):
 
 
 def _write_chart_image(region, site_dir):
-    covid_max = max(m.frame.value.max() for m in region.covid_metrics.values())
-    covid_max = min(200, max(30, (covid_max // 10 + 1) * 10))
-    covid_height = covid_max / 10
+    covid_max = max(
+        m.frame.value.max()
+        for m in region.covid_metrics.values()
+        if m.frame.size > 2
+    )
+
+    covid_max = min(200, max(60, (covid_max // 10 + 1) * 10))
+    covid_height = covid_max / 25
 
     if region.mobility_metrics:
-        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 4), dpi=200)
+        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 3), dpi=200)
         covid_axes, mobility_axes = fig.subplots(
             nrows=2, ncols=1, sharex=True,
-            gridspec_kw=dict(height_ratios=[covid_height, 4]))
+            gridspec_kw=dict(height_ratios=[covid_height, 3]))
     else:
         fig = matplotlib.pyplot.figure(figsize=(10, covid_height), dpi=200)
         covid_axes, mobility_axes = fig.add_subplot(), None
 
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
-    _plot_covid_metrics(covid_axes, region)
+    _plot_covid_metrics(covid_axes, region, show_raw=True)
     _plot_policy_changes(covid_axes, region, show_emoji=True)
     _plot_subregion_peaks(covid_axes, region)
     _add_plot_legend(covid_axes)
@@ -100,7 +105,7 @@ def _plot_subregion_peaks(axes, region):
                 xytext=(0, -15), textcoords='offset pixels')
 
 
-def _plot_covid_metrics(axes, region):
+def _plot_covid_metrics(axes, region, show_raw):
     """Plots COVID case-related metrics."""
 
     # (This function does not set ylim.)
@@ -108,32 +113,31 @@ def _plot_covid_metrics(axes, region):
     axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-    _plot_metrics(axes, region.covid_metrics)
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+    _plot_metrics(axes, region.covid_metrics, show_raw=show_raw)
 
 
 def _plot_mobility_metrics(axes, region):
     """Plots metrics of population mobility."""
 
     axes.axhline(100, c='black', lw=1)  # Identity line.
-    axes.set_ylim(0, 250)
+    axes.set_ylim(0, 150)
     axes.set_ylabel('% of same weekday in January')
     axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    _plot_metrics(axes, region.mobility_metrics)
+    _plot_metrics(axes, region.mobility_metrics, show_raw=False)
 
 
-def _plot_metrics(axes, metrics):
+def _plot_metrics(axes, metrics, show_raw):
     for name, m in sorted(metrics.items(), key=lambda nm: nm[1].order):
         width = 4 if m.emphasis >= 1 else 2
         style = '-' if m.emphasis >= 0 else '--'
         alpha = 1.0 if m.emphasis >= 0 else 0.5
         zorder = 2.0 - m.order / 100
-        if 'raw' in m.frame.columns:
+        if show_raw and ('raw' in m.frame.columns):
             axes.plot(
                 m.frame.index, m.frame.raw,
                 c=m.color, alpha=alpha * 0.5, zorder=zorder + 0.001,
