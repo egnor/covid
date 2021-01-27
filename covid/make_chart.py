@@ -49,7 +49,7 @@ def _write_chart_image(region, site_dir):
         if m.frame.size > 2
     )
 
-    covid_max = min(200, max(60, (covid_max // 10 + 1) * 10))
+    covid_max = min(300, max(60, (covid_max // 10 + 1) * 10))
     covid_height = covid_max / 25
 
     if region.mobility_metrics:
