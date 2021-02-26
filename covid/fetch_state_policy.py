@@ -59,9 +59,10 @@ def get_events(session):
         if tab_title in skip_tabs or re.fullmatch(r'Sheet\d+', tab_title):
             continue
 
-        try:
-            tab_values = tab_json['values']
-        except KeyError:
+        tab_values = tab_json.get('values', [])
+        while tab_values and (not tab_values[0] or not tab_values[0][0]):
+            del tab_values[0]
+        if not tab_values:
             raise ValueError(f'No values in "{tab_title}"')
 
         header, header_seen = [], {''}
@@ -74,18 +75,16 @@ def get_events(session):
 
         if header[:3] != ['State', 'State Abbreviation', 'State FIPS Code']:
             raise ValueError(
-                f'Unexpected columns in "{tab_title}": '
-                f'"{header[0]}", "{header[1]}", "{header[2]}"')
+                f'Unexpected header columns in "{tab_title}": ' +
+                ", ".join(f'"{h}"' for h in header[:3]))
 
         rows = [[str(v) for v in r] for r in tab_values[1:52]]
         for i, r in enumerate(rows):
             if (not r[1].isupper() or len(r[1]) != 2 or not r[2].isdigit()):
                 raise ValueError(
                     f'Unexpected data "{r[:3]}" in "{tab_title}" row {i + 2}')
-            if len(r) < len(header):
-                raise ValueError(
-                    f'Short row {i + 2} ({r[1]}) in "{tab_title}": '
-                    f'len={len(r)} < {header}')
+            while len(r) < len(header):
+                r.append('')
 
         Col = collections.namedtuple('Col', 'index name ctype emoji score')
         coldefs = []
@@ -100,7 +99,7 @@ def get_events(session):
                 continue  # Empty data
             elif all(r[c] in ('0', '1') for r in rows):
                 ctype = bool
-            elif all(r[c] in ('0', '1') or '/' in r[c] for r in rows):
+            elif all(r[c] in ('', '0', '1') or '/' in r[c] for r in rows):
                 ctype = pandas.Timestamp
             elif all(re.fullmatch(r'\d+', r[c]) for r in rows):
                 ctype = int
@@ -131,7 +130,7 @@ def get_events(session):
                 '💇' if 'hair salons' in norm else
                 '🚧' if 'construction' in norm else
                 '🛐' if 'religious' in norm else
-                '🚪' if 'eviction' in norm else
+                '🚪' if ('eviction' in norm or 'housing' in area_norm) else
                 '🍞' if 'snap' in norm else
                 '💵' if ('rent' in norm or 'mortgage' in norm) else
                 '🔌' if 'utility' in norm else
