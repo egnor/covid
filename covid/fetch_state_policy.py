@@ -51,6 +51,7 @@ def get_events(session):
         'Information', 'Vaccine Distribution', 'Vote By Mail',
         'Racial Disparities', 'Codebook', 'Notes/Details',
         'Pre-COVID UI Monetary Eligibility Thresholds', 'Minimum Wage',
+        'Unemployment Insurance',
     ]
 
     for tab_json in fetch_json['valueRanges']:
