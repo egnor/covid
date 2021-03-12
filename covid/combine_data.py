@@ -41,6 +41,13 @@ argument_group.add_argument('--use_covid_tracking', action='store_true')
 argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
 
+KNOWN_WARNINGS_REGEX = re.compile(
+    r'No COVID metrics: World/EH.*|'
+    r'Underpopulation: World/DK .*|'
+    r'Underpopulation: World/FR .*'
+)
+
+
 @dataclass(frozen=True)
 class Metric:
     frame: pandas.DataFrame
@@ -114,7 +121,7 @@ def get_world(session, args, verbose=False):
 
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if 'Underpopulation' in str(message):
+        if KNOWN_WARNINGS_REGEX.match(str(message)):
             print(f'=== {str(message).strip()}')
         else:
             nonlocal warning_count
@@ -469,8 +476,13 @@ def _compute_world(session, args, vprint):
 
     def roll_up_metrics(r):
         fieldname_popvals, sub_pop_total = {}, 0
-        for sub in r.subregions.values():
+        for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
+            if not sub.covid_metrics:
+                warn(f'No COVID metrics: {sub.path()}')
+                del r.subregions[key]
+                continue
+
             sub_pop = sub.totals['population']
             sub_pop_total += sub_pop
             for field in ('totals', 'covid_metrics', 'mobility_metrics'):
@@ -482,10 +494,10 @@ def _compute_world(session, args, vprint):
 
         pop = r.totals['population']
         if sub_pop_total > pop * 1.1:
-            warn(f'Overpopulation: {pop}p in "{r.path()}", '
+            warn(f'Overpopulation: {r.path()} has {pop}p, '
                  f'{sub_pop_total}p in parts')
         if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
-            warn(f'Underpopulation: {pop}p in "{r.path()}", '
+            warn(f'Underpopulation: {r.path()} has {pop}p, '
                  f'{sub_pop_total}p in parts')
 
         for (field, name), popvals in fieldname_popvals.items():
@@ -509,9 +521,6 @@ def _compute_world(session, args, vprint):
                 frame = frame.add(next_frame, fill_value=0)
             getattr(r, field)[name] = replace(
                 first_val, frame=frame / metric_pop, credits=credits)
-
-        if not r.covid_metrics:
-            warn(f'No COVID metrics for "{r.path()}"!')
 
     vprint('Rolling up metrics...')
     roll_up_metrics(world)

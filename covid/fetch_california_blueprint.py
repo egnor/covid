@@ -140,6 +140,8 @@ def _counties_from_xlsx(session, xlsx_url):
 
 
 _add_fips = addfips.AddFIPS()
+
+
 def _fips_from_county(county):
     try:
         return int(_add_fips.get_county_fips(county, 'CA'))
