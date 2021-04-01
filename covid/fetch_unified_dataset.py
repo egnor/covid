@@ -204,6 +204,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument('--id_regex')
     parser.add_argument('--print_data', action='store_true')
+    parser.add_argument('--print_types', action='store_true')
     args = parser.parse_args()
     session = cache_policy.new_session(args)
 
@@ -242,9 +243,8 @@ if __name__ == '__main__':
             continue
 
         p = places[id]
-        days = c_data.index.unique(level='Date')
-        c_by_type = c_data.groupby(level=['Source', 'Type'])
-        c_refs = [codes[s] for s in c_by_type.groups]
+        c_by_source_type = c_data.groupby(level=['Source', 'Type'])
+        c_refs = [codes[s] for s in c_by_source_type.groups]
 
         h_data, h_by_type, h_refs = None, None, []
         if id in hydromet_by_id.groups:
@@ -252,7 +252,8 @@ if __name__ == '__main__':
             h_by_type = h_data.groupby(level='HydrometSource')
             h_refs = [codes[s] for s in h_by_type.groups]
 
-        line = f'{p.ID:<11} {p.Population:9d}p {len(days):>3d}d {p.ISO2_UID}'
+        line = f'{p.ID:<11} {p.Population:9d}p'
+        line += f' {p.ISO2_UID}'
         line += f' [{",".join(str(r) for r in c_refs)}]' if c_refs else ''
         line += f' <{",".join(str(h) for h in h_refs)}>' if h_refs else ''
         line += f' f={p.FIPS}' if p.FIPS else ''
@@ -260,7 +261,23 @@ if __name__ == '__main__':
         line += ' ' + ': '.join(a for a in (p.Admin2, p.Admin3) if a)
         print(line)
 
-        if args.print_data:
-            for by_type in (c_by_type, h_by_type):
-                for type, data in by_type or []:
+        if args.print_data or args.print_types:
+            for (source, type), data in c_by_source_type or []:
+                days = data.index.unique(level='Date')
+                print(f'  {f"[{codes[source, type]}]":>4}'
+                      f' {min(days).strftime("%Y-%m-%d")}'
+                      f' - {max(days).strftime("%y-%m-%d")}'
+                      f' COV ({source}) {type}')
+                if args.print_data:
                     print(data)
+
+            for type, data in h_by_type or []:
+                days = data.index.unique(level='Date')
+                print(f'  {f"<{codes[type]}>":>4}'
+                      f' {min(days).strftime("%Y-%m-%d")}'
+                      f' - {max(days).strftime("%y-%m-%d")}'
+                      f' Hyd {type}')
+                if args.print_data:
+                    print(data)
+
+            print()

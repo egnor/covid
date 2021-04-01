@@ -44,9 +44,12 @@ def _write_thumb_image(region, site_dir):
 
 def _write_chart_image(region, site_dir):
     covid_max = max(
-        m.frame.value.max()
-        for m in region.covid_metrics.values()
-        if m.frame.size > 2
+        (
+            m.frame.value.max()
+            for m in region.covid_metrics.values()
+            if m.frame.size > 2 and m.emphasis > 0
+        ),
+        default=0
     )
 
     covid_max = min(300, max(60, (covid_max // 10 + 1) * 10))

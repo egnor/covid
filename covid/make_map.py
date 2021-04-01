@@ -57,7 +57,13 @@ def write_video(region, site_dir, verbose=False):
     vprint(f'Creating map video: {region.path()}')
 
     subs = _mapped_subregions(region)
-    d_m_r_v = list(_date_metric_region_value(subs).items())
+    max_time = max(m.frame.index.max() for m in region.map_metrics.values())
+    d_m_r_v = list(
+        (d, m_r_v)
+        for d, m_r_v in _date_metric_region_value(subs).items()
+        if datetime.date(2020, 3, 1) <= d.date() <= max_time.date()
+    )
+
     if not d_m_r_v:
         warnings.warn(f'No metrics for map video: {region.path()}')
         return
@@ -151,10 +157,7 @@ def _date_metric_region_value(regions):
                     r_v = d_m_r_v.setdefault(t.Index, {}).setdefault(n, {})
                     r_v[r] = max(0, t.value)
 
-    return {
-        d: m_r_v for d, m_r_v in sorted(d_m_r_v.items())
-        if d.date() >= datetime.date(2020, 3, 1)
-    }
+    return {d: m_r_v for d, m_r_v in sorted(d_m_r_v.items())}
 
 
 def _setup_axes(figure, region):

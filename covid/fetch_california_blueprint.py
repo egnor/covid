@@ -76,7 +76,7 @@ def get_counties(session):
 def _counties_from_xlsx(session, xlsx_url):
     # Impute a date from the URL.
     filename = xlsx_url.split('/')[-1]
-    date_match = re.search(r'[01][0-9][012][0-9][2][01]', filename)
+    date_match = re.search(r'[01][0-9][0123][0-9][2][01]', filename)
     if not date_match:
         raise ValueError(f'No MMDDYY date in "{filename}"')
     url_date = pandas.to_datetime(date_match.group(), format='%m%d%y')

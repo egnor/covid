@@ -229,20 +229,25 @@ def _compute_world(session, args, vprint):
             pop = region.totals['population']
             df.reset_index(level='ID', drop=True, inplace=True)
 
-            def best_source(type):
-                # TODO: Pick the best source, not just the first one!
+            def best_data(type):
                 for_type = df.xs(type)
-                return for_type.xs(for_type.index[0][0])
+                best_date, best_data = None, None
+                for source, source_data in df.xs(type).groupby(level='Source'):
+                    source_data = source_data.droplevel(level='Source')
+                    source_latest = source_data.last_valid_index()
+                    if best_date is None or source_latest > best_date:
+                        best_date, best_data = source_latest, source_data
+                return best_data
 
             # COVID metrics
             if 'Confirmed' in df.index:
-                confirmed = best_source('Confirmed')
+                confirmed = best_data('Confirmed')
                 region.totals['positives'] = confirmed.Cases.max()  # glitch
                 region.covid_metrics['positives / 100Kp'] = trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=unified_credits,
                     v=confirmed.Cases_New * 1e5 / pop)
             if 'Deaths' in df.index:
-                deaths = best_source('Deaths')
+                deaths = best_data('Deaths')
                 region.totals['deaths'] = deaths.Cases.max()  # glitch
                 region.covid_metrics['deaths / 10Mp'] = trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=unified_credits,
@@ -250,15 +255,15 @@ def _compute_world(session, args, vprint):
             if 'Tests' in df.index:
                 region.covid_metrics['tests / 10Kp'] = trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=unified_credits,
-                    v=best_source('Tests').Cases_New * 1e4 / pop)
+                    v=best_data('Tests').Cases_New * 1e4 / pop)
             if 'Hospitalized' in df.index:
                 region.covid_metrics['hosp admit / 1Mp'] = trend_metric(
                     c='tab:orange', em=0, ord=3.0, cred=unified_credits,
-                    v=best_source('Hospitalized').Cases_New * 1e6 / pop)
+                    v=best_data('Hospitalized').Cases_New * 1e6 / pop)
             if 'Hospitalized_Now' in df.index:
                 region.covid_metrics['hosp current / 100Kp'] = trend_metric(
                     c='tab:pink', em=0, ord=3.1, cred=unified_credits,
-                    v=best_source('Hospitalized_Now').Cases * 1e5 / pop)
+                    v=best_data('Hospitalized_Now').Cases * 1e5 / pop)
 
             # Hydrometeorological data
             def to_f(c): return c * 1.8 + 32
@@ -721,13 +726,14 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
-    parser.add_argument('--region_regex')
+    parser.add_argument('--print_regex')
+    parser.add_argument('--print_credits', action='store_true')
     parser.add_argument('--print_data', action='store_true')
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = combine_data.get_world(session=session, args=args, verbose=True)
-    region_regex = args.region_regex and re.compile(args.region_regex, re.I)
+    region_regex = args.print_regex and re.compile(args.print_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
         if r.matches_regex(region_regex):
@@ -755,6 +761,8 @@ if __name__ == '__main__':
                            f' peak={m.peak[1]:<3.0f} @{m.peak[0].date()}')
                     print(f'{prefix}    {len(m.frame):3d}d '
                           f'=>{m.frame.index.max().date()}{max} {cat}: {name}')
+                    if args.print_credits:
+                        print(f'{prefix}        {" ".join(m.credits.values())}')
                     if args.print_data:
                         print(m.frame)
 
