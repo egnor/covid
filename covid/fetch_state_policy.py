@@ -100,7 +100,7 @@ def get_events(session):
                 continue  # Empty data
             elif all(r[c] in ('0', '1') for r in rows):
                 ctype = bool
-            elif all(r[c] in ('', '0', '1') or '/' in r[c] for r in rows):
+            elif all(r[c] in ('', '0', '1', '^') or '/' in r[c] for r in rows):
                 ctype = pandas.Timestamp
             elif all(re.fullmatch(r'\d+', r[c]) for r in rows):
                 ctype = int
@@ -193,10 +193,9 @@ def get_events(session):
                     # Codes for policies in effect pre-COVID.
                     date = value.replace('already in effect', '').strip()
                     date = date.replace('*', '')  # Footnote.
-                    date = '1/1/2020' if date == '1/0/1900' else date
-                    date = '1/1/2020' if date == '1' else date
+                    date = '1/1/2020' if date in ('1', '1/0/1900') else date
                     date = date + '/2020' if date.count('/') == 1 else date
-                    date = '' if date == '0' else date
+                    date = '' if date in ('0', '^') else date
                     if not date:
                         continue
 
