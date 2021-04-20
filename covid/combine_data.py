@@ -21,9 +21,8 @@ import us
 from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_mortality
-from covid import fetch_covid_tracking
 from covid import fetch_google_mobility
-from covid import fetch_jhu_covid19
+from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
 from covid import fetch_unified_dataset
 
@@ -34,11 +33,10 @@ argument_group = argument_parser.add_argument_group('data gathering')
 argument_group.add_argument('--no_california_blueprint', action='store_true')
 argument_group.add_argument('--no_cdc_mortality', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
+argument_group.add_argument('--no_ourworld_vaccinations', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
 argument_group.add_argument('--no_unified_dataset', action='store_true')
 argument_group.add_argument('--no_unified_hydromet', action='store_true')
-argument_group.add_argument('--use_covid_tracking', action='store_true')
-argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
@@ -81,14 +79,14 @@ class Region:
     iso_code: Optional[str] = None
     fips_code: Optional[int] = None
     zip_code: Optional[int] = None
-    jhu_uid: Optional[int] = None
     unified_id: Optional[str] = None
     lat_lon: Optional[Tuple[float, float]] = None
     totals: collections.Counter = field(default_factory=collections.Counter)
     parent: Optional['Region'] = field(default=None, repr=0)
     subregions: Dict[str, 'Region'] = field(default_factory=dict, repr=0)
-    covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    vaccination_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
     current_policy: Optional[PolicyChange] = None
@@ -159,25 +157,47 @@ def _world_cache_key(args):
             ''.join(f':{k}={getattr(args, k)}' for k in ks))
 
 
+def _trend_metric(c, em, ord, cred, v, raw=None, mins=None, maxs=None):
+    if not pandas.api.types.is_datetime64_any_dtype(v.index.dtype):
+        raise ValueError(f'Bad trend index dtype "{v.index.dtype}"')
+    if v.index.duplicated().any():
+        dups = v.index.duplicated(keep=False)
+        raise ValueError(f'Dup trend dates: {v.index[dups]}')
+    nonzero_is, = (v.values > 0).nonzero()  # Skip first nonzero.
+    first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(v)
+    first_i = max(0, min(first_i, len(v) - 14))
+    peak_x = df.value.idxmax()
+    peak = None if pandas.isna(peak_x) else (peak_x, df.value.loc[peak_x])
+    if raw is not None:
+        df = pandas.DataFrame({'raw': raw, 'value': v})
+    else:
+        smooth = v.iloc[first_i:].rolling(7).mean()
+        df = pandas.DataFrame({'raw': v, 'value': smooth})
+    if mins is not None:
+        assert mins.index is v.index
+        df['min'] = mins.iloc[first_i:].rolling(7).mean()
+    if maxs is not None:
+        assert maxs.index is v.index
+        df['max'] = maxs.iloc[first_i:].rolling(7).mean()
+    return Metric(
+        frame=df, color=c, emphasis=em, order=ord, credits=cred, peak=peak)
+
+
 def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
     vprint('Loading place data...')
-    if args.use_jhu_covid19 and args.no_unified_dataset:
-        world = _jhu_skeleton(session)
-    else:
-        world = _unified_skeleton(session)
+    world = _unified_skeleton(session)
 
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
     region_by_fips = {}
-    region_by_jhu = {}
     region_by_uid = {}
 
     def index_region_tree(r):
         for index_dict, key in [
             (region_by_iso, r.iso_code), (region_by_fips, r.fips_code),
-                (region_by_jhu, r.jhu_uid), (region_by_uid, r.unified_id)]:
+                (region_by_uid, r.unified_id)]:
             if key is not None:
                 index_dict[key] = r
         for sub in r.subregions.values():
@@ -189,34 +209,10 @@ def _compute_world(session, args, vprint):
     # Add metrics from the Unified COVID-19 Dataset.
     #
 
-    def trend_metric(c, em, ord, cred, v, mins=None, maxs=None):
-        if not pandas.api.types.is_datetime64_any_dtype(v.index.dtype):
-            raise ValueError(f'Bad trend index dtype "{v.index.dtype}"')
-        if v.index.duplicated().any():
-            dups = v.index.duplicated(keep=False)
-            raise ValueError(f'Dup trend dates: {v.index[dups]}')
-        nonzero_is, = (v.values > 0).nonzero()  # Skip first nonzero.
-        first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(v)
-        first_i = max(0, min(first_i, len(v) - 14))
-        smooth = v.iloc[first_i:].rolling(7).mean()
-        peak_x = smooth.idxmax()
-        peak = None if pandas.isna(peak_x) else (peak_x, smooth.loc[peak_x])
-        df = pandas.DataFrame({'raw': v, 'value': smooth})
-        if mins is not None:
-            assert mins.index is v.index
-            df['min'] = mins.iloc[first_i:].rolling(7).mean()
-        if maxs is not None:
-            assert maxs.index is v.index
-            df['max'] = maxs.iloc[first_i:].rolling(7).mean()
-        return Metric(
-            frame=df, color=c, emphasis=em, order=ord, credits=cred, peak=peak)
-
     if not args.no_unified_dataset:
         vprint('Loading unified dataset (COVID)...')
         unified_credits = fetch_unified_dataset.credits()
         unified_covid = fetch_unified_dataset.get_covid(session)
-        unified_covid = unified_covid.xs(level='Age', key='Total')
-        unified_covid = unified_covid.xs(level='Sex', key='Total')
 
         if args.no_unified_hydromet:
             hydromet_by_uid = None
@@ -248,25 +244,25 @@ def _compute_world(session, args, vprint):
             if 'Confirmed' in df.index:
                 confirmed = best_data('Confirmed')
                 region.totals['positives'] = confirmed.Cases.max()  # glitch
-                region.covid_metrics['positives / 100Kp'] = trend_metric(
+                region.covid_metrics['positives / 100Kp'] = _trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=unified_credits,
                     v=confirmed.Cases_New * 1e5 / pop)
             if 'Deaths' in df.index:
                 deaths = best_data('Deaths')
                 region.totals['deaths'] = deaths.Cases.max()  # glitch
-                region.covid_metrics['deaths / 10Mp'] = trend_metric(
+                region.covid_metrics['deaths / 10Mp'] = _trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=unified_credits,
                     v=deaths.Cases_New * 1e7 / pop)
             if 'Tests' in df.index:
-                region.covid_metrics['tests / 10Kp'] = trend_metric(
+                region.covid_metrics['tests / 10Kp'] = _trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=unified_credits,
                     v=best_data('Tests').Cases_New * 1e4 / pop)
             if 'Hospitalized' in df.index:
-                region.covid_metrics['hosp admit / 1Mp'] = trend_metric(
+                region.covid_metrics['hosp admit / 1Mp'] = _trend_metric(
                     c='tab:orange', em=0, ord=3.0, cred=unified_credits,
                     v=best_data('Hospitalized').Cases_New * 1e6 / pop)
             if 'Hospitalized_Now' in df.index:
-                region.covid_metrics['hosp current / 100Kp'] = trend_metric(
+                region.covid_metrics['hosp current / 100Kp'] = _trend_metric(
                     c='tab:pink', em=0, ord=3.1, cred=unified_credits,
                     v=best_data('Hospitalized_Now').Cases * 1e5 / pop)
 
@@ -278,91 +274,9 @@ def _compute_world(session, args, vprint):
                 df = by_source.get_group(by_source['T'].count().idxmax())
                 df.reset_index(level=('ID', 'HydrometSource'),
                                drop=True, inplace=True)
-                region.mobility_metrics['temp °F'] = trend_metric(
+                region.mobility_metrics['temp °F'] = _trend_metric(
                     c='tab:gray', em=1, ord=2.0, cred=unified_credits,
                     v=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
-
-    #
-    # Add COVID metrics from JHU.
-    #
-
-    if args.use_jhu_covid19:
-        vprint('Loading JHU COVID data...')
-        jhu_credits = fetch_jhu_covid19.credits()
-        jhu_data = fetch_jhu_covid19.get_data(session)
-        vprint('Merging JHU COVID data...')
-        for jid, df in jhu_data.groupby(level='UID', sort=False):
-            region = region_by_jhu.get(jid)
-            if not region:
-                continue  # Filtered out for one reason or another.
-
-            # All rows in the group have the same UID; index only by date.
-            df.reset_index(level='UID', drop=True, inplace=True)
-
-            # Convert total cases and deaths into daily cases and deaths.
-            region.covid_metrics.update({
-                'positives / 100Kp': trend_metric(
-                    c='tab:blue', em=1, ord=1.0, cred=jhu_credits,
-                    v=(df.total_cases.iloc[1:] - df.total_cases.iloc[:-1]) *
-                    1e5 / region.totals['population']),
-                'deaths / 10Mp': trend_metric(
-                    c='tab:red', em=1, ord=1.1, cred=jhu_credits,
-                    v=(df.total_deaths.iloc[1:] - df.total_deaths.iloc[:-1]) *
-                    1e7 / region.totals['population']),
-            })
-
-            region.totals['deaths'] = df.total_deaths.iloc[-1]
-            region.totals['positives'] = df.total_cases.iloc[-1]
-
-        # Drop subtrees in the region tree with no JHU COVID metrics.
-        def prune_region_tree(region):
-            region.subregions = {
-                k: sub for k, sub in region.subregions.items()
-                if prune_region_tree(sub)
-            }
-            return (region.subregions or region.covid_metrics)
-
-        prune_region_tree(world)
-
-    #
-    # Mix in covidtracking data to get hospital data for US states.
-    # (Use its cases/deaths data where available, for matching metrics.)
-    #
-
-    if args.use_covid_tracking:
-        vprint('Loading and merging covidtracking.com data...')
-        covid_credits = fetch_covid_tracking.credits()
-        covid_tracking = fetch_covid_tracking.get_states(session=session)
-        for fips, covid in covid_tracking.groupby(level='fips', sort=False):
-            region = region_by_fips.get(fips)
-            if region is None:
-                continue  # Filtered out for one reason or another.
-
-            # All rows in the group have the same fips; index only by date.
-            covid.reset_index(level='fips', drop=True, inplace=True)
-
-            # Take all covidtracking data where available, for consistency.
-            pop = region.totals['population']
-            region.covid_metrics.update({
-                'positives / 100Kp': trend_metric(
-                    c='tab:blue', em=1, ord=1.0, cred=covid_credits,
-                    v=covid.positiveIncrease * 1e5 / pop),
-                'deaths / 10Mp': trend_metric(
-                    c='tab:red', em=1, ord=1.1, cred=covid_credits,
-                    v=covid.deathIncrease * 1e7 / pop),
-                'tests / 10Kp': trend_metric(
-                    c='tab:green', em=0, ord=2.0, cred=covid_credits,
-                    v=covid.totalTestResultsIncrease * 1e4 / pop),
-                'hosp admit / 1Mp': trend_metric(
-                    c='tab:orange', em=0, ord=3.0, cred=covid_credits,
-                    v=covid.hospitalizedIncrease * 1e6 / pop),
-                'hosp current / 100Kp': trend_metric(
-                    c='tab:pink', em=0, ord=3.1, cred=covid_credits,
-                    v=covid.hospitalizedCurrently * 1e5 / pop),
-            })
-
-            region.totals['deaths'] = covid.death.iloc[-1]
-            region.totals['positives'] = covid.positive.iloc[-1]
 
     #
     # Add baseline mortality data from CDC figures for US states.
@@ -463,21 +377,75 @@ def _compute_world(session, args, vprint):
 
             pcfb = 'percent_change_from_baseline'  # common, long suffix
             region.mobility_metrics.update({
-                'residential': trend_metric(
+                'residential': _trend_metric(
                     c='tab:brown', em=1, ord=1.0, cred=mobility_credits,
                     v=100 + m[f'residential_{pcfb}']),
-                'retail / recreation': trend_metric(
+                'retail / recreation': _trend_metric(
                     c='tab:orange', em=1, ord=1.1, cred=mobility_credits,
                     v=100 + m[f'retail_and_recreation_{pcfb}']),
-                'workplaces': trend_metric(
+                'workplaces': _trend_metric(
                     c='tab:red', em=1, ord=1.2, cred=mobility_credits,
                     v=100 + m[f'workplaces_{pcfb}']),
-                'grocery / pharmacy': trend_metric(
+                'grocery / pharmacy': _trend_metric(
                     c='tab:blue', em=0, ord=1.4, cred=mobility_credits,
                     v=100 + m[f'grocery_and_pharmacy_{pcfb}']),
-                'transit stations': trend_metric(
+                'transit stations': _trend_metric(
                     'tab:purple', em=0, ord=1.5, cred=mobility_credits,
                     v=100 + m[f'transit_stations_{pcfb}']),
+            })
+
+    #
+    # Add vaccination statistics.
+    #
+
+    if not args.no_ourworld_vaccinations:
+        vprint('Loading ourworldindata vaccination data...')
+        vax_credits = fetch_ourworld_vaccinations.credits()
+        vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
+        vprint('Merging ourworldindata vaccintion data...')
+        vcols = ['iso_code', 'state']
+        for (iso, s), v in vax_data.group_by(vcols, as_index=False, sort=False):
+            country = pycountry.get(alpha_3=iso)
+            if country is None:
+                continue
+
+            region = region_by_iso.get(country.alpha_2)
+            if region is None:
+                warnings.warn(f'ISO {country.alpha_2} ({country.name}) missing')
+                continue
+
+            if s and country.alpha_2 == 'US':
+                state = us.states.lookup(s)
+                if not state:
+                    warnings.warn(f'Bad US state "{s}" from ourworldindata')
+                    continue
+                region = region_by_fips.get(int(state.fips))
+                if region is None:
+                    warnings.warn(f'FIPS {state.fips} (state.name) missing')
+                    continue
+
+            pop = region.get('population', 0)
+            if not pop:
+                warn(f'No population for {region.path} for vaccination data')
+                continue
+
+            region.vaccination_metrics.update({
+                'total first / 100p': _trend_metric(
+                    c='tab:orange', em=1, ord=1.0, cred=vax_credits,
+                    v=v.people_vaccinated / (pop / 100)),
+                'total full / 100p': _trend_metric(
+                    c='tab:green', em=1, ord=1.1, cred=vax_credits,
+                    v=v.people_fully_vaccinated / (pop / 100)),
+                'total doses / 100p': _trend_metric(
+                    c='tab:blue', em=0, ord=1.2, cred=vax_credits,
+                    v=v.total_vaccinations / (pop / 100)),
+                'total alloc / 100p': _trend_metric(
+                    c='tab:gray', em=0, ord=1.3, cred=vax_credits,
+                    v=v.total_distributed / (pop / 100)),
+                'daily doses / 10Kp': _trend_metric(
+                    c='tab:cyan', em=0, ord=1.3, cred=vax_credits,
+                    v=v.daily_vaccinations / (pop / 10000),
+                    raw=v.daily_vaccinations_raw / (pop / 10000)),
             })
 
     #
@@ -641,90 +609,6 @@ def _unified_skeleton(session):
     return world
 
 
-def _jhu_skeleton(session):
-    """Returns a region tree for the world with no metrics populated."""
-
-    def subregion(parent, key, name=None, short_name=None):
-        region = parent.subregions.get(key)
-        if not region:
-            region = parent.subregions[key] = Region(
-                name=name or str(key), short_name=short_name or str(key),
-                parent=parent)
-        return region
-
-    # Do not generate a region for these US county FIPS codes.
-    skip_fips = set((
-        25007, 25019,                              # MA: "Dukes and Nantucket"
-        36005, 36047, 36081, 36085,                # NY: "New York City"
-        49003, 49005, 49033,                       # UT: "Bear River"
-        49023, 49027, 49039, 49041, 49031, 49055,  # UT: "Central Utah"
-        49007, 49015, 49019,                       # UT: "Southeast Utah"
-        49001, 49017, 49021, 49025, 49053,         # UT: "Southwest Utah"
-        49009, 49013, 49047,                       # UT: "TriCounty"
-        49057, 49029))                             # UT: "Weber-Morgan"
-
-    world = Region(name='World', short_name='World')
-    for jid, place in fetch_jhu_covid19.get_places(session).items():
-        if not (place.Population > 0):
-            continue  # We require population data.
-
-        if place.Country_Region == 'US':
-            # US specific logic for FIPS, etc.
-            region = subregion(world, 'US', us.unitedstatesofamerica.name)
-            region.iso_code = 'US'  # Place all territories under US toplevel.
-            if place.Province_State:
-                s = us.states.lookup(place.Province_State, field='name')
-                if s:
-                    state_fips = int(s.fips)
-                    region = subregion(region, state_fips, s.name, s.abbr)
-                    region.fips_code = state_fips
-                else:
-                    region = subregion(region, place.Province_State)
-                if place.iso2 != 'US':
-                    region.iso2 = place.iso2
-            if place.Admin2:
-                if not place.Province_State:
-                    raise ValueError(f'Admin2 but no State in {place}')
-                key = place.FIPS or place.Admin2
-                if key == 36061:
-                    key = None  # JHU fudges 36061 (Manhattan) for all NYC.
-                elif key == 'Kansas City':
-                    continue    # KC data is also allocated to counties.
-                elif key in skip_fips:
-                    continue    # These regions are tracked elsewhere.
-                region = subregion(region, key, place.Admin2, place.Admin2)
-                region.fips_code = key if isinstance(key, int) else None
-
-        else:
-            # Generic non-US logic.
-            country = pycountry.countries.get(name=place.Country_Region)
-            if not country:
-                country = pycountry.countries.get(alpha_2=place.iso2)
-            if country:
-                region = subregion(
-                    world, country.alpha_2, country.name, country.alpha_2)
-                region.iso_code = country.alpha_2
-            elif place.Country_Region:
-                # Uncoded "countries" are usually cruise ships and such?
-                region = subregion(world, place.Country_Region)
-            else:
-                raise ValueError(f'No country in {place}')
-            if place.Province_State:
-                region = subregion(region, place.Province_State)
-                if country and place.iso2 != country.alpha_2:
-                    region.iso_code = place.iso2
-            if place.Admin2:
-                region = subregion(region, place.Admin2)
-
-        region.jhu_uid = jid
-        region.totals['population'] = place.Population
-        region.lat_lon = (place.Lat, place.Long_)
-
-    world.totals['population'] = sum(
-        s.totals['population'] for s in world.subregions.values())
-    return world
-
-
 if __name__ == '__main__':
     import argparse
     import signal
@@ -747,8 +631,9 @@ if __name__ == '__main__':
             line = (
                 f'{prefix}{r.totals["population"] or -1:9.0f}p <' +
                 '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
-                '.c'[bool(r.covid_metrics)] +
                 '.m'[bool(r.map_metrics)] +
+                '.c'[bool(r.covid_metrics)] +
+                '.v'[bool(r.vaccination_metrics)] +
                 '.g'[bool(r.mobility_metrics)] +
                 '.p'[bool(r.policy_changes)] + '>')
             if key != r.short_name:
@@ -760,8 +645,9 @@ if __name__ == '__main__':
             print(f'{prefix}    ' + ' '.join(
                 f'{k}={v}' for k, v in sorted(r.totals.items())))
             for cat, metrics in (
-                    ('cov', r.covid_metrics),
                     ('map', r.map_metrics),
+                    ('cov', r.covid_metrics),
+                    ('vax', r.vaccination_metrics),
                     ('mob', r.mobility_metrics)):
                 for name, m in metrics.items():
                     max = (' ' * 21 if not m.peak else

@@ -135,6 +135,8 @@ def get_covid(session):
         df = pandas.read_feather(cache_path)
     else:
         df = _read_rdata_url(session, COVID19_RDATA_URL)
+        df = df[(df.Age == 'Total') & (df.Sex == 'Total')]
+        df.drop(columns=['Age', 'Sex'], inplace=True)
         df.Date = pandas.to_datetime(df.Date, utc=True)
         for c in ('Cases', 'Cases_New'):
             df[c].fillna(0, inplace=True)
