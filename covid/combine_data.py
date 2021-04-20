@@ -166,8 +166,7 @@ def _trend_metric(c, em, ord, cred, v, raw=None, mins=None, maxs=None):
     nonzero_is, = (v.values > 0).nonzero()  # Skip first nonzero.
     first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(v)
     first_i = max(0, min(first_i, len(v) - 14))
-    peak_x = df.value.idxmax()
-    peak = None if pandas.isna(peak_x) else (peak_x, df.value.loc[peak_x])
+
     if raw is not None:
         df = pandas.DataFrame({'raw': raw, 'value': v})
     else:
@@ -179,6 +178,9 @@ def _trend_metric(c, em, ord, cred, v, raw=None, mins=None, maxs=None):
     if maxs is not None:
         assert maxs.index is v.index
         df['max'] = maxs.iloc[first_i:].rolling(7).mean()
+
+    peak_x = df.value.idxmax()
+    peak = None if pandas.isna(peak_x) else (peak_x, df.value.loc[peak_x])
     return Metric(
         frame=df, color=c, emphasis=em, order=ord, credits=cred, peak=peak)
 
@@ -404,7 +406,7 @@ def _compute_world(session, args, vprint):
         vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
         vprint('Merging ourworldindata vaccintion data...')
         vcols = ['iso_code', 'state']
-        for (iso, s), v in vax_data.group_by(vcols, as_index=False, sort=False):
+        for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
             country = pycountry.get(alpha_3=iso)
             if country is None:
                 continue

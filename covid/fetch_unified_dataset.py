@@ -144,7 +144,7 @@ def get_covid(session):
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
-    return df.groupby(['ID', 'Type', 'Source', 'Age', 'Sex', 'Date']).first()
+    return df.groupby(['ID', 'Type', 'Source', 'Date']).first()
 
 
 def get_hydromet(session):
