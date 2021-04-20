@@ -42,9 +42,14 @@ argument_group.add_argument('--use_jhu_covid19', action='store_true')
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r'No COVID metrics: World/EH.*|'
-    r'Underpopulation: World/DK .*|'
-    r'Underpopulation: World/FR .*'
+    r'No COVID metrics: World/EH.*'
+    r'|Underpopulation: World/DK .*'
+    r'|Underpopulation: World/FR .*'
+    r'|Underpopulation: World/PE/CAL .*'
+    r'|Overpopulation: World/CL(/..)? .*'
+    r'|Overpopulation: World/CO(/...)? .*'
+    r'|Overpopulation: World/MX(/...)? .*'
+    r'|Overpopulation: World/PE(/...)? .*'
 )
 
 
@@ -498,6 +503,8 @@ def _compute_world(session, args, vprint):
                             fieldname_popvals.setdefault(fn, []).append(pv)
 
         pop = r.totals['population']
+        if pop == 0:
+            pop = r.totals['population'] = sub_pop_total
         if sub_pop_total > pop * 1.1:
             warn(f'Overpopulation: {r.path()} has {pop}p, '
                  f'{sub_pop_total}p in parts')

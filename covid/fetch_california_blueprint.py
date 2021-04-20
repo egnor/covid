@@ -119,16 +119,17 @@ def _counties_from_xlsx(session, xlsx_url):
     rename_col('Tier', r'^(updated )?(overall )?tier (status|ass(ign|ass))',
                r'^final tier ', required=True)
 
+    # Clean up county names and add FIPS codes.
+    county_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
+    xlsx.County = xlsx.County.str.replace(county_regex, r'\1')
+    xlsx = xlsx[xlsx.County != 'CA']  # Drop whole-state data.
+    xlsx['FIPS'] = xlsx.County.apply(_fips_from_county)
+
     # Fill or convert date values.
     if 'Date' not in xlsx.columns:
         xlsx['Date'] = url_date
     else:
         xlsx.Date = pandas.to_datetime(xlsx.Date)
-
-    # Clean up county names and add FIPS codes.
-    county_regex = re.compile(r'\W*(\w[\w\s]*\w)\W*')
-    xlsx.County = xlsx.County.str.replace(county_regex, r'\1')
-    xlsx['FIPS'] = xlsx.County.apply(_fips_from_county)
 
     # Return CountyData based on all the work above.
     return {
