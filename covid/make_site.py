@@ -143,7 +143,9 @@ def make_region_html(region, args):
 
         r = region
         credits = dict(c for p in r.policy_changes for c in p.credits.items())
-        for md in (r.covid_metrics, r.map_metrics, r.mobility_metrics):
+        for md in (
+                r.map_metrics, r.covid_metrics, r.vaccination_metrics,
+                r.mobility_metrics):
             credits.update(c for m in md.values() for c in m.credits.items())
         with tags.p('Sources: ', cls='credits'):
             for i, (url, text) in enumerate(credits.items()):

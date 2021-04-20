@@ -48,6 +48,15 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r'|Overpopulation: World/CO(/...)? .*'
     r'|Overpopulation: World/MX(/...)? .*'
     r'|Overpopulation: World/PE(/...)? .*'
+    r'|Bad ourworldindata state: Bureau of Prisons'
+    r'|Bad ourworldindata state: Dept of Defense'
+    r'|Bad ourworldindata state: Federated States of Micronesia'
+    r'|Bad ourworldindata state: Indian Health Svc'
+    r'|Bad ourworldindata state: Long Term Care'
+    r'|Bad ourworldindata state: Marshall Islands'
+    r'|Bad ourworldindata state: Republic of Palau'
+    r'|Bad ourworldindata state: United States'
+    r'|Bad ourworldindata state: Veterans Health'
 )
 
 
@@ -86,7 +95,8 @@ class Region:
     subregions: Dict[str, 'Region'] = field(default_factory=dict, repr=0)
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    vaccination_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    vaccination_metrics: Dict[str, Metric] = field(
+        default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
     current_policy: Optional[PolicyChange] = None
@@ -364,7 +374,7 @@ def _compute_world(session, args, vprint):
         mobility_data = fetch_google_mobility.get_mobility(session=session)
         vprint('Merging Google mobility data...')
         mobility_data.sort_values(by=gcols + ['date'], inplace=True)
-        mobility_data.set_index('date', inplace=True)
+        mobility_data.set_index(keys='date', inplace=True)
         for g, m in mobility_data.groupby(gcols, as_index=False, sort=False):
             if g[5]:
                 region = region_by_fips.get(g[5])
@@ -403,51 +413,59 @@ def _compute_world(session, args, vprint):
     if not args.no_ourworld_vaccinations:
         vprint('Loading ourworldindata vaccination data...')
         vax_credits = fetch_ourworld_vaccinations.credits()
-        vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
-        vprint('Merging ourworldindata vaccintion data...')
+        vax_data = fetch_ourworld_vaccinations.get_vaccinations(
+            session=session)
+        vprint('Merging ourworldindata vaccination data...')
         vcols = ['iso_code', 'state']
+        vax_data.state.fillna('', inplace=True)  # Or groupby() drops them.
+        vax_data.sort_values(by=vcols + ['date'], inplace=True)
+        vax_data.set_index(keys='date', inplace=True)
         for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
-            country = pycountry.get(alpha_3=iso)
+            if iso.startswith('OWID'):
+                continue  # Special ourworldindata regions, not real countries
+
+            country = pycountry.countries.get(alpha_3=iso)
             if country is None:
+                warnings.warn(f'Bad ourworldindata country code: {iso}')
                 continue
 
             region = region_by_iso.get(country.alpha_2)
             if region is None:
-                warnings.warn(f'ISO {country.alpha_2} ({country.name}) missing')
                 continue
 
-            if s and country.alpha_2 == 'US':
-                state = us.states.lookup(s)
+            if s:
+                # Data includes "New York State", lookup() needs "New York"
+                state = us.states.lookup(s.replace(' State', ''))
                 if not state:
-                    warnings.warn(f'Bad US state "{s}" from ourworldindata')
+                    warnings.warn(f'Bad ourworldindata state: {s}')
                     continue
                 region = region_by_fips.get(int(state.fips))
                 if region is None:
-                    warnings.warn(f'FIPS {state.fips} (state.name) missing')
+                    warnings.warn(f'FIPS missing: {state.fips} (state.name)')
                     continue
 
-            pop = region.get('population', 0)
+            pop = region.totals.get('population', 0)
             if not pop:
-                warn(f'No population for {region.path} for vaccination data')
+                warn(f'No population for ourworldindata: {region.path}')
                 continue
 
             region.vaccination_metrics.update({
-                'total first / 100p': _trend_metric(
+                'people given any doses / 100p': _trend_metric(
                     c='tab:orange', em=1, ord=1.0, cred=vax_credits,
-                    v=v.people_vaccinated / (pop / 100)),
-                'total full / 100p': _trend_metric(
+                    v=v.people_vaccinated * (100 / pop)),
+                'people given all doses / 100p': _trend_metric(
                     c='tab:green', em=1, ord=1.1, cred=vax_credits,
-                    v=v.people_fully_vaccinated / (pop / 100)),
-                'total doses / 100p': _trend_metric(
+                    v=v.people_fully_vaccinated * (100 / pop)),
+                'doses given / 100p': _trend_metric(
                     c='tab:blue', em=0, ord=1.2, cred=vax_credits,
-                    v=v.total_vaccinations / (pop / 100)),
-                'total alloc / 100p': _trend_metric(
+                    v=v.total_vaccinations * (100 / pop)),
+                'doses allocated / 100p': _trend_metric(
                     c='tab:gray', em=0, ord=1.3, cred=vax_credits,
-                    v=v.total_distributed / (pop / 100)),
-                'daily doses / 10Kp': _trend_metric(
+                    v=v.total_distributed * (100 / pop)),
+                'daily doses given / 5Kp': _trend_metric(
                     c='tab:cyan', em=0, ord=1.3, cred=vax_credits,
-                    v=v.daily_vaccinations / (pop / 10000),
-                    raw=v.daily_vaccinations_raw / (pop / 10000)),
+                    v=v.daily_vaccinations * (5000 / pop),
+                    raw=v.daily_vaccinations_raw * (5000 / pop)),
             })
 
     #
@@ -465,7 +483,9 @@ def _compute_world(session, args, vprint):
 
             sub_pop = sub.totals['population']
             sub_pop_total += sub_pop
-            for field in ('totals', 'covid_metrics', 'mobility_metrics'):
+            for field in (
+                'totals', 'covid_metrics', 'vaccination_metrics',
+                    'mobility_metrics'):
                 if not (field == 'mobility_metrics' and not r.parent):
                     for name, value in getattr(sub, field).items():
                         if name not in getattr(r, field):
@@ -537,12 +557,6 @@ def _compute_world(session, args, vprint):
                        '#FF000050', '#FF0000A0', None)
 
     make_map_metrics(world)
-
-    def trim_tree(r, rx):
-        sub = r.subregions
-        region.subregions = {k: s for k, s in sub.items() if trim_tree(s, rx)}
-        return (r.subregions or r.matches_regex(rx))
-
     return world
 
 

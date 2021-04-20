@@ -53,17 +53,20 @@ def _write_chart_image(region, site_dir):
     )
 
     covid_max = min(300, max(60, (covid_max // 10 + 1) * 10))
-    covid_height = covid_max / 25
+    heights = [covid_max / 25]
+
+    if region.vaccination_metrics:
+        heights.append(3)
 
     if region.mobility_metrics:
-        fig = matplotlib.pyplot.figure(figsize=(10, covid_height + 3), dpi=200)
-        covid_axes, mobility_axes = fig.subplots(
-            nrows=2, ncols=1, sharex=True,
-            gridspec_kw=dict(height_ratios=[covid_height, 3]))
-    else:
-        fig = matplotlib.pyplot.figure(figsize=(10, covid_height), dpi=200)
-        covid_axes, mobility_axes = fig.add_subplot(), None
+        heights.append(3)
 
+    fig = matplotlib.pyplot.figure(figsize=(10, sum(heights)), dpi=200)
+    axes_list = fig.subplots(
+        nrows=len(heights), ncols=1, sharex=True, squeeze=False,
+        gridspec_kw=dict(height_ratios=heights))[:, 0]
+
+    covid_axes, axes_list = axes_list[0], axes_list[1:]
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
     _plot_covid_metrics(covid_axes, region, show_raw=True)
@@ -71,7 +74,15 @@ def _write_chart_image(region, site_dir):
     _plot_subregion_peaks(covid_axes, region)
     _add_plot_legend(covid_axes)
 
-    if mobility_axes:
+    if region.vaccination_metrics:
+        vax_axes, axes_list = axes_list[0], axes_list[1:]
+        _setup_xaxis(vax_axes, region, title=f'{region.short_name} vaccines')
+        _plot_vaccination_metrics(vax_axes, region)
+        _plot_policy_changes(vax_axes, region, show_emoji=False)
+        _add_plot_legend(vax_axes)
+
+    if region.mobility_metrics:
+        mobility_axes, axes_list = axes_list[0], axes_list[1:]
         _setup_xaxis(
             mobility_axes, region, title=f'{region.short_name} mobility')
         _plot_mobility_metrics(mobility_axes, region)
@@ -118,6 +129,20 @@ def _plot_covid_metrics(axes, region, show_raw):
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     _plot_metrics(axes, region.covid_metrics, show_raw=show_raw)
+
+
+def _plot_vaccination_metrics(axes, region):
+    """Plots COVID vaccination metrics."""
+
+    axes.axhline(100, c='black', lw=1)  # 100% line.
+    axes.set_ylim(0, 150)
+    axes.set_ylabel('% of population (cumulative)')
+    axes.yaxis.set_label_position('right')
+    axes.yaxis.tick_right()
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
+    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    _plot_metrics(axes, region.vaccination_metrics, show_raw=True)
 
 
 def _plot_mobility_metrics(axes, region):

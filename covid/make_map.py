@@ -145,7 +145,7 @@ def _mapped_subregions(region):
     # Walk at most 2 layers down to find regions plot on the map.
     return [r for s in region.subregions.values()
             for r in (s.subregions.values() if urls.has_map(s) else (s,))
-            if r.map_metrics]
+            if r.map_metrics and r.lat_lon]
 
 
 def _date_metric_region_value(regions):
