@@ -113,7 +113,6 @@ def _plot_covid_metrics(axes, region, detailed):
 def _plot_vaccination_metrics(axes, region, detailed):
     """Plots COVID vaccination metrics."""
 
-    axes.axhline(100, c='black', lw=1)  # 100% line.
     axes.set_ylim(0, 150)
     axes.set_ylabel('% of population (cumulative)')
     axes.yaxis.set_label_position('right')
@@ -121,13 +120,14 @@ def _plot_vaccination_metrics(axes, region, detailed):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    if detailed:
+        axes.axhline(100, c='black', lw=1)  # 100% line.
     _plot_metrics(axes, region.vaccination_metrics, detailed=detailed)
 
 
 def _plot_mobility_metrics(axes, region, detailed):
     """Plots metrics of population mobility."""
 
-    axes.axhline(100, c='black', lw=1)  # Identity line.
     axes.set_ylim(0, 150)
     axes.set_ylabel('% of same weekday in January')
     axes.yaxis.set_label_position('right')
@@ -135,6 +135,8 @@ def _plot_mobility_metrics(axes, region, detailed):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    if detailed:
+        axes.axhline(100, c='black', lw=1)  # Identity line.
     _plot_metrics(axes, region.mobility_metrics, detailed=detailed)
 
 
