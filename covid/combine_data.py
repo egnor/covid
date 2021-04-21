@@ -68,7 +68,6 @@ class Metric:
     order: float = 0
     increase_color: Optional[str] = None
     decrease_color: Optional[str] = None
-    peak: Optional[Tuple[pandas.Timestamp, float]] = None
     credits: Dict[str, str] = field(default_factory=dict)
 
 
@@ -107,8 +106,8 @@ class Region:
     def matches_regex(r, rx):
         rx = rx if isinstance(rx, re.Pattern) else (
             rx and re.compile(rx, re.I))
-        return bool(not rx or rx.search(r.name) or rx.search(r.path()) or
-                    rx.search(r.path().replace(' ', '_')))
+        return bool(not rx or rx.fullmatch(r.name) or rx.fullmatch(r.path()) or
+                    rx.fullmatch(r.path().replace(' ', '_')))
 
     def lookup_path(r, p):
         p = p.strip('/ ').lower()
@@ -167,34 +166,6 @@ def _world_cache_key(args):
             ''.join(f':{k}={getattr(args, k)}' for k in ks))
 
 
-def _trend_metric(c, em, ord, cred, v, raw=None, mins=None, maxs=None):
-    if not pandas.api.types.is_datetime64_any_dtype(v.index.dtype):
-        raise ValueError(f'Bad trend index dtype "{v.index.dtype}"')
-    if v.index.duplicated().any():
-        dups = v.index.duplicated(keep=False)
-        raise ValueError(f'Dup trend dates: {v.index[dups]}')
-    nonzero_is, = (v.values > 0).nonzero()  # Skip first nonzero.
-    first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(v)
-    first_i = max(0, min(first_i, len(v) - 14))
-
-    if raw is not None:
-        df = pandas.DataFrame({'raw': raw, 'value': v})
-    else:
-        smooth = v.iloc[first_i:].rolling(7).mean()
-        df = pandas.DataFrame({'raw': v, 'value': smooth})
-    if mins is not None:
-        assert mins.index is v.index
-        df['min'] = mins.iloc[first_i:].rolling(7).mean()
-    if maxs is not None:
-        assert maxs.index is v.index
-        df['max'] = maxs.iloc[first_i:].rolling(7).mean()
-
-    peak_x = df.value.idxmax()
-    peak = None if pandas.isna(peak_x) else (peak_x, df.value.loc[peak_x])
-    return Metric(
-        frame=df, color=c, emphasis=em, order=ord, credits=cred, peak=peak)
-
-
 def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
@@ -250,33 +221,40 @@ def _compute_world(session, args, vprint):
                     source_latest = source_data.last_valid_index()
                     if best_date is None or source_latest > best_date:
                         best_date, best_data = source_latest, source_data
-                return best_data
+                return best_data.Cases
 
             # COVID metrics
+            # (to avoid some data issues, use cum= to compute our own deltas)
             if 'Confirmed' in df.index:
                 confirmed = best_data('Confirmed')
-                region.totals['positives'] = confirmed.Cases.max()  # glitch
+                region.totals['positives'] = confirmed.max()  # glitch
                 region.covid_metrics['positives / 100Kp'] = _trend_metric(
                     c='tab:blue', em=1, ord=1.0, cred=unified_credits,
-                    v=confirmed.Cases_New * 1e5 / pop)
+                    cum=confirmed * 1e5 / pop)
             if 'Deaths' in df.index:
                 deaths = best_data('Deaths')
-                region.totals['deaths'] = deaths.Cases.max()  # glitch
+                region.totals['deaths'] = deaths.max()  # glitch
                 region.covid_metrics['deaths / 10Mp'] = _trend_metric(
                     c='tab:red', em=1, ord=1.1, cred=unified_credits,
-                    v=deaths.Cases_New * 1e7 / pop)
+                    cum=deaths * 1e7 / pop)
             if 'Tests' in df.index:
                 region.covid_metrics['tests / 10Kp'] = _trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=unified_credits,
-                    v=best_data('Tests').Cases_New * 1e4 / pop)
+                    cum=best_data('Tests') * 1e4 / pop)
             if 'Hospitalized' in df.index:
+                hosp = best_data('Hospitalized')
+                if 'ICU' in df.index:
+                    hosp = hosp + best_data('ICU')
                 region.covid_metrics['hosp admit / 1Mp'] = _trend_metric(
                     c='tab:orange', em=0, ord=3.0, cred=unified_credits,
-                    v=best_data('Hospitalized').Cases_New * 1e6 / pop)
+                    cum=hosp * 1e6 / pop)
             if 'Hospitalized_Now' in df.index:
+                hosp_now = best_data('Hospitalized_Now')
+                if 'ICU_Now' in df.index:
+                    hosp_now = hosp_now + best_data('ICU_Now')
                 region.covid_metrics['hosp current / 100Kp'] = _trend_metric(
                     c='tab:pink', em=0, ord=3.1, cred=unified_credits,
-                    v=best_data('Hospitalized_Now').Cases * 1e5 / pop)
+                    raw=hosp_now * 1e5 / pop)
 
             # Hydrometeorological data
             def to_f(c): return c * 1.8 + 32
@@ -288,7 +266,7 @@ def _compute_world(session, args, vprint):
                                drop=True, inplace=True)
                 region.mobility_metrics['temp °F'] = _trend_metric(
                     c='tab:gray', em=1, ord=2.0, cred=unified_credits,
-                    v=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
+                    raw=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
 
     #
     # Add baseline mortality data from CDC figures for US states.
@@ -388,23 +366,29 @@ def _compute_world(session, args, vprint):
                 continue
 
             pcfb = 'percent_change_from_baseline'  # common, long suffix
-            region.mobility_metrics.update({
+            mobility_metrics = {
                 'residential': _trend_metric(
                     c='tab:brown', em=1, ord=1.0, cred=mobility_credits,
-                    v=100 + m[f'residential_{pcfb}']),
+                    raw=100 + m[f'residential_{pcfb}']),
                 'retail / recreation': _trend_metric(
                     c='tab:orange', em=1, ord=1.1, cred=mobility_credits,
-                    v=100 + m[f'retail_and_recreation_{pcfb}']),
+                    raw=100 + m[f'retail_and_recreation_{pcfb}']),
                 'workplaces': _trend_metric(
                     c='tab:red', em=1, ord=1.2, cred=mobility_credits,
-                    v=100 + m[f'workplaces_{pcfb}']),
+                    raw=100 + m[f'workplaces_{pcfb}']),
                 'grocery / pharmacy': _trend_metric(
                     c='tab:blue', em=0, ord=1.4, cred=mobility_credits,
-                    v=100 + m[f'grocery_and_pharmacy_{pcfb}']),
+                    raw=100 + m[f'grocery_and_pharmacy_{pcfb}']),
                 'transit stations': _trend_metric(
                     'tab:purple', em=0, ord=1.5, cred=mobility_credits,
-                    v=100 + m[f'transit_stations_{pcfb}']),
-            })
+                    raw=100 + m[f'transit_stations_{pcfb}']),
+            }
+
+            # Raw daily mobility metrics are confusing, don't show them.
+            for m in mobility_metrics.values():
+                m.frame.drop(columns=['raw'])
+
+            region.mobility_metrics.update(mobility_metrics)
 
     #
     # Add vaccination statistics.
@@ -450,20 +434,20 @@ def _compute_world(session, args, vprint):
                 continue
 
             region.vaccination_metrics.update({
+                'doses allocated / 100p': _trend_metric(
+                    c='tab:gray', em=0, ord=1.0, cred=vax_credits,
+                    v=v.total_distributed * (100 / pop)),
+                'doses given / 100p': _trend_metric(
+                    c='tab:blue', em=0, ord=1.1, cred=vax_credits,
+                    v=v.total_vaccinations * (100 / pop)),
                 'people given any doses / 100p': _trend_metric(
-                    c='tab:orange', em=1, ord=1.0, cred=vax_credits,
+                    c='tab:orange', em=1, ord=1.2, cred=vax_credits,
                     v=v.people_vaccinated * (100 / pop)),
                 'people given all doses / 100p': _trend_metric(
-                    c='tab:green', em=1, ord=1.1, cred=vax_credits,
+                    c='tab:green', em=1, ord=1.3, cred=vax_credits,
                     v=v.people_fully_vaccinated * (100 / pop)),
-                'doses given / 100p': _trend_metric(
-                    c='tab:blue', em=0, ord=1.2, cred=vax_credits,
-                    v=v.total_vaccinations * (100 / pop)),
-                'doses allocated / 100p': _trend_metric(
-                    c='tab:gray', em=0, ord=1.3, cred=vax_credits,
-                    v=v.total_distributed * (100 / pop)),
-                'daily doses given / 5Kp': _trend_metric(
-                    c='tab:cyan', em=0, ord=1.3, cred=vax_credits,
+                'daily dose rate / 5Kp': _trend_metric(
+                    c='tab:cyan', em=0, ord=1.4, cred=vax_credits,
                     v=v.daily_vaccinations * (5000 / pop),
                     raw=v.daily_vaccinations_raw * (5000 / pop)),
             })
@@ -625,6 +609,45 @@ def _unified_skeleton(session):
     return world
 
 
+def _trend_metric(
+        c, em, ord, cred,
+        v=None, raw=None, cum=None, mins=None, maxs=None):
+    """Returns a Metric with data massaged appropriately."""
+
+    assert (v is not None) or (raw is not None) or (cum is not None)
+
+    if cum is not None:
+        raw = cum - cum.shift()  # Assume daily data.
+
+    if (v is not None) and (raw is not None):
+        assert v.index is raw.index
+        df = pandas.DataFrame({'raw': raw, 'value': v})
+    elif (v is not None):
+        df = pandas.DataFrame({'value': v})
+    elif (raw is not None):
+        nonzero_is, = (raw.values > 0).nonzero()  # Skip first nonzero.
+        first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
+        first_i = max(0, min(first_i, len(raw) - 14))
+        smooth = raw.iloc[first_i:].rolling(7).mean()
+        df = pandas.DataFrame({'raw': raw, 'value': smooth})
+    else:
+        raise ValueError(f'No data for metric')
+
+    if not pandas.api.types.is_datetime64_any_dtype(df.index.dtype):
+        raise ValueError(f'Bad trend index dtype "{df.index.dtype}"')
+    if df.index.duplicated().any():
+        dups = df.index.duplicated(keep=False)
+        raise ValueError(f'Dup trend dates: {df.index[dups]}')
+
+    # Assume that mins/maxs are raw and need smoothing (true so far).
+    if mins is not None:
+        df['min'] = mins.loc[df.value.first_valid_index():].rolling(7).mean()
+    if maxs is not None:
+        df['max'] = maxs.loc[df.value.first_valid_index():].rolling(7).mean()
+
+    return Metric(frame=df, color=c, emphasis=em, order=ord, credits=cred)
+
+
 if __name__ == '__main__':
     import argparse
     import signal
@@ -633,14 +656,14 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser])
-    parser.add_argument('--print_regex')
     parser.add_argument('--print_credits', action='store_true')
     parser.add_argument('--print_data', action='store_true')
+    parser.add_argument('--region_regex')
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = combine_data.get_world(session=session, args=args, verbose=True)
-    region_regex = args.print_regex and re.compile(args.print_regex, re.I)
+    region_regex = args.region_regex and re.compile(args.region_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
         if r.matches_regex(region_regex):
@@ -666,10 +689,10 @@ if __name__ == '__main__':
                     ('vax', r.vaccination_metrics),
                     ('mob', r.mobility_metrics)):
                 for name, m in metrics.items():
-                    max = (' ' * 21 if not m.peak else
-                           f' peak={m.peak[1]:<3.0f} @{m.peak[0].date()}')
                     print(f'{prefix}    {len(m.frame):3d}d '
-                          f'=>{m.frame.index.max().date()}{max} {cat}: {name}')
+                          f'=>{m.frame.index.max().date()} '
+                          f'last={m.frame.value.iloc[-1]:<3.0f} '
+                          f'{cat}: {name}')
                     if args.print_credits:
                         print(f'{prefix}        {" ".join(m.credits.values())}')
                     if args.print_data:

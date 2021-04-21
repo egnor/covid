@@ -30,8 +30,9 @@ def _write_thumb_image(region, site_dir):
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes, region)
     thumb_axes.set_ylim(0, 100)
-    _plot_covid_metrics(thumb_axes, region, show_raw=False)
-    _plot_policy_changes(thumb_axes, region, show_emoji=False)
+    _plot_covid_metrics(thumb_axes, region, detailed=False)
+    _plot_vaccination_metrics(thumb_axes, region, detailed=False)
+    _plot_policy_changes(thumb_axes, region, detailed=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
@@ -69,24 +70,26 @@ def _write_chart_image(region, site_dir):
     covid_axes, axes_list = axes_list[0], axes_list[1:]
     covid_axes.set_ylim(0, covid_max)
     _setup_xaxis(covid_axes, region, title=f'{region.short_name} COVID')
-    _plot_covid_metrics(covid_axes, region, show_raw=True)
-    _plot_policy_changes(covid_axes, region, show_emoji=True)
-    _plot_subregion_peaks(covid_axes, region)
+    _plot_covid_metrics(covid_axes, region, detailed=True)
+    _plot_policy_changes(covid_axes, region, detailed=True)
     _add_plot_legend(covid_axes)
 
     if region.vaccination_metrics:
         vax_axes, axes_list = axes_list[0], axes_list[1:]
-        _setup_xaxis(vax_axes, region, title=f'{region.short_name} vaccines')
-        _plot_vaccination_metrics(vax_axes, region)
-        _plot_policy_changes(vax_axes, region, show_emoji=False)
+        _setup_xaxis(
+            vax_axes,
+            region,
+            title=f'{region.short_name} vaccination')
+        _plot_vaccination_metrics(vax_axes, region, detailed=True)
+        _plot_policy_changes(vax_axes, region, detailed=False)
         _add_plot_legend(vax_axes)
 
     if region.mobility_metrics:
         mobility_axes, axes_list = axes_list[0], axes_list[1:]
         _setup_xaxis(
             mobility_axes, region, title=f'{region.short_name} mobility')
-        _plot_mobility_metrics(mobility_axes, region)
-        _plot_policy_changes(mobility_axes, region, show_emoji=False)
+        _plot_mobility_metrics(mobility_axes, region, detailed=True)
+        _plot_policy_changes(mobility_axes, region, detailed=False)
         _add_plot_legend(mobility_axes)
 
     fig.align_ylabels()
@@ -95,43 +98,19 @@ def _write_chart_image(region, site_dir):
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
-def _plot_subregion_peaks(axes, region):
-    (xmin, xmax), (ymin, ymax) = axes.get_xlim(), axes.get_ylim()
-
-    def pop(r): return r.totals['population']
-    rgb = matplotlib.colors.to_rgb('tab:blue')
-    xs, ys, cs, ts = [], [], [], []
-    max_p = max((pop(s) for s in region.subregions.values()), default=1)
-    for sub in sorted(region.subregions.values(), key=lambda r: -pop(r)):
-        m = sub.covid_metrics.get('positives / 100Kp')
-        if m and m.peak and matplotlib.dates.date2num(m.peak[0]) >= xmin:
-            xs.append(m.peak[0])
-            ys.append(min(m.peak[1], ymax))
-            cs.append(rgb + (max(0.2, (pop(sub) / max_p) ** 0.5),))
-            ts.append(sub.short_name.replace(' ', '')[:3])
-
-    if xs:
-        _add_to_legend(axes, axes.scatter(
-            xs, ys, c=cs, marker=6, label='subdiv peak positives'), order=+5)
-        for x, y, c, t in zip(xs, ys, cs, ts):
-            axes.annotate(
-                t, c=c, xy=(x, y), ha='center', va='top',
-                xytext=(0, -15), textcoords='offset pixels')
-
-
-def _plot_covid_metrics(axes, region, show_raw):
+def _plot_covid_metrics(axes, region, detailed):
     """Plots COVID case-related metrics."""
 
     # (This function does not set ylim.)
-    axes.set_ylabel('number per capita')
+    axes.set_ylabel('daily change per capita')
     axes.yaxis.set_label_position('right')
     axes.yaxis.tick_right()
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-    _plot_metrics(axes, region.covid_metrics, show_raw=show_raw)
+    _plot_metrics(axes, region.covid_metrics, detailed=detailed)
 
 
-def _plot_vaccination_metrics(axes, region):
+def _plot_vaccination_metrics(axes, region, detailed):
     """Plots COVID vaccination metrics."""
 
     axes.axhline(100, c='black', lw=1)  # 100% line.
@@ -142,10 +121,10 @@ def _plot_vaccination_metrics(axes, region):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    _plot_metrics(axes, region.vaccination_metrics, show_raw=True)
+    _plot_metrics(axes, region.vaccination_metrics, detailed=detailed)
 
 
-def _plot_mobility_metrics(axes, region):
+def _plot_mobility_metrics(axes, region, detailed):
     """Plots metrics of population mobility."""
 
     axes.axhline(100, c='black', lw=1)  # Identity line.
@@ -156,16 +135,18 @@ def _plot_mobility_metrics(axes, region):
     axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    _plot_metrics(axes, region.mobility_metrics, show_raw=False)
+    _plot_metrics(axes, region.mobility_metrics, detailed=detailed)
 
 
-def _plot_metrics(axes, metrics, show_raw):
+def _plot_metrics(axes, metrics, detailed):
     for name, m in sorted(metrics.items(), key=lambda nm: nm[1].order):
+        if m.emphasis < 1 and not detailed:
+            continue
         width = 4 if m.emphasis >= 1 else 2
         style = '-' if m.emphasis >= 0 else '--'
         alpha = 1.0 if m.emphasis >= 0 else 0.5
         zorder = 2.0 - m.order / 100
-        if show_raw and ('raw' in m.frame.columns):
+        if detailed and ('raw' in m.frame.columns):
             axes.plot(
                 m.frame.index, m.frame.raw,
                 c=m.color, alpha=alpha * 0.5, zorder=zorder + 0.001,
@@ -185,7 +166,7 @@ def _plot_metrics(axes, metrics, show_raw):
                 c=m.color, alpha=alpha, zorder=zorder, lw=width, ls=style))
 
 
-def _plot_policy_changes(axes, region, show_emoji):
+def _plot_policy_changes(axes, region, detailed):
     """Plots important policy changes."""
 
     date_changes = {}
@@ -197,23 +178,25 @@ def _plot_policy_changes(axes, region, show_emoji):
         color = 'tab:orange' if s > 0 else 'tab:blue' if s else 'tab:gray'
         axes.axvline(date, c=color, lw=2, ls='--', alpha=0.7, zorder=1)
 
-    if any(changes[0].score < 0 for changes in date_changes.values()):
-        _add_to_legend(axes, matplotlib.lines.Line2D(
-            [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
-            label='closing changes'))
-    if any(changes[0].score > 0 for changes in date_changes.values()):
-        _add_to_legend(axes, matplotlib.lines.Line2D(
-            [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
-            label='reopening changes'))
+    if detailed:
+        if any(changes[0].score < 0 for changes in date_changes.values()):
+            _add_to_legend(axes, matplotlib.lines.Line2D(
+                [], [], c='tab:blue', lw=2, ls='--', alpha=0.7,
+                label='closing changes'))
 
-    if date_changes and show_emoji:
-        top = axes.secondary_xaxis('top')
-        top.set_xticks(list(date_changes.keys()))
-        top.set_xticklabels(
-            ['\n'.join(c.emoji.replace('\uFE0F', '') for c in changes)
-             for changes in date_changes.values()],
-            fontdict=dict(fontsize=15), linespacing=1.1,
-            font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf')
+        if any(changes[0].score > 0 for changes in date_changes.values()):
+            _add_to_legend(axes, matplotlib.lines.Line2D(
+                [], [], c='tab:orange', lw=2, ls='--', alpha=0.7,
+                label='reopening changes'))
+
+        if date_changes:
+            top = axes.secondary_xaxis('top')
+            top.set_xticks(list(date_changes.keys()))
+            top.set_xticklabels(
+                ['\n'.join(c.emoji.replace('\uFE0F', '') for c in changes)
+                 for changes in date_changes.values()],
+                fontdict=dict(fontsize=15), linespacing=1.1,
+                font=pathlib.Path(__file__).parent / 'NotoColorEmoji.ttf')
 
 
 def _setup_xaxis(axes, region, title=None, titlesize=45):

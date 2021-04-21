@@ -241,7 +241,7 @@ if __name__ == '__main__':
     id_regex = args.id_regex and re.compile(args.id_regex, re.I)
     hydromet_by_id = hydromet.groupby(level='ID')
     for id, c_data in covid.groupby(level='ID'):
-        if id_regex and not id_regex.match(id):
+        if id_regex and not id_regex.fullmatch(id):
             continue
 
         p = places[id]

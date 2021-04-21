@@ -35,13 +35,18 @@ def get_counties(session):
         html_response = session.get(html_url)
         html_response.raise_for_status()
         html = bs4.BeautifulSoup(html_response.text, features='html.parser')
-        targets = [
-            urllib.parse.urljoin(html_url, l['href'])
-            for l in html.find_all(name='a')
-            if l.get('href', '').endswith('.xlsx')]
-        if not targets:
+
+        found = False
+        for anchor in html.find_all(name='a'):
+            href = anchor.get('href')
+            if href:
+                url = urllib.parse.urljoin(html_url, href)
+                if urllib.parse.urlparse(url).path.endswith('.xlsx'):
+                    found = True
+                    xlsx_urls.add(url)
+
+        if not found:
             warnings.warn(f'No CA .xlsx links found: {html_url}')
-        xlsx_urls.update(targets)
 
     if not xlsx_urls:
         warnings.warn(f'No CA blueprint .xlsx files found!')
