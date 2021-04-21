@@ -278,7 +278,7 @@ def _compute_world(session, args, vprint):
         vprint('Loading and merging CDC mortality data...')
         cdc_credits = fetch_cdc_mortality.credits()
         cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-        y2020 = pandas.DatetimeIndex(['2020-01-01', '2020-12-31'], tz='UTC')
+        y2020 = pandas.DatetimeIndex(['2020-01-01', '2021-12-31'], tz='UTC')
         for mort in cdc_mortality.itertuples(name='Mortality'):
             region = region_by_fips.get(mort.Index)
             if region is None:
@@ -410,7 +410,7 @@ def _compute_world(session, args, vprint):
 
             country = pycountry.countries.get(alpha_3=iso)
             if country is None:
-                warnings.warn(f'Bad ourworldindata country code: {iso}')
+                warnings.warn(f'Unknown ourworldindata country code: {iso}')
                 continue
 
             region = region_by_iso.get(country.alpha_2)
@@ -421,7 +421,7 @@ def _compute_world(session, args, vprint):
                 # Data includes "New York State", lookup() needs "New York"
                 state = us.states.lookup(s.replace(' State', ''))
                 if not state:
-                    warnings.warn(f'Bad ourworldindata state: {s}')
+                    warnings.warn(f'Unknown ourworldindata state: {s}')
                     continue
                 region = region_by_fips.get(int(state.fips))
                 if region is None:
@@ -432,6 +432,11 @@ def _compute_world(session, args, vprint):
             if not pop:
                 warn(f'No population for ourworldindata: {region.path}')
                 continue
+
+            v.total_distributed.fillna(method='ffill', inplace=True)
+            v.total_vaccinations.fillna(method='ffill', inplace=True)
+            v.people_vaccinated.fillna(method='ffill', inplace=True)
+            v.people_fully_vaccinated.fillna(method='ffill', inplace=True)
 
             region.vaccination_metrics.update({
                 'doses allocated / 100p': _trend_metric(
