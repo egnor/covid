@@ -386,7 +386,7 @@ def _compute_world(session, args, vprint):
 
             # Raw daily mobility metrics are confusing, don't show them.
             for m in mobility_metrics.values():
-                m.frame.drop(columns=['raw'])
+                m.frame.drop(columns=['raw'], inplace=True)
 
             region.mobility_metrics.update(mobility_metrics)
 
