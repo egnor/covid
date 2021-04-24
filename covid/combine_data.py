@@ -208,7 +208,7 @@ def _compute_world(session, args, vprint):
         for uid, df in unified_covid.groupby(level='ID', sort=False):
             region = region_by_uid.get(uid)
             if not region:
-                continue  # Filtered out for one reason or another.
+                continue  # Taken out of the skeleton for some reason.
 
             pop = region.totals['population']
             df.reset_index(level='ID', drop=True, inplace=True)
@@ -216,12 +216,12 @@ def _compute_world(session, args, vprint):
             def best_data(type):
                 for_type = df.xs(type)
                 best_date, best_data = None, None
-                for source, source_data in df.xs(type).groupby(level='Source'):
-                    source_data = source_data.droplevel(level='Source')
-                    source_latest = source_data.last_valid_index()
-                    if best_date is None or source_latest > best_date:
-                        best_date, best_data = source_latest, source_data
-                return best_data.Cases
+                for source, s_data in df.xs(type).groupby(level='Source'):
+                    s_data = s_data.droplevel(level='Source').Cases
+                    s_date = s_data[s_data > 0].last_valid_index()
+                    if best_date is None or s_date > best_date:
+                        best_date, best_data = s_date, s_data
+                return best_data
 
             # COVID metrics
             # (to avoid some data issues, use cum= to compute our own deltas)
