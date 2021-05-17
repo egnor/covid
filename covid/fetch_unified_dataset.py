@@ -138,9 +138,9 @@ def get_covid(session):
         df = df[(df.Age == 'Total') & (df.Sex == 'Total')]
         df.drop(columns=['Age', 'Sex'], inplace=True)
         df.Date = pandas.to_datetime(df.Date, utc=True)
-        for c in ('Cases', 'Cases_New'):
-            df[c].fillna(0, inplace=True)
-            df[c] = df[c].astype(int)
+        # for c in ('Cases', 'Cases_New'):
+        #     df[c].fillna(0, inplace=True)
+        #     df[c] = df[c].astype(int)
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
