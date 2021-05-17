@@ -51,7 +51,7 @@ def get_events(session):
         'Information', 'Vaccine Distribution', 'Vote By Mail',
         'Racial Disparities', 'Codebook', 'Notes/Details',
         'Pre-COVID UI Monetary Eligibility Thresholds', 'Minimum Wage',
-        'Unemployment Insurance',
+        'Workplace Protections', 'Unemployment Insurance',
     ]
 
     for tab_json in fetch_json['valueRanges']:
@@ -158,10 +158,14 @@ def get_events(session):
                 -2 if 'closed bars' in norm else
                 -2 if 'close bars' in norm else
                 -1 if 'physical distance closures' in area_norm else
-                +2 if 'reopen businesses' in norm else
-                +2 if 'reopen restaurants' in norm else
                 +2 if 'reopen bars' in norm else
+                +2 if 'reopen businesses' in norm else
                 +2 if 'reopen non-essential retail' in norm else
+                +2 if 'reopen restaurants' in norm else
+                +2 if 'reopened businesses' in norm else
+                +2 if 'reopened bars' in norm else
+                +2 if 'reopened non-essential retail' in norm else
+                +2 if 'reopened restaurants' in norm else
                 +1 if 'reopening' in area_norm else
                 -2 if 're-close indoor dining' in norm else
                 -2 if 're-close bars' in norm else
