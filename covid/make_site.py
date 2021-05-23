@@ -195,13 +195,13 @@ def main():
     print(f'Generating {len(all_regions)} pages in {args.site_dir}...')
     style.write_style_files(args.site_dir)
 
-    # Recurse for subregions.
+    # Process regions using multiple cores.
     processes = args.processes or os.cpu_count() * 2
     chunk_size = args.chunk_size or max(1, len(all_regions) // (4 * processes))
     with multiprocessing.Pool(processes=args.processes) as pool:
         pool.starmap(
             make_region_page, ((r, args) for r in all_regions),
-            chunksize=args.chunk_size)
+            chunksize=chunk_size)
 
 
 if __name__ == '__main__':
