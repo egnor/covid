@@ -57,6 +57,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r'|Unknown ourworldindata state: Republic of Palau'
     r'|Unknown ourworldindata state: United States'
     r'|Unknown ourworldindata state: Veterans Health'
+    r'|Bad cases: World/BR/PE/Quixaba .*'
 )
 
 
@@ -226,17 +227,27 @@ def _compute_world(session, args, vprint):
             # COVID metrics
             # (to avoid some data issues, use cum= to compute our own deltas)
             if 'Confirmed' in df.index:
-                confirmed = best_data('Confirmed')
-                region.totals['positives'] = confirmed.max()  # glitch
-                region.covid_metrics['positives / 100Kp'] = _trend_metric(
-                    c='tab:blue', em=1, ord=1.0, cred=unified_credits,
-                    cum=confirmed * 1e5 / pop)
+                cases = best_data('Confirmed')
+                cases_total = cases.max()  # avoid glitches
+                if cases_total < 0 or cases_total > pop:
+                    warnings.warn(
+                        f"Bad cases: {region.path()} ({cases_total}/{pop}p)")
+                else:
+                    region.totals['positives'] = cases_total
+                    region.covid_metrics['positives / 100Kp'] = _trend_metric(
+                        c='tab:blue', em=1, ord=1.0, cred=unified_credits,
+                        cum=cases * 1e5 / pop)
             if 'Deaths' in df.index:
                 deaths = best_data('Deaths')
-                region.totals['deaths'] = deaths.max()  # glitch
-                region.covid_metrics['deaths / 10Mp'] = _trend_metric(
-                    c='tab:red', em=1, ord=1.1, cred=unified_credits,
-                    cum=deaths * 1e7 / pop)
+                deaths_total = deaths.max()  # avoid glitches
+                if deaths_total < 0 or deaths_total > pop:
+                    warnings.warn(
+                        f"Bad deaths: {region.path()} ({deaths_total}/{pop}p)")
+                else:
+                    region.totals['deaths'] = deaths_total
+                    region.covid_metrics['deaths / 10Mp'] = _trend_metric(
+                        c='tab:red', em=1, ord=1.1, cred=unified_credits,
+                        cum=deaths * 1e7 / pop)
             if 'Tests' in df.index:
                 region.covid_metrics['tests / 10Kp'] = _trend_metric(
                     c='tab:green', em=0, ord=2.0, cred=unified_credits,
