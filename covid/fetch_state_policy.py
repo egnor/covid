@@ -98,7 +98,7 @@ def get_events(session):
 
             if all(r[c] in ('0', '') for r in rows):
                 continue  # Empty data
-            elif all(r[c] in ('0', '1') for r in rows):
+            elif all(r[c] in ('0', '1', '.') for r in rows):
                 ctype = bool
             elif all(r[c] in ('', '0', '1', '^') or '/' in r[c] for r in rows):
                 ctype = pandas.Timestamp
@@ -172,6 +172,8 @@ def get_events(session):
                 -1 if 're-close' in norm else
                 +2 if ('ended statewide' in norm and 'masks' in area_norm) else
                 +2 if ('prevent local' in norm and 'masks' in area_norm) else
+                +2 if ('mandate end' in norm and 'masks' in area_norm) else
+                -2 if ('mandate start' in norm and 'masks' in area_norm) else
                 -2 if ('public spaces' in norm and 'masks' in area_norm) else
                 -1 if 'masks' in area_norm else
                 +1 if 'quarantines ended' in norm else
