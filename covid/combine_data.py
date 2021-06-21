@@ -43,6 +43,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r'No COVID metrics: World/EH.*'
     r'|Underpopulation: World/DK .*'
     r'|Underpopulation: World/FR .*'
+    r'|Underpopulation: World/NZ .*'
     r'|Underpopulation: World/PE/CAL .*'
     r'|Overpopulation: World/CL(/..)? .*'
     r'|Overpopulation: World/CO(/...)? .*'
