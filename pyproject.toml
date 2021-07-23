@@ -20,12 +20,11 @@ pycountry = "^20.7.3"
 cartopy = "^0.18.0"
 scipy = "^1.5.2"
 moviepy = "^1.0.3"
-numpy = "^1.19.1"
 pyreadr = "^0.3.4"
 xlrd = "^1.2.0"
 beautifulsoup4 = "^4.9.2"
 addfips = "^0.2.2"
-pyarrow = "^2.0.0"
+numpy = "^1.21.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"
