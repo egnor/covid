@@ -25,6 +25,8 @@ xlrd = "^1.2.0"
 beautifulsoup4 = "^4.9.2"
 addfips = "^0.2.2"
 numpy = "^1.21.1"
+charset_normalizer = "^2.0.3"
+pyarrow = "^4.0.1"
 
 [tool.poetry.dev-dependencies]
 autopep8 = "^1.5.3"
