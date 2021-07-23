@@ -41,6 +41,9 @@ argument_group.add_argument('--no_unified_hydromet', action='store_true')
 
 KNOWN_WARNINGS_REGEX = re.compile(
     r'No COVID metrics: World/EH.*'
+    r'|Underpopulation: World/CL(/..)? .*'
+    r'|Underpopulation: World/CO(/...)? .*'
+    r'|Underpopulation: World/PE(/...)? .*'
     r'|Underpopulation: World/DK .*'
     r'|Underpopulation: World/FR .*'
     r'|Underpopulation: World/NZ .*'
