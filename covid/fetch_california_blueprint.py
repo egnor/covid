@@ -79,7 +79,7 @@ def get_counties(session):
 
 
 def _counties_from_xlsx(session, xlsx_url):
-    # Impute a date from the URL.
+    # Infer a date from the URL.
     filename = xlsx_url.split('/')[-1]
     date_match = re.search(r'[01][0-9][0123][0-9][2][01]', filename)
     if not date_match:

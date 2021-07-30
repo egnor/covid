@@ -62,6 +62,8 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r'|Unknown ourworldindata state: United States'
     r'|Unknown ourworldindata state: Veterans Health'
     r'|Bad cases: World/BR/PE/Quixaba .*'
+    r'|Bad cases: World/BR/RS/Santa .*'
+    r'|Cannot parse header or footer so it will be ignored'  # xlsx parser
 )
 
 

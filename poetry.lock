@@ -1,30 +1,30 @@
 [[package]]
-category = "main"
-description = "Add county FIPS to tabular data"
 name = "addfips"
+version = "0.2.2"
+description = "Add county FIPS to tabular data"
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.2.2"
 
 [[package]]
-category = "dev"
-description = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
 name = "autopep8"
+version = "1.5.7"
+description = "A tool that automatically formats Python code to conform to the PEP 8 style guide"
+category = "dev"
 optional = false
 python-versions = "*"
-version = "1.5.7"
 
 [package.dependencies]
 pycodestyle = ">=2.7.0"
 toml = "*"
 
 [[package]]
-category = "main"
-description = "Screen-scraping library"
 name = "beautifulsoup4"
+version = "4.9.3"
+description = "Screen-scraping library"
+category = "main"
 optional = false
 python-versions = "*"
-version = "4.9.3"
 
 [package.dependencies]
 soupsieve = {version = ">1.2", markers = "python_version >= \"3.0\""}
@@ -34,29 +34,29 @@ html5lib = ["html5lib"]
 lxml = ["lxml"]
 
 [[package]]
-category = "main"
-description = "httplib2 caching for requests"
 name = "cachecontrol"
+version = "0.12.6"
+description = "httplib2 caching for requests"
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "0.12.6"
 
 [package.dependencies]
+lockfile = {version = ">=0.9", optional = true, markers = "extra == \"filecache\""}
 msgpack = ">=0.5.2"
 requests = "*"
-lockfile = {version = ">=0.9", optional = true, markers = "extra == \"filecache\""}
 
 [package.extras]
 filecache = ["lockfile (>=0.9)"]
 redis = ["redis (>=2.10.5)"]
 
 [[package]]
-category = "main"
-description = "A cartographic python library with Matplotlib support for visualisation"
 name = "cartopy"
+version = "0.18.0"
+description = "A cartographic python library with Matplotlib support for visualisation"
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "0.18.0"
 
 [package.dependencies]
 numpy = ">=1.10"
@@ -71,74 +71,82 @@ plotting = ["matplotlib (>=1.5.1)", "GDAL (>=1.10.0)", "pillow (>=1.7.8)", "scip
 tests = ["filelock", "mock (>=1.0.1)", "pytest (>=3.0.0)"]
 
 [[package]]
-category = "main"
-description = "Python package for providing Mozilla's CA Bundle."
 name = "certifi"
+version = "2021.5.30"
+description = "Python package for providing Mozilla's CA Bundle."
+category = "main"
 optional = false
 python-versions = "*"
-version = "2021.5.30"
 
 [[package]]
-category = "main"
-description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
 name = "charset-normalizer"
+version = "2.0.3"
+description = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
+category = "main"
 optional = false
 python-versions = ">=3.5.0"
-version = "2.0.3"
 
 [package.extras]
 unicode_backport = ["unicodedata2"]
 
 [[package]]
-category = "main"
-description = "Cross-platform colored terminal text."
 name = "colorama"
+version = "0.4.4"
+description = "Cross-platform colored terminal text."
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "0.4.4"
 
 [[package]]
-category = "main"
-description = "Composable style cycles"
 name = "cycler"
+version = "0.10.0"
+description = "Composable style cycles"
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.10.0"
 
 [package.dependencies]
 six = "*"
 
 [[package]]
-category = "main"
-description = "Decorators for Humans"
 name = "decorator"
+version = "4.4.2"
+description = "Decorators for Humans"
+category = "main"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
-version = "4.4.2"
 
 [[package]]
-category = "main"
-description = "Dominate is a Python library for creating and manipulating HTML documents using an elegant DOM API."
 name = "dominate"
+version = "2.6.0"
+description = "Dominate is a Python library for creating and manipulating HTML documents using an elegant DOM API."
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "2.6.0"
 
 [[package]]
+name = "et-xmlfile"
+version = "1.1.0"
+description = "An implementation of lxml.xmlfile for the standard library"
 category = "main"
-description = "Internationalized Domain Names in Applications (IDNA)"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "idna"
+version = "3.2"
+description = "Internationalized Domain Names in Applications (IDNA)"
+category = "main"
 optional = false
 python-versions = ">=3.5"
-version = "3.2"
 
 [[package]]
-category = "main"
-description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats."
 name = "imageio"
+version = "2.9.0"
+description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats."
+category = "main"
 optional = false
 python-versions = ">=3.5"
-version = "2.9.0"
 
 [package.dependencies]
 numpy = "*"
@@ -152,44 +160,44 @@ gdal = ["gdal"]
 itk = ["itk"]
 
 [[package]]
-category = "main"
-description = "FFMPEG wrapper for Python"
 name = "imageio-ffmpeg"
+version = "0.4.4"
+description = "FFMPEG wrapper for Python"
+category = "main"
 optional = false
 python-versions = ">=3.4"
-version = "0.4.4"
 
 [[package]]
-category = "main"
-description = "a library for doing approximate and phonetic matching of strings."
 name = "jellyfish"
+version = "0.6.1"
+description = "a library for doing approximate and phonetic matching of strings."
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.6.1"
 
 [[package]]
-category = "main"
-description = "A fast implementation of the Cassowary constraint solver"
 name = "kiwisolver"
+version = "1.3.1"
+description = "A fast implementation of the Cassowary constraint solver"
+category = "main"
 optional = false
 python-versions = ">=3.6"
-version = "1.3.1"
 
 [[package]]
-category = "main"
-description = "Platform-independent file locking module"
 name = "lockfile"
+version = "0.12.2"
+description = "Platform-independent file locking module"
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.12.2"
 
 [[package]]
-category = "main"
-description = "Python plotting package"
 name = "matplotlib"
+version = "3.4.2"
+description = "Python plotting package"
+category = "main"
 optional = false
 python-versions = ">=3.7"
-version = "3.4.2"
 
 [package.dependencies]
 cycler = ">=0.10"
@@ -200,28 +208,24 @@ pyparsing = ">=2.2.1"
 python-dateutil = ">=2.7"
 
 [[package]]
-category = "main"
-description = "Video editing with Python"
 name = "moviepy"
+version = "1.0.3"
+description = "Video editing with Python"
+category = "main"
 optional = false
 python-versions = "*"
-version = "1.0.3"
 
 [package.dependencies]
 decorator = ">=4.0.2,<5.0"
+imageio = {version = ">=2.5,<3.0", markers = "python_version >= \"3.4\""}
+imageio_ffmpeg = {version = ">=0.2.0", markers = "python_version >= \"3.4\""}
+numpy = [
+    {version = ">=1.17.3", markers = "python_version != \"2.7\""},
+    {version = "*", markers = "python_version >= \"2.7\""},
+]
 proglog = "<=1.0.0"
 requests = ">=2.8.1,<3.0"
 tqdm = ">=4.11.2,<5.0"
-imageio = {version = ">=2.5,<3.0", markers = "python_version >= \"3.4\""}
-imageio_ffmpeg = {version = ">=0.2.0", markers = "python_version >= \"3.4\""}
-
-[[package.dependencies.numpy]]
-markers = "python_version != \"2.7\""
-version = ">=1.17.3"
-
-[[package.dependencies.numpy]]
-markers = "python_version >= \"2.7\""
-version = "*"
 
 [package.extras]
 doc = ["numpydoc (>=0.6.0,<1.0)", "sphinx_rtd_theme (>=0.1.10b0,<1.0)", "Sphinx (>=1.5.2,<2.0)", "pygame (>=1.9.3,<2.0)"]
@@ -229,12 +233,12 @@ optional = ["youtube-dl", "opencv-python (>=3.0,<4.0)", "scipy (>=0.19.0,<1.5)",
 test = ["coverage (<5.0)", "coveralls (>=1.1,<2.0)", "pytest-cov (>=2.5.1,<3.0)", "pytest (>=3.0.0,<4.0)", "requests (>=2.8.1,<3.0)"]
 
 [[package]]
-category = "main"
-description = "A (new) cairo backend for Matplotlib."
 name = "mplcairo"
+version = "0.3"
+description = "A (new) cairo backend for Matplotlib."
+category = "main"
 optional = false
 python-versions = ">=3.6"
-version = "0.3"
 
 [package.dependencies]
 matplotlib = ">=2.2"
@@ -242,28 +246,39 @@ pillow = "*"
 pycairo = {version = ">=1.16.0", markers = "os_name == \"posix\""}
 
 [[package]]
-category = "main"
-description = "MessagePack (de)serializer."
 name = "msgpack"
+version = "1.0.2"
+description = "MessagePack (de)serializer."
+category = "main"
 optional = false
 python-versions = "*"
-version = "1.0.2"
 
 [[package]]
-category = "main"
-description = "NumPy is the fundamental package for array computing with Python."
 name = "numpy"
+version = "1.21.1"
+description = "NumPy is the fundamental package for array computing with Python."
+category = "main"
 optional = false
 python-versions = ">=3.7"
-version = "1.21.1"
 
 [[package]]
+name = "openpyxl"
+version = "3.0.7"
+description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
 category = "main"
-description = "Powerful data structures for data analysis, time series, and statistics"
+optional = false
+python-versions = ">=3.6,"
+
+[package.dependencies]
+et-xmlfile = "*"
+
+[[package]]
 name = "pandas"
+version = "1.3.0"
+description = "Powerful data structures for data analysis, time series, and statistics"
+category = "main"
 optional = false
 python-versions = ">=3.7.1"
-version = "1.3.0"
 
 [package.dependencies]
 numpy = ">=1.17.3"
@@ -274,140 +289,141 @@ pytz = ">=2017.3"
 test = ["hypothesis (>=3.58)", "pytest (>=6.0)", "pytest-xdist"]
 
 [[package]]
-category = "main"
-description = "Python Imaging Library (Fork)"
 name = "pillow"
+version = "8.3.1"
+description = "Python Imaging Library (Fork)"
+category = "main"
 optional = false
 python-versions = ">=3.6"
-version = "8.3.1"
 
 [[package]]
-category = "main"
-description = "Log and progress bar manager for console, notebooks, web..."
 name = "proglog"
+version = "0.1.9"
+description = "Log and progress bar manager for console, notebooks, web..."
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.1.9"
 
 [package.dependencies]
 tqdm = "*"
 
 [[package]]
-category = "main"
-description = "Python library for Apache Arrow"
 name = "pyarrow"
+version = "4.0.1"
+description = "Python library for Apache Arrow"
+category = "main"
 optional = false
 python-versions = ">=3.6"
-version = "4.0.1"
 
 [package.dependencies]
 numpy = ">=1.16.6"
 
 [[package]]
-category = "main"
-description = "Python interface for cairo"
 name = "pycairo"
+version = "1.20.1"
+description = "Python interface for cairo"
+category = "main"
 optional = false
 python-versions = ">=3.6, <4"
-version = "1.20.1"
 
 [[package]]
-category = "dev"
-description = "Python style guide checker"
 name = "pycodestyle"
+version = "2.7.0"
+description = "Python style guide checker"
+category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "2.7.0"
 
 [[package]]
-category = "main"
-description = "ISO country, subdivision, language, currency and script definitions and their translations"
 name = "pycountry"
+version = "20.7.3"
+description = "ISO country, subdivision, language, currency and script definitions and their translations"
+category = "main"
 optional = false
 python-versions = "*"
-version = "20.7.3"
 
 [[package]]
-category = "main"
-description = "Python parsing module"
 name = "pyparsing"
+version = "2.4.7"
+description = "Python parsing module"
+category = "main"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-version = "2.4.7"
 
 [[package]]
-category = "main"
-description = "Reads/writes R RData and Rds files into/from pandas data frames."
 name = "pyreadr"
+version = "0.3.9"
+description = "Reads/writes R RData and Rds files into/from pandas data frames."
+category = "main"
 optional = false
 python-versions = "*"
-version = "0.3.9"
 
 [package.dependencies]
 pandas = ">0.24.0"
 
 [[package]]
-category = "main"
-description = "Pure Python read/write support for ESRI Shapefile format"
 name = "pyshp"
+version = "2.1.3"
+description = "Pure Python read/write support for ESRI Shapefile format"
+category = "main"
 optional = false
 python-versions = ">= 2.7"
-version = "2.1.3"
 
 [[package]]
-category = "main"
-description = "Extensions to the standard Python datetime module"
 name = "python-dateutil"
+version = "2.8.2"
+description = "Extensions to the standard Python datetime module"
+category = "main"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
-version = "2.8.2"
 
 [package.dependencies]
 six = ">=1.5"
 
 [[package]]
-category = "main"
-description = "World timezone definitions, modern and historical"
 name = "pytz"
+version = "2021.1"
+description = "World timezone definitions, modern and historical"
+category = "main"
 optional = false
 python-versions = "*"
-version = "2021.1"
 
 [[package]]
-category = "main"
-description = "Python HTTP for Humans."
 name = "requests"
+version = "2.26.0"
+description = "Python HTTP for Humans."
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*"
-version = "2.26.0"
 
 [package.dependencies]
 certifi = ">=2017.4.17"
-urllib3 = ">=1.21.1,<1.27"
+charset-normalizer = {version = ">=2.0.0,<2.1.0", markers = "python_version >= \"3\""}
 idna = {version = ">=2.5,<4", markers = "python_version >= \"3\""}
+urllib3 = ">=1.21.1,<1.27"
 
 [package.extras]
-socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7)", "win-inet-pton"]
+socks = ["PySocks (>=1.5.6,!=1.5.7)", "win-inet-pton"]
 use_chardet_on_py3 = ["chardet (>=3.0.2,<5)"]
 
 [[package]]
-category = "main"
-description = "SciPy: Scientific Library for Python"
 name = "scipy"
+version = "1.6.1"
+description = "SciPy: Scientific Library for Python"
+category = "main"
 optional = false
 python-versions = ">=3.7"
-version = "1.6.1"
 
 [package.dependencies]
 numpy = ">=1.16.5"
 
 [[package]]
-category = "main"
-description = "Geometric objects, predicates, and operations"
 name = "shapely"
+version = "1.7.1"
+description = "Geometric objects, predicates, and operations"
+category = "main"
 optional = false
 python-versions = "*"
-version = "1.7.1"
 
 [package.extras]
 all = ["numpy", "pytest", "pytest-cov"]
@@ -415,36 +431,36 @@ test = ["pytest", "pytest-cov"]
 vectorized = ["numpy"]
 
 [[package]]
-category = "main"
-description = "Python 2 and 3 compatibility utilities"
 name = "six"
+version = "1.16.0"
+description = "Python 2 and 3 compatibility utilities"
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
-version = "1.16.0"
 
 [[package]]
-category = "main"
-description = "A modern CSS selector implementation for Beautiful Soup."
 name = "soupsieve"
+version = "2.2.1"
+description = "A modern CSS selector implementation for Beautiful Soup."
+category = "main"
 optional = false
 python-versions = ">=3.6"
-version = "2.2.1"
 
 [[package]]
-category = "dev"
-description = "Python Library for Tom's Obvious, Minimal Language"
 name = "toml"
+version = "0.10.2"
+description = "Python Library for Tom's Obvious, Minimal Language"
+category = "dev"
 optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-version = "0.10.2"
 
 [[package]]
-category = "main"
-description = "Fast, Extensible Progress Meter"
 name = "tqdm"
+version = "4.61.2"
+description = "Fast, Extensible Progress Meter"
+category = "main"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
-version = "4.61.2"
 
 [package.dependencies]
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
@@ -455,52 +471,41 @@ notebook = ["ipywidgets (>=6)"]
 telegram = ["requests"]
 
 [[package]]
-category = "main"
-description = "HTTP library with thread-safe connection pooling, file post, and more."
 name = "urllib3"
+version = "1.26.6"
+description = "HTTP library with thread-safe connection pooling, file post, and more."
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, <4"
-version = "1.26.6"
 
 [package.extras]
 brotli = ["brotlipy (>=0.6.0)"]
 secure = ["pyOpenSSL (>=0.14)", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "certifi", "ipaddress"]
-socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7,<2.0)"]
+socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
 
 [[package]]
-category = "main"
-description = "US state meta information and other fun stuff"
 name = "us"
+version = "2.0.2"
+description = "US state meta information and other fun stuff"
+category = "main"
 optional = false
 python-versions = "*"
-version = "2.0.2"
 
 [package.dependencies]
 jellyfish = "0.6.1"
 
 [[package]]
-category = "dev"
-description = "A built-package format for Python"
-name = "wheel"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "0.34.2"
-
-[package.extras]
-test = ["pytest (>=3.0.0)", "pytest-cov"]
-
-[[package]]
-category = "main"
-description = "Library for developers to extract data from Microsoft Excel (tm) spreadsheet files"
 name = "xlrd"
+version = "1.2.0"
+description = "Library for developers to extract data from Microsoft Excel (tm) spreadsheet files"
+category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
-version = "1.2.0"
 
 [metadata]
-content-hash = "120bb220ba8e8032194dcfa307668ed5a417013c157dad8cace1c1097414a665"
 lock-version = "1.1"
 python-versions = "^3.8"
+content-hash = "d985edc335455fe8cdd4b8debc4827a491569ef1dd1e8b7a972605c48c9fb9d8"
 
 [metadata.files]
 addfips = [
@@ -545,6 +550,10 @@ decorator = [
 dominate = [
     {file = "dominate-2.6.0-py2.py3-none-any.whl", hash = "sha256:84b5f71ed30021193cb0faa45d7776e1083f392cfe67a49f44e98cb2ed76c036"},
     {file = "dominate-2.6.0.tar.gz", hash = "sha256:76ec2cde23700a6fc4fee098168b9dee43b99c2f1dd0ca6a711f683e8eb7e1e4"},
+]
+et-xmlfile = [
+    {file = "et_xmlfile-1.1.0-py3-none-any.whl", hash = "sha256:a2ba85d1d6a74ef63837eed693bcb89c3f752169b0e3e7ae5b16ca5e1b3deada"},
+    {file = "et_xmlfile-1.1.0.tar.gz", hash = "sha256:8eb9e2bc2f8c97e37a2dc85a09ecdcdec9d8a396530a6d5a33b30b9a92da0c5c"},
 ]
 idna = [
     {file = "idna-3.2-py3-none-any.whl", hash = "sha256:14475042e284991034cb48e06f6851428fb14c4dc953acd9be9a5e95c7b6dd7a"},
@@ -698,6 +707,10 @@ numpy = [
     {file = "numpy-1.21.1-cp39-cp39-win_amd64.whl", hash = "sha256:01721eefe70544d548425a07c80be8377096a54118070b8a62476866d5208e33"},
     {file = "numpy-1.21.1-pp37-pypy37_pp73-manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:2d4d1de6e6fb3d28781c73fbde702ac97f03d79e4ffd6598b880b2d95d62ead4"},
     {file = "numpy-1.21.1.zip", hash = "sha256:dff4af63638afcc57a3dfb9e4b26d434a7a602d225b42d746ea7fe2edf1342fd"},
+]
+openpyxl = [
+    {file = "openpyxl-3.0.7-py2.py3-none-any.whl", hash = "sha256:46af4eaf201a89b610fcca177eed957635f88770a5462fb6aae4a2a52b0ff516"},
+    {file = "openpyxl-3.0.7.tar.gz", hash = "sha256:6456a3b472e1ef0facb1129f3c6ef00713cebf62e736cd7a75bcc3247432f251"},
 ]
 pandas = [
     {file = "pandas-1.3.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:c81b8d91e9ae861eb4406b4e0f8d4dabbc105b9c479b3d1e921fba1d35b5b62a"},
@@ -917,10 +930,6 @@ urllib3 = [
 ]
 us = [
     {file = "us-2.0.2.tar.gz", hash = "sha256:cb11ad0d43deff3a1c3690c74f0c731cff5b862c73339df2edd91133e1496fbc"},
-]
-wheel = [
-    {file = "wheel-0.34.2-py2.py3-none-any.whl", hash = "sha256:df277cb51e61359aba502208d680f90c0493adec6f0e848af94948778aed386e"},
-    {file = "wheel-0.34.2.tar.gz", hash = "sha256:8788e9155fe14f54164c1b9eb0a319d98ef02c160725587ad60f14ddc57b6f96"},
 ]
 xlrd = [
     {file = "xlrd-1.2.0-py2.py3-none-any.whl", hash = "sha256:e551fb498759fa3a5384a94ccd4c3c02eb7c00ea424426e212ac0c57be9dfbde"},
