@@ -21,6 +21,7 @@ import us
 from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_mortality
+from covid import fetch_covariants
 from covid import fetch_google_mobility
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
@@ -32,6 +33,7 @@ argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group('data gathering')
 argument_group.add_argument('--no_california_blueprint', action='store_true')
 argument_group.add_argument('--no_cdc_mortality', action='store_true')
+argument_group.add_argument('--no_covariants', action='store_true')
 argument_group.add_argument('--no_google_mobility', action='store_true')
 argument_group.add_argument('--no_ourworld_vaccinations', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
@@ -44,7 +46,6 @@ argument_group.add_argument(
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r'No COVID metrics: World/EH.*'
     r'|Underpopulation: World/CL(/..)? .*'
     r'|Underpopulation: World/CO(/...)? .*'
     r'|Underpopulation: World/PE(/...)? .*'
@@ -105,6 +106,7 @@ class Region:
     subregions: Dict[str, 'Region'] = field(default_factory=dict, repr=0)
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    variant_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     vaccination_metrics: Dict[str, Metric] = field(
         default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
@@ -301,6 +303,137 @@ def _compute_world(session, args, vprint):
                     raw=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
 
     #
+    # Add variant breakdown
+    #
+
+    if not args.no_covariants:
+        vprint('Loading and merging CoVariants data...')
+        cov_credits = fetch_covariants.credits()
+        covar = fetch_covariants.get_variants(session=session)
+
+        region_cols = ['country', 'region']
+        covar.sort_values(region_cols + ['date'], inplace=True)
+        covar.set_index(keys='date', inplace=True)
+        for r, rd in covar.groupby(region_cols, as_index=False, sort=False):
+            if (r[0], r[1]) == ("United States", "USA"):
+                continue  # Covered separately as ("USA", "").
+
+            c_find = {
+                "Curacao": "Curaçao",
+                "South Korea": "Republic Of Korea",
+                "Sint Maarten": "Sint Maarten (Dutch part)",
+            }.get(r[0], r[0])
+            try:
+                countries = [pycountry.countries.lookup(c_find)]
+            except LookupError:
+                try:
+                    countries = pycountry.countries.search_fuzzy(c_find)
+                except LookupError:
+                    warnings.warn(f'Unknown covariant country: "{c_find}"')
+                    continue
+
+            region = region_by_iso.get(countries[0].alpha_2)
+            if region is None:
+                continue  # Valid country but not in skeleton
+
+            r_find = {"Washington DC": "District of Columbia"}.get(r[1], r[1])
+            if r_find:
+                region = region.subregions.get(r_find)
+                if region is None:
+                    warnings.warn(f'Unknown covariant region: {r[0]}/{r_find}')
+                    continue
+
+            v_totals = v_others = []
+            for v, vd in rd.groupby('variant', as_index=False, sort=False):
+                if not v:
+                    v_totals = v_others = vd.found
+                    continue
+
+                if v in region.variant_metrics:
+                    warnings.warn(f'Duplicate covariant ({region.path()}): {v}')
+                    continue
+
+                if len(v_totals) != len(vd):
+                    warnings.warn(
+                        f'Bad covariant data ({region.path()}): '
+                        f'len totals={len(v_totals)} len data={len(vd)}'
+                    )
+                    continue
+
+                # XXX consistent colors for variants
+                v_others = v_others - vd.found
+                region.variant_metrics[v] = _trend_metric(
+                    c='tab:orange', em=0, ord=0, cred=cov_credits,
+                    v=vd.found * 100.0 / v_totals)
+
+    #
+    # Add vaccination statistics.
+    #
+
+    if not args.no_ourworld_vaccinations:
+        vprint('Loading ourworldindata vaccination data...')
+        vax_credits = fetch_ourworld_vaccinations.credits()
+        vax_data = fetch_ourworld_vaccinations.get_vaccinations(
+            session=session)
+        vprint('Merging ourworldindata vaccination data...')
+        vcols = ['iso_code', 'state']
+        vax_data.state.fillna('', inplace=True)  # Or groupby() drops them.
+        vax_data.sort_values(by=vcols + ['date'], inplace=True)
+        vax_data.set_index(keys='date', inplace=True)
+        for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
+            if iso.startswith('OWID'):
+                continue  # Special ourworldindata regions, not real countries
+
+            country = pycountry.countries.get(alpha_3=iso)
+            if country is None:
+                warnings.warn(f'Unknown ourworldindata country code: {iso}')
+                continue
+
+            region = region_by_iso.get(country.alpha_2)
+            if region is None:
+                continue
+
+            if s:
+                # Data includes "New York State", lookup() needs "New York"
+                state = us.states.lookup(s.replace(' State', ''))
+                if not state:
+                    warnings.warn(f'Unknown ourworldindata state: {s}')
+                    continue
+                region = region_by_fips.get(int(state.fips))
+                if region is None:
+                    warnings.warn(f'FIPS missing: {state.fips} (state.name)')
+                    continue
+
+            pop = region.totals.get('population', 0)
+            if not pop:
+                warn(f'No population for ourworldindata: {region.path}')
+                continue
+
+            v.total_distributed.fillna(method='ffill', inplace=True)
+            v.total_vaccinations.fillna(method='ffill', inplace=True)
+            v.people_vaccinated.fillna(method='ffill', inplace=True)
+            v.people_fully_vaccinated.fillna(method='ffill', inplace=True)
+
+            region.vaccination_metrics.update({
+                'doses allocated / 100p': _trend_metric(
+                    c='tab:gray', em=0, ord=1.0, cred=vax_credits,
+                    v=v.total_distributed * (100 / pop)),
+                'doses given / 100p': _trend_metric(
+                    c='tab:blue', em=0, ord=1.1, cred=vax_credits,
+                    v=v.total_vaccinations * (100 / pop)),
+                'people given any doses / 100p': _trend_metric(
+                    c='tab:orange', em=1, ord=1.2, cred=vax_credits,
+                    v=v.people_vaccinated * (100 / pop)),
+                'people given all doses / 100p': _trend_metric(
+                    c='tab:green', em=1, ord=1.3, cred=vax_credits,
+                    v=v.people_fully_vaccinated * (100 / pop)),
+                'daily dose rate / 5Kp': _trend_metric(
+                    c='tab:cyan', em=0, ord=1.4, cred=vax_credits,
+                    v=v.daily_vaccinations * (5000 / pop),
+                    raw=v.daily_vaccinations_raw * (5000 / pop)),
+            })
+
+    #
     # Add baseline mortality data from CDC figures for US states.
     # TODO: Include seasonal variation and county level data?
     # TODO: Some sort of proper excess mortality plotting?
@@ -426,73 +559,6 @@ def _compute_world(session, args, vprint):
             region.mobility_metrics.update(mobility_metrics)
 
     #
-    # Add vaccination statistics.
-    #
-
-    if not args.no_ourworld_vaccinations:
-        vprint('Loading ourworldindata vaccination data...')
-        vax_credits = fetch_ourworld_vaccinations.credits()
-        vax_data = fetch_ourworld_vaccinations.get_vaccinations(
-            session=session)
-        vprint('Merging ourworldindata vaccination data...')
-        vcols = ['iso_code', 'state']
-        vax_data.state.fillna('', inplace=True)  # Or groupby() drops them.
-        vax_data.sort_values(by=vcols + ['date'], inplace=True)
-        vax_data.set_index(keys='date', inplace=True)
-        for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
-            if iso.startswith('OWID'):
-                continue  # Special ourworldindata regions, not real countries
-
-            country = pycountry.countries.get(alpha_3=iso)
-            if country is None:
-                warnings.warn(f'Unknown ourworldindata country code: {iso}')
-                continue
-
-            region = region_by_iso.get(country.alpha_2)
-            if region is None:
-                continue
-
-            if s:
-                # Data includes "New York State", lookup() needs "New York"
-                state = us.states.lookup(s.replace(' State', ''))
-                if not state:
-                    warnings.warn(f'Unknown ourworldindata state: {s}')
-                    continue
-                region = region_by_fips.get(int(state.fips))
-                if region is None:
-                    warnings.warn(f'FIPS missing: {state.fips} (state.name)')
-                    continue
-
-            pop = region.totals.get('population', 0)
-            if not pop:
-                warn(f'No population for ourworldindata: {region.path}')
-                continue
-
-            v.total_distributed.fillna(method='ffill', inplace=True)
-            v.total_vaccinations.fillna(method='ffill', inplace=True)
-            v.people_vaccinated.fillna(method='ffill', inplace=True)
-            v.people_fully_vaccinated.fillna(method='ffill', inplace=True)
-
-            region.vaccination_metrics.update({
-                'doses allocated / 100p': _trend_metric(
-                    c='tab:gray', em=0, ord=1.0, cred=vax_credits,
-                    v=v.total_distributed * (100 / pop)),
-                'doses given / 100p': _trend_metric(
-                    c='tab:blue', em=0, ord=1.1, cred=vax_credits,
-                    v=v.total_vaccinations * (100 / pop)),
-                'people given any doses / 100p': _trend_metric(
-                    c='tab:orange', em=1, ord=1.2, cred=vax_credits,
-                    v=v.people_vaccinated * (100 / pop)),
-                'people given all doses / 100p': _trend_metric(
-                    c='tab:green', em=1, ord=1.3, cred=vax_credits,
-                    v=v.people_fully_vaccinated * (100 / pop)),
-                'daily dose rate / 5Kp': _trend_metric(
-                    c='tab:cyan', em=0, ord=1.4, cred=vax_credits,
-                    v=v.daily_vaccinations * (5000 / pop),
-                    raw=v.daily_vaccinations_raw * (5000 / pop)),
-            })
-
-    #
     # Combine metrics from subregions when not defined at the higher level.
     #
 
@@ -501,7 +567,6 @@ def _compute_world(session, args, vprint):
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
             if not sub.covid_metrics:
-                warn(f'No COVID metrics: {sub.path()}')
                 del r.subregions[key]
                 continue
 
@@ -712,7 +777,8 @@ if __name__ == '__main__':
                 '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
                 '.m'[bool(r.map_metrics)] +
                 '.c'[bool(r.covid_metrics)] +
-                '.v'[bool(r.vaccination_metrics)] +
+                '.v'[bool(r.covid_metrics)] +
+                '.x'[bool(r.vaccination_metrics)] +
                 '.g'[bool(r.mobility_metrics)] +
                 '.p'[bool(r.policy_changes)] + '>')
             if key != r.short_name:
@@ -726,6 +792,7 @@ if __name__ == '__main__':
             for cat, metrics in (
                     ('map', r.map_metrics),
                     ('cov', r.covid_metrics),
+                    ('var', r.variant_metrics),
                     ('vax', r.vaccination_metrics),
                     ('mob', r.mobility_metrics)):
                 for name, m in metrics.items():
