@@ -37,6 +37,10 @@ argument_group.add_argument('--no_ourworld_vaccinations', action='store_true')
 argument_group.add_argument('--no_state_policy', action='store_true')
 argument_group.add_argument('--no_unified_dataset', action='store_true')
 argument_group.add_argument('--no_unified_hydromet', action='store_true')
+argument_group.add_argument(
+    '--prune_regex',
+    default=r'World/(BR|CL)/[A-Z]*/.*|World/.*/.*/.*/.*'
+)
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
@@ -179,6 +183,17 @@ def _compute_world(session, args, vprint):
     vprint('Loading place data...')
     world = _unified_skeleton(session)
 
+    prune_regex = args.prune_regex and re.compile(args.prune_regex, re.I)
+
+    def prune_region(region):
+        for id, sub in list(region.subregions.items()):
+            if sub.matches_regex(prune_regex):
+                del region.subregions[id]
+            else:
+                prune_region(sub)
+
+    prune_region(world)
+
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
     region_by_fips = {}
@@ -200,7 +215,7 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_unified_dataset:
-        vprint('Loading unified dataset (COVID)...')
+        vprint('Loading unified (COVID) dataset...')
         unified_credits = fetch_unified_dataset.credits()
         unified_covid = fetch_unified_dataset.get_covid(session)
 
@@ -211,7 +226,7 @@ def _compute_world(session, args, vprint):
             unified_hydromet = fetch_unified_dataset.get_hydromet(session)
             hydromet_by_uid = unified_hydromet.groupby(level='ID', sort=False)
 
-        vprint('Merging unified dataset...')
+        vprint('Merging unified (COVID) dataset...')
         for uid, df in unified_covid.groupby(level='ID', sort=False):
             region = region_by_uid.get(uid)
             if not region:
