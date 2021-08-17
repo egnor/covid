@@ -24,6 +24,8 @@ TIERS = [
     Tier(4, '🟡', 'Yellow', 'Minimal')
 ]
 
+REOPENING = Tier(10, '🟢', 'Reopening', 'Beyond the Blueprint')
+
 OVERVIEW_URL = 'https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/COVID19CountyMonitoringOverview.aspx'
 
 ARCHIVE_URL = 'https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/CaliforniaBlueprintDataCharts.aspx'
@@ -68,12 +70,14 @@ def get_counties(session):
             raise ValueError(f'Error parsing CA .xlsx: {xlsx_url}')
 
     out = {}
+    reopening_date = pandas.Timestamp(year=2021, month=6, day=15)
     for fips, county in sorted(counties.items()):
         change_history, last_tier = {}, None
         for date, tier in sorted(county.tier_history.items()):
             if tier != last_tier:
                 change_history[date] = last_tier = tier
         out[fips] = county._replace(tier_history=change_history)
+        out[fips].tier_history[reopening_date] = REOPENING
 
     return out
 

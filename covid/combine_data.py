@@ -351,15 +351,18 @@ def _compute_world(session, args, vprint):
                 warnings.warn(f'FIPS {county.fips} (CA {county.name}) missing')
                 continue
 
-            prev = None
             for date, tier in sorted(county.tier_history.items()):
-                region.current_policy = PolicyChange(
-                    date=date, emoji=tier.emoji,
-                    score=(-3 if tier.number <= 2 else +3),
-                    text=f'Entered {tier.color} tier ({tier.name})',
-                    credits=cal_credits)
+                if tier.number >= 10:
+                    region.current_policy = PolicyChange(
+                        date=date, emoji=tier.emoji, score=+3,
+                        text=tier.color, credits=cal_credits)
+                else:
+                    region.current_policy = PolicyChange(
+                        date=date, emoji=tier.emoji,
+                        score=(-3 if tier.number <= 2 else +3),
+                        text=f'Entered {tier.color} tier ({tier.name})',
+                        credits=cal_credits)
                 region.policy_changes.append(region.current_policy)
-                prev = tier
 
     def sort_policy_changes(r):
         def sort_key(p): return (p.date.date(), -abs(p.score), p.score)
