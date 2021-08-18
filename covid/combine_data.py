@@ -311,6 +311,11 @@ def _compute_world(session, args, vprint):
         cov_credits = fetch_covariants.credits()
         covar = fetch_covariants.get_variants(session=session)
 
+        totals = covar[covar.region == ''].groupby('variant')['found'].sum()
+        for total in totals.itertuples():
+            total.variant
+            total.found
+
         region_cols = ['country', 'region']
         covar.sort_values(region_cols + ['date'], inplace=True)
         covar.set_index(keys='date', inplace=True)
@@ -346,17 +351,18 @@ def _compute_world(session, args, vprint):
             v_totals = v_others = []
             for v, vd in rd.groupby('variant', as_index=False, sort=False):
                 if not v:
-                    v_totals = v_others = vd.found
+                    v_others = vd.found
+                    v_scaling = 0.01 / vd.found
                     continue
 
                 if v in region.variant_metrics:
                     warnings.warn(f'Duplicate covariant ({region.path()}): {v}')
                     continue
 
-                if len(v_totals) != len(vd):
+                if len(v_scaling) != len(vd):
                     warnings.warn(
                         f'Bad covariant data ({region.path()}): '
-                        f'len totals={len(v_totals)} len data={len(vd)}'
+                        f'len totals={len(v_scaling)} len data={len(vd)}'
                     )
                     continue
 
@@ -364,7 +370,11 @@ def _compute_world(session, args, vprint):
                 v_others = v_others - vd.found
                 region.variant_metrics[v] = _trend_metric(
                     c='tab:orange', em=0, ord=0, cred=cov_credits,
-                    v=vd.found * 100.0 / v_totals)
+                    v=vd.found * v_scaling)
+
+            region.variant_metrics['(other)'] = _trend_metric(
+                c='tab:gray', em=0, ord=0, cred=cov_credits,
+                v=v_others * v_scaling)
 
     #
     # Add vaccination statistics.
