@@ -6,7 +6,7 @@ import pandas
 
 
 # TODO - figure out how to load from CDC rather than hardcoding.
-CANNED_DATA = '''
+CANNED_DATA = """
 "Notes"	"State"	"State Code"	Deaths	Population	Crude Rate
 	"Alabama"	"01"	54352	4887871	1112.0
 	"Alaska"	"02"	4453	737438	603.8
@@ -59,25 +59,25 @@ CANNED_DATA = '''
 	"West Virginia"	"54"	23478	1805832	1300.1
 	"Wisconsin"	"55"	53684	5813568	923.4
 	"Wyoming"	"56"	5070	577737	877.6
-'''
+"""
 
 
 def get_states(session):
     """Returns a pandas.DataFrame of state-level mortality data."""
 
-    data = pandas.read_csv(io.StringIO(CANNED_DATA), sep='\t')
+    data = pandas.read_csv(io.StringIO(CANNED_DATA), sep="\t")
 
-    data = data[data['State Code'].notna()]
-    data.drop('Notes', axis='columns', inplace=True)
-    data.set_index('State Code', inplace=True)
+    data = data[data["State Code"].notna()]
+    data.drop("Notes", axis="columns", inplace=True)
+    data.set_index("State Code", inplace=True)
     return data
 
 
 def credits():
-    return {'https://wonder.cdc.gov/': 'CDC WONDER'}
+    return {"https://wonder.cdc.gov/": "CDC WONDER"}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
     from covid import cache_policy
 

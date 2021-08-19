@@ -30,45 +30,44 @@ from covid import fetch_unified_dataset
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
-argument_group = argument_parser.add_argument_group('data gathering')
-argument_group.add_argument('--no_california_blueprint', action='store_true')
-argument_group.add_argument('--no_cdc_mortality', action='store_true')
-argument_group.add_argument('--no_covariants', action='store_true')
-argument_group.add_argument('--no_google_mobility', action='store_true')
-argument_group.add_argument('--no_ourworld_vaccinations', action='store_true')
-argument_group.add_argument('--no_state_policy', action='store_true')
-argument_group.add_argument('--no_unified_dataset', action='store_true')
-argument_group.add_argument('--no_unified_hydromet', action='store_true')
+argument_group = argument_parser.add_argument_group("data gathering")
+argument_group.add_argument("--no_california_blueprint", action="store_true")
+argument_group.add_argument("--no_cdc_mortality", action="store_true")
+argument_group.add_argument("--no_covariants", action="store_true")
+argument_group.add_argument("--no_google_mobility", action="store_true")
+argument_group.add_argument("--no_ourworld_vaccinations", action="store_true")
+argument_group.add_argument("--no_state_policy", action="store_true")
+argument_group.add_argument("--no_unified_dataset", action="store_true")
+argument_group.add_argument("--no_unified_hydromet", action="store_true")
 argument_group.add_argument(
-    '--prune_regex',
-    default=r'World/(BR|CL)/[A-Z]*/.*|World/.*/.*/.*/.*'
+    "--prune_regex", default=r"World/(BR|CL)/[A-Z]*/.*|World/.*/.*/.*/.*"
 )
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r'|Underpopulation: World/CL(/..)? .*'
-    r'|Underpopulation: World/CO(/...)? .*'
-    r'|Underpopulation: World/PE(/...)? .*'
-    r'|Underpopulation: World/DK .*'
-    r'|Underpopulation: World/FR .*'
-    r'|Underpopulation: World/NZ .*'
-    r'|Underpopulation: World/PE/CAL .*'
-    r'|Overpopulation: World/CL(/..)? .*'
-    r'|Overpopulation: World/CO(/...)? .*'
-    r'|Overpopulation: World/MX(/...)? .*'
-    r'|Overpopulation: World/PE(/...)? .*'
-    r'|Unknown ourworldindata state: Bureau of Prisons'
-    r'|Unknown ourworldindata state: Dept of Defense'
-    r'|Unknown ourworldindata state: Federated States of Micronesia'
-    r'|Unknown ourworldindata state: Indian Health Svc'
-    r'|Unknown ourworldindata state: Long Term Care'
-    r'|Unknown ourworldindata state: Marshall Islands'
-    r'|Unknown ourworldindata state: Republic of Palau'
-    r'|Unknown ourworldindata state: United States'
-    r'|Unknown ourworldindata state: Veterans Health'
-    r'|Bad cases: World/BR/PE/Quixaba .*'
-    r'|Bad cases: World/BR/RS/Santa .*'
-    r'|Cannot parse header or footer so it will be ignored'  # xlsx parser
+    r"|Underpopulation: World/CL(/..)? .*"
+    r"|Underpopulation: World/CO(/...)? .*"
+    r"|Underpopulation: World/PE(/...)? .*"
+    r"|Underpopulation: World/DK .*"
+    r"|Underpopulation: World/FR .*"
+    r"|Underpopulation: World/NZ .*"
+    r"|Underpopulation: World/PE/CAL .*"
+    r"|Overpopulation: World/CL(/..)? .*"
+    r"|Overpopulation: World/CO(/...)? .*"
+    r"|Overpopulation: World/MX(/...)? .*"
+    r"|Overpopulation: World/PE(/...)? .*"
+    r"|Unknown ourworldindata state: Bureau of Prisons"
+    r"|Unknown ourworldindata state: Dept of Defense"
+    r"|Unknown ourworldindata state: Federated States of Micronesia"
+    r"|Unknown ourworldindata state: Indian Health Svc"
+    r"|Unknown ourworldindata state: Long Term Care"
+    r"|Unknown ourworldindata state: Marshall Islands"
+    r"|Unknown ourworldindata state: Republic of Palau"
+    r"|Unknown ourworldindata state: United States"
+    r"|Unknown ourworldindata state: Veterans Health"
+    r"|Bad cases: World/BR/PE/Quixaba .*"
+    r"|Bad cases: World/BR/RS/Santa .*"
+    r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
 )
 
 
@@ -102,33 +101,52 @@ class Region:
     unified_id: Optional[str] = None
     lat_lon: Optional[Tuple[float, float]] = None
     totals: collections.Counter = field(default_factory=collections.Counter)
-    parent: Optional['Region'] = field(default=None, repr=0)
-    subregions: Dict[str, 'Region'] = field(default_factory=dict, repr=0)
+    parent: Optional["Region"] = field(default=None, repr=0)
+    subregions: Dict[str, "Region"] = field(default_factory=dict, repr=0)
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     variant_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    vaccination_metrics: Dict[str, Metric] = field(
-        default_factory=dict, repr=0)
+    vaccination_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
     current_policy: Optional[PolicyChange] = None
 
     def path(r):
-        return f'{r.parent.path()}/{r.short_name}' if r.parent else r.name
+        return f"{r.parent.path()}/{r.short_name}" if r.parent else r.name
 
     def matches_regex(r, rx):
-        rx = rx if isinstance(rx, re.Pattern) else (
-            rx and re.compile(rx, re.I))
-        return bool(not rx or rx.fullmatch(r.name) or rx.fullmatch(r.path()) or
-                    rx.fullmatch(r.path().replace(' ', '_')))
+        rx = rx if isinstance(rx, re.Pattern) else (rx and re.compile(rx, re.I))
+        return bool(
+            not rx
+            or rx.fullmatch(r.name)
+            or rx.fullmatch(r.path())
+            or rx.fullmatch(r.path().replace(" ", "_"))
+        )
 
     def lookup_path(r, p):
-        p = p.strip('/ ').lower()
-        n = (p[len(r.short_name):] if p.startswith(r.short_name.lower()) else
-             p[len(r.name):] if p.startswith(r.name.lower()) else None)
-        return r if (n == '') else None if (n is None) else next(
-            (y for s in r.subregions.values()
-             for y in [s.lookup_path(n)] if y), None)
+        p = p.strip("/ ").lower()
+        n = (
+            p[len(r.short_name) :]
+            if p.startswith(r.short_name.lower())
+            else p[len(r.name) :]
+            if p.startswith(r.name.lower())
+            else None
+        )
+        return (
+            r
+            if (n == "")
+            else None
+            if (n is None)
+            else next(
+                (
+                    y
+                    for s in r.subregions.values()
+                    for y in [s.lookup_path(n)]
+                    if y
+                ),
+                None,
+            )
+        )
 
 
 def get_world(session, args, verbose=False):
@@ -138,8 +156,8 @@ def get_world(session, args, verbose=False):
     vprint = lambda *a, **k: print(*a, **k) if verbose else None
     cache_path = cache_policy.cached_path(session, _world_cache_key(args))
     if cache_path.exists():
-        vprint(f'Loading cached world: {cache_path}')
-        with cache_path.open(mode='rb') as cache_file:
+        vprint(f"Loading cached world: {cache_path}")
+        with cache_path.open(mode="rb") as cache_file:
             return pickle.load(cache_file)
 
     warning_count = 0
@@ -147,12 +165,12 @@ def get_world(session, args, verbose=False):
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
         if KNOWN_WARNINGS_REGEX.match(str(message)):
-            print(f'=== {str(message).strip()}')
+            print(f"=== {str(message).strip()}")
         else:
             nonlocal warning_count
             warning_count += 1
-            where = f'{os.path.basename(filename)}:{lineno}'
-            print(f'*** #{warning_count} ({where}) {str(message).strip()}')
+            where = f"{os.path.basename(filename)}:{lineno}"
+            print(f"*** #{warning_count} ({where}) {str(message).strip()}")
             traceback.print_stack(file=sys.stdout)
             print()
 
@@ -164,10 +182,10 @@ def get_world(session, args, verbose=False):
 
     if warning_count:
         print()
-        raise ValueError(f'{warning_count} warnings found combining data')
+        raise ValueError(f"{warning_count} warnings found combining data")
 
-    vprint(f'Saving cached world: {cache_path}')
-    with cache_policy.temp_to_rename(cache_path, mode='wb') as cache_file:
+    vprint(f"Saving cached world: {cache_path}")
+    with cache_policy.temp_to_rename(cache_path, mode="wb") as cache_file:
         pickle.dump(world, cache_file)
     return world
 
@@ -175,14 +193,15 @@ def get_world(session, args, verbose=False):
 def _world_cache_key(args):
     # Only include args understood by this module.
     ks = list(sorted(vars(argument_parser.parse_args([])).keys()))
-    return ('https://plague.wtf/world' +
-            ''.join(f':{k}={getattr(args, k)}' for k in ks))
+    return "https://plague.wtf/world" + "".join(
+        f":{k}={getattr(args, k)}" for k in ks
+    )
 
 
 def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
-    vprint('Loading place data...')
+    vprint("Loading place data...")
     world = _unified_skeleton(session)
 
     prune_regex = args.prune_regex and re.compile(args.prune_regex, re.I)
@@ -203,8 +222,10 @@ def _compute_world(session, args, vprint):
 
     def index_region_tree(r):
         for index_dict, key in [
-            (region_by_iso, r.iso_code), (region_by_fips, r.fips_code),
-                (region_by_uid, r.unified_id)]:
+            (region_by_iso, r.iso_code),
+            (region_by_fips, r.fips_code),
+            (region_by_uid, r.unified_id),
+        ]:
             if key is not None:
                 index_dict[key] = r
         for sub in r.subregions.values():
@@ -217,31 +238,31 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_unified_dataset:
-        vprint('Loading unified (COVID) dataset...')
+        vprint("Loading unified (COVID) dataset...")
         unified_credits = fetch_unified_dataset.credits()
         unified_covid = fetch_unified_dataset.get_covid(session)
 
         if args.no_unified_hydromet:
             hydromet_by_uid = None
         else:
-            vprint('Loading unified dataset (hydromet)...')
+            vprint("Loading unified dataset (hydromet)...")
             unified_hydromet = fetch_unified_dataset.get_hydromet(session)
-            hydromet_by_uid = unified_hydromet.groupby(level='ID', sort=False)
+            hydromet_by_uid = unified_hydromet.groupby(level="ID", sort=False)
 
-        vprint('Merging unified (COVID) dataset...')
-        for uid, df in unified_covid.groupby(level='ID', sort=False):
+        vprint("Merging unified (COVID) dataset...")
+        for uid, df in unified_covid.groupby(level="ID", sort=False):
             region = region_by_uid.get(uid)
             if not region:
                 continue  # Taken out of the skeleton for some reason.
 
-            pop = region.totals['population']
-            df.reset_index(level='ID', drop=True, inplace=True)
+            pop = region.totals["population"]
+            df.reset_index(level="ID", drop=True, inplace=True)
 
             def best_data(type):
                 for_type = df.xs(type)
                 best_date, best_data = None, None
-                for source, s_data in df.xs(type).groupby(level='Source'):
-                    s_data = s_data.droplevel(level='Source').Cases
+                for source, s_data in df.xs(type).groupby(level="Source"):
+                    s_data = s_data.droplevel(level="Source").Cases
                     s_date = s_data[s_data > 0].last_valid_index()
                     if best_date is None or s_date > best_date:
                         best_date, best_data = s_date, s_data
@@ -249,76 +270,113 @@ def _compute_world(session, args, vprint):
 
             # COVID metrics
             # (to avoid some data issues, use cum= to compute our own deltas)
-            if 'Confirmed' in df.index:
-                cases = best_data('Confirmed')
+            if "Confirmed" in df.index:
+                cases = best_data("Confirmed")
                 cases_total = cases.max()  # avoid glitches
                 if cases_total < 0 or cases_total > pop:
                     warnings.warn(
-                        f"Bad cases: {region.path()} ({cases_total}/{pop}p)")
+                        f"Bad cases: {region.path()} ({cases_total}/{pop}p)"
+                    )
                 else:
-                    region.totals['positives'] = cases_total
-                    region.covid_metrics['positives / 100Kp'] = _trend_metric(
-                        c='tab:blue', em=1, ord=1.0, cred=unified_credits,
-                        cum=cases * 1e5 / pop)
-            if 'Deaths' in df.index:
-                deaths = best_data('Deaths')
+                    region.totals["positives"] = cases_total
+                    region.covid_metrics["positives / 100Kp"] = _trend_metric(
+                        c="tab:blue",
+                        em=1,
+                        ord=1.0,
+                        cred=unified_credits,
+                        cum=cases * 1e5 / pop,
+                    )
+            if "Deaths" in df.index:
+                deaths = best_data("Deaths")
                 deaths_total = deaths.max()  # avoid glitches
                 if deaths_total < 0 or deaths_total > pop:
                     warnings.warn(
-                        f"Bad deaths: {region.path()} ({deaths_total}/{pop}p)")
+                        f"Bad deaths: {region.path()} ({deaths_total}/{pop}p)"
+                    )
                 else:
-                    region.totals['deaths'] = deaths_total
-                    region.covid_metrics['deaths / 10Mp'] = _trend_metric(
-                        c='tab:red', em=1, ord=1.1, cred=unified_credits,
-                        cum=deaths * 1e7 / pop)
-            if 'Tests' in df.index:
-                region.covid_metrics['tests / 10Kp'] = _trend_metric(
-                    c='tab:green', em=0, ord=2.0, cred=unified_credits,
-                    cum=best_data('Tests') * 1e4 / pop)
-            if 'Hospitalized' in df.index:
-                hosp = best_data('Hospitalized')
-                if 'ICU' in df.index:
-                    hosp = hosp + best_data('ICU')
-                region.covid_metrics['hosp admit / 1Mp'] = _trend_metric(
-                    c='tab:orange', em=0, ord=3.0, cred=unified_credits,
-                    cum=hosp * 1e6 / pop)
-            if 'Hospitalized_Now' in df.index:
-                hosp_now = best_data('Hospitalized_Now')
-                if 'ICU_Now' in df.index:
-                    hosp_now = hosp_now + best_data('ICU_Now')
-                region.covid_metrics['hosp current / 100Kp'] = _trend_metric(
-                    c='tab:pink', em=0, ord=3.1, cred=unified_credits,
-                    raw=hosp_now * 1e5 / pop)
+                    region.totals["deaths"] = deaths_total
+                    region.covid_metrics["deaths / 10Mp"] = _trend_metric(
+                        c="tab:red",
+                        em=1,
+                        ord=1.1,
+                        cred=unified_credits,
+                        cum=deaths * 1e7 / pop,
+                    )
+            if "Tests" in df.index:
+                region.covid_metrics["tests / 10Kp"] = _trend_metric(
+                    c="tab:green",
+                    em=0,
+                    ord=2.0,
+                    cred=unified_credits,
+                    cum=best_data("Tests") * 1e4 / pop,
+                )
+            if "Hospitalized" in df.index:
+                hosp = best_data("Hospitalized")
+                if "ICU" in df.index:
+                    hosp = hosp + best_data("ICU")
+                region.covid_metrics["hosp admit / 1Mp"] = _trend_metric(
+                    c="tab:orange",
+                    em=0,
+                    ord=3.0,
+                    cred=unified_credits,
+                    cum=hosp * 1e6 / pop,
+                )
+            if "Hospitalized_Now" in df.index:
+                hosp_now = best_data("Hospitalized_Now")
+                if "ICU_Now" in df.index:
+                    hosp_now = hosp_now + best_data("ICU_Now")
+                region.covid_metrics["hosp current / 100Kp"] = _trend_metric(
+                    c="tab:pink",
+                    em=0,
+                    ord=3.1,
+                    cred=unified_credits,
+                    raw=hosp_now * 1e5 / pop,
+                )
 
             # Hydrometeorological data
-            def to_f(c): return c * 1.8 + 32
+            def to_f(c):
+                return c * 1.8 + 32
+
             if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
                 for_uid = hydromet_by_uid.get_group(uid)
-                by_source = for_uid.groupby(level='HydrometSource')
-                df = by_source.get_group(by_source['T'].count().idxmax())
-                df.reset_index(level=('ID', 'HydrometSource'),
-                               drop=True, inplace=True)
-                region.mobility_metrics['temp °F'] = _trend_metric(
-                    c='tab:gray', em=1, ord=2.0, cred=unified_credits,
-                    raw=to_f(df['T']), mins=to_f(df.Tmin), maxs=to_f(df.Tmax))
+                by_source = for_uid.groupby(level="HydrometSource")
+                df = by_source.get_group(by_source["T"].count().idxmax())
+                df.reset_index(
+                    level=("ID", "HydrometSource"), drop=True, inplace=True
+                )
+                region.mobility_metrics["temp °F"] = _trend_metric(
+                    c="tab:gray",
+                    em=1,
+                    ord=2.0,
+                    cred=unified_credits,
+                    raw=to_f(df["T"]),
+                    mins=to_f(df.Tmin),
+                    maxs=to_f(df.Tmax),
+                )
 
     #
     # Add variant breakdown
     #
 
     if not args.no_covariants:
-        vprint('Loading and merging CoVariants data...')
+        vprint("Loading and merging CoVariants data...")
         cov_credits = fetch_covariants.credits()
         covar = fetch_covariants.get_variants(session=session)
 
-        totals = covar[covar.region == ''].groupby('variant')['found'].sum()
-        for total in totals.itertuples():
-            total.variant
-            total.found
+        totals = covar[covar.region == ""].groupby("variant")["found"].sum()
+        colors = dict(
+            zip(
+                (
+                    vf[0]
+                    for vf in sorted(totals.itertuples(), key=lambda vf: vf[1])
+                ),
+                itertools.cycle(matplotlib.cm.tab20.colors),
+            )
+        )
 
-        region_cols = ['country', 'region']
-        covar.sort_values(region_cols + ['date'], inplace=True)
-        covar.set_index(keys='date', inplace=True)
+        region_cols = ["country", "region"]
+        covar.sort_values(region_cols + ["date"], inplace=True)
+        covar.set_index(keys="date", inplace=True)
         for r, rd in covar.groupby(region_cols, as_index=False, sort=False):
             if (r[0], r[1]) == ("United States", "USA"):
                 continue  # Covered separately as ("USA", "").
@@ -345,58 +403,65 @@ def _compute_world(session, args, vprint):
             if r_find:
                 region = region.subregions.get(r_find)
                 if region is None:
-                    warnings.warn(f'Unknown covariant region: {r[0]}/{r_find}')
+                    warnings.warn(f"Unknown covariant region: {r[0]}/{r_find}")
                     continue
 
             v_totals = v_others = []
-            for v, vd in rd.groupby('variant', as_index=False, sort=False):
+            for v, vd in rd.groupby("variant", as_index=False, sort=False):
                 if not v:
                     v_others = vd.found
                     v_scaling = 0.01 / vd.found
                     continue
 
                 if v in region.variant_metrics:
-                    warnings.warn(f'Duplicate covariant ({region.path()}): {v}')
+                    warnings.warn(f"Duplicate covariant ({region.path()}): {v}")
                     continue
 
                 if len(v_scaling) != len(vd):
                     warnings.warn(
-                        f'Bad covariant data ({region.path()}): '
-                        f'len totals={len(v_scaling)} len data={len(vd)}'
+                        f"Bad covariant data ({region.path()}): "
+                        f"len totals={len(v_scaling)} len data={len(vd)}"
                     )
                     continue
 
                 # XXX consistent colors for variants
                 v_others = v_others - vd.found
                 region.variant_metrics[v] = _trend_metric(
-                    c='tab:orange', em=0, ord=0, cred=cov_credits,
-                    v=vd.found * v_scaling)
+                    c="tab:orange",
+                    em=0,
+                    ord=0,
+                    cred=cov_credits,
+                    v=vd.found * v_scaling,
+                )
 
-            region.variant_metrics['(other)'] = _trend_metric(
-                c='tab:gray', em=0, ord=0, cred=cov_credits,
-                v=v_others * v_scaling)
+            region.variant_metrics["(other)"] = _trend_metric(
+                c="tab:gray",
+                em=0,
+                ord=0,
+                cred=cov_credits,
+                v=v_others * v_scaling,
+            )
 
     #
     # Add vaccination statistics.
     #
 
     if not args.no_ourworld_vaccinations:
-        vprint('Loading ourworldindata vaccination data...')
+        vprint("Loading ourworldindata vaccination data...")
         vax_credits = fetch_ourworld_vaccinations.credits()
-        vax_data = fetch_ourworld_vaccinations.get_vaccinations(
-            session=session)
-        vprint('Merging ourworldindata vaccination data...')
-        vcols = ['iso_code', 'state']
-        vax_data.state.fillna('', inplace=True)  # Or groupby() drops them.
-        vax_data.sort_values(by=vcols + ['date'], inplace=True)
-        vax_data.set_index(keys='date', inplace=True)
+        vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
+        vprint("Merging ourworldindata vaccination data...")
+        vcols = ["iso_code", "state"]
+        vax_data.state.fillna("", inplace=True)  # Or groupby() drops them.
+        vax_data.sort_values(by=vcols + ["date"], inplace=True)
+        vax_data.set_index(keys="date", inplace=True)
         for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
-            if iso.startswith('OWID'):
+            if iso.startswith("OWID"):
                 continue  # Special ourworldindata regions, not real countries
 
             country = pycountry.countries.get(alpha_3=iso)
             if country is None:
-                warnings.warn(f'Unknown ourworldindata country code: {iso}')
+                warnings.warn(f"Unknown ourworldindata country code: {iso}")
                 continue
 
             region = region_by_iso.get(country.alpha_2)
@@ -405,43 +470,65 @@ def _compute_world(session, args, vprint):
 
             if s:
                 # Data includes "New York State", lookup() needs "New York"
-                state = us.states.lookup(s.replace(' State', ''))
+                state = us.states.lookup(s.replace(" State", ""))
                 if not state:
-                    warnings.warn(f'Unknown ourworldindata state: {s}')
+                    warnings.warn(f"Unknown ourworldindata state: {s}")
                     continue
                 region = region_by_fips.get(int(state.fips))
                 if region is None:
-                    warnings.warn(f'FIPS missing: {state.fips} (state.name)')
+                    warnings.warn(f"FIPS missing: {state.fips} (state.name)")
                     continue
 
-            pop = region.totals.get('population', 0)
+            pop = region.totals.get("population", 0)
             if not pop:
-                warn(f'No population for ourworldindata: {region.path}')
+                warn(f"No population for ourworldindata: {region.path}")
                 continue
 
-            v.total_distributed.fillna(method='ffill', inplace=True)
-            v.total_vaccinations.fillna(method='ffill', inplace=True)
-            v.people_vaccinated.fillna(method='ffill', inplace=True)
-            v.people_fully_vaccinated.fillna(method='ffill', inplace=True)
+            v.total_distributed.fillna(method="ffill", inplace=True)
+            v.total_vaccinations.fillna(method="ffill", inplace=True)
+            v.people_vaccinated.fillna(method="ffill", inplace=True)
+            v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
 
-            region.vaccination_metrics.update({
-                'doses allocated / 100p': _trend_metric(
-                    c='tab:gray', em=0, ord=1.0, cred=vax_credits,
-                    v=v.total_distributed * (100 / pop)),
-                'doses given / 100p': _trend_metric(
-                    c='tab:blue', em=0, ord=1.1, cred=vax_credits,
-                    v=v.total_vaccinations * (100 / pop)),
-                'people given any doses / 100p': _trend_metric(
-                    c='tab:orange', em=1, ord=1.2, cred=vax_credits,
-                    v=v.people_vaccinated * (100 / pop)),
-                'people given all doses / 100p': _trend_metric(
-                    c='tab:green', em=1, ord=1.3, cred=vax_credits,
-                    v=v.people_fully_vaccinated * (100 / pop)),
-                'daily dose rate / 5Kp': _trend_metric(
-                    c='tab:cyan', em=0, ord=1.4, cred=vax_credits,
-                    v=v.daily_vaccinations * (5000 / pop),
-                    raw=v.daily_vaccinations_raw * (5000 / pop)),
-            })
+            region.vaccination_metrics.update(
+                {
+                    "doses allocated / 100p": _trend_metric(
+                        c="tab:gray",
+                        em=0,
+                        ord=1.0,
+                        cred=vax_credits,
+                        v=v.total_distributed * (100 / pop),
+                    ),
+                    "doses given / 100p": _trend_metric(
+                        c="tab:blue",
+                        em=0,
+                        ord=1.1,
+                        cred=vax_credits,
+                        v=v.total_vaccinations * (100 / pop),
+                    ),
+                    "people given any doses / 100p": _trend_metric(
+                        c="tab:orange",
+                        em=1,
+                        ord=1.2,
+                        cred=vax_credits,
+                        v=v.people_vaccinated * (100 / pop),
+                    ),
+                    "people given all doses / 100p": _trend_metric(
+                        c="tab:green",
+                        em=1,
+                        ord=1.3,
+                        cred=vax_credits,
+                        v=v.people_fully_vaccinated * (100 / pop),
+                    ),
+                    "daily dose rate / 5Kp": _trend_metric(
+                        c="tab:cyan",
+                        em=0,
+                        ord=1.4,
+                        cred=vax_credits,
+                        v=v.daily_vaccinations * (5000 / pop),
+                        raw=v.daily_vaccinations_raw * (5000 / pop),
+                    ),
+                }
+            )
 
     #
     # Add baseline mortality data from CDC figures for US states.
@@ -450,65 +537,87 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_cdc_mortality:
-        vprint('Loading and merging CDC mortality data...')
+        vprint("Loading and merging CDC mortality data...")
         cdc_credits = fetch_cdc_mortality.credits()
         cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-        y2020 = pandas.DatetimeIndex(['2020-01-01', '2021-12-31'], tz='UTC')
-        for mort in cdc_mortality.itertuples(name='Mortality'):
+        y2020 = pandas.DatetimeIndex(["2020-01-01", "2021-12-31"], tz="UTC")
+        for mort in cdc_mortality.itertuples(name="Mortality"):
             region = region_by_fips.get(mort.Index)
             if region is None:
                 continue  # Filtered out for one reason or another.
 
-            mort_10M = mort.Deaths / 365 * 1e7 / region.totals['population']
-            region.covid_metrics.update({
-                f'historical deaths / 10Mp ({mort_10M:.1f})': Metric(
-                    color='black', emphasis=-1, order=4.0, credits=cdc_credits,
-                    frame=pandas.DataFrame(
-                        {'value': [mort_10M] * 2}, index=y2020))})
+            mort_10M = mort.Deaths / 365 * 1e7 / region.totals["population"]
+            region.covid_metrics.update(
+                {
+                    f"historical deaths / 10Mp ({mort_10M:.1f})": Metric(
+                        color="black",
+                        emphasis=-1,
+                        order=4.0,
+                        credits=cdc_credits,
+                        frame=pandas.DataFrame(
+                            {"value": [mort_10M] * 2}, index=y2020
+                        ),
+                    )
+                }
+            )
 
     #
     # Add policy changes for US states from the state policy database.
     #
 
     if not args.no_state_policy:
-        vprint('Loading and merging state policy database...')
+        vprint("Loading and merging state policy database...")
         policy_credits = fetch_state_policy.credits()
         state_policy = fetch_state_policy.get_events(session=session)
-        for f, events in state_policy.groupby(level='state_fips', sort=False):
+        for f, events in state_policy.groupby(level="state_fips", sort=False):
             region = region_by_fips.get(f)
             if region is None:
                 continue
 
             for e in events.itertuples():
-                region.policy_changes.append(PolicyChange(
-                    date=e.Index[1], score=e.score, emoji=e.emoji,
-                    text=e.policy, credits=policy_credits))
+                region.policy_changes.append(
+                    PolicyChange(
+                        date=e.Index[1],
+                        score=e.score,
+                        emoji=e.emoji,
+                        text=e.policy,
+                        credits=policy_credits,
+                    )
+                )
 
     if not args.no_california_blueprint:
-        vprint('Loading and merging California blueprint data chart...')
+        vprint("Loading and merging California blueprint data chart...")
         cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         for county in cal_counties.values():
             region = region_by_fips.get(county.fips)
             if region is None:
-                warnings.warn(f'FIPS {county.fips} (CA {county.name}) missing')
+                warnings.warn(f"FIPS {county.fips} (CA {county.name}) missing")
                 continue
 
             for date, tier in sorted(county.tier_history.items()):
                 if tier.number >= 10:
                     region.current_policy = PolicyChange(
-                        date=date, emoji=tier.emoji, score=+3,
-                        text=tier.color, credits=cal_credits)
+                        date=date,
+                        emoji=tier.emoji,
+                        score=+3,
+                        text=tier.color,
+                        credits=cal_credits,
+                    )
                 else:
                     region.current_policy = PolicyChange(
-                        date=date, emoji=tier.emoji,
+                        date=date,
+                        emoji=tier.emoji,
                         score=(-3 if tier.number <= 2 else +3),
-                        text=f'Entered {tier.color} tier ({tier.name})',
-                        credits=cal_credits)
+                        text=f"Entered {tier.color} tier ({tier.name})",
+                        credits=cal_credits,
+                    )
                 region.policy_changes.append(region.current_policy)
 
     def sort_policy_changes(r):
-        def sort_key(p): return (p.date.date(), -abs(p.score), p.score)
+        def sort_key(p):
+            return (p.date.date(), -abs(p.score), p.score)
+
         r.policy_changes.sort(key=sort_key)
         for sub in r.subregions.values():
             sort_policy_changes(sub)
@@ -521,16 +630,20 @@ def _compute_world(session, args, vprint):
 
     if not args.no_google_mobility:
         gcols = [
-            'country_region_code', 'sub_region_1', 'sub_region_2',
-            'metro_area', 'iso_3166_2_code', 'census_fips_code'
+            "country_region_code",
+            "sub_region_1",
+            "sub_region_2",
+            "metro_area",
+            "iso_3166_2_code",
+            "census_fips_code",
         ]
 
-        vprint('Loading Google mobility data...')
+        vprint("Loading Google mobility data...")
         mobility_credits = fetch_google_mobility.credits()
         mobility_data = fetch_google_mobility.get_mobility(session=session)
-        vprint('Merging Google mobility data...')
-        mobility_data.sort_values(by=gcols + ['date'], inplace=True)
-        mobility_data.set_index(keys='date', inplace=True)
+        vprint("Merging Google mobility data...")
+        mobility_data.sort_values(by=gcols + ["date"], inplace=True)
+        mobility_data.set_index(keys="date", inplace=True)
         for g, m in mobility_data.groupby(gcols, as_index=False, sort=False):
             if g[5]:
                 region = region_by_fips.get(g[5])
@@ -543,28 +656,48 @@ def _compute_world(session, args, vprint):
             if region is None:
                 continue
 
-            pcfb = 'percent_change_from_baseline'  # common, long suffix
+            pcfb = "percent_change_from_baseline"  # common, long suffix
             mobility_metrics = {
-                'residential': _trend_metric(
-                    c='tab:brown', em=1, ord=1.0, cred=mobility_credits,
-                    raw=100 + m[f'residential_{pcfb}']),
-                'retail / recreation': _trend_metric(
-                    c='tab:orange', em=1, ord=1.1, cred=mobility_credits,
-                    raw=100 + m[f'retail_and_recreation_{pcfb}']),
-                'workplaces': _trend_metric(
-                    c='tab:red', em=1, ord=1.2, cred=mobility_credits,
-                    raw=100 + m[f'workplaces_{pcfb}']),
-                'grocery / pharmacy': _trend_metric(
-                    c='tab:blue', em=0, ord=1.4, cred=mobility_credits,
-                    raw=100 + m[f'grocery_and_pharmacy_{pcfb}']),
-                'transit stations': _trend_metric(
-                    'tab:purple', em=0, ord=1.5, cred=mobility_credits,
-                    raw=100 + m[f'transit_stations_{pcfb}']),
+                "residential": _trend_metric(
+                    c="tab:brown",
+                    em=1,
+                    ord=1.0,
+                    cred=mobility_credits,
+                    raw=100 + m[f"residential_{pcfb}"],
+                ),
+                "retail / recreation": _trend_metric(
+                    c="tab:orange",
+                    em=1,
+                    ord=1.1,
+                    cred=mobility_credits,
+                    raw=100 + m[f"retail_and_recreation_{pcfb}"],
+                ),
+                "workplaces": _trend_metric(
+                    c="tab:red",
+                    em=1,
+                    ord=1.2,
+                    cred=mobility_credits,
+                    raw=100 + m[f"workplaces_{pcfb}"],
+                ),
+                "grocery / pharmacy": _trend_metric(
+                    c="tab:blue",
+                    em=0,
+                    ord=1.4,
+                    cred=mobility_credits,
+                    raw=100 + m[f"grocery_and_pharmacy_{pcfb}"],
+                ),
+                "transit stations": _trend_metric(
+                    "tab:purple",
+                    em=0,
+                    ord=1.5,
+                    cred=mobility_credits,
+                    raw=100 + m[f"transit_stations_{pcfb}"],
+                ),
             }
 
             # Raw daily mobility metrics are confusing, don't show them.
             for m in mobility_metrics.values():
-                m.frame.drop(columns=['raw'], inplace=True)
+                m.frame.drop(columns=["raw"], inplace=True)
 
             region.mobility_metrics.update(mobility_metrics)
 
@@ -580,33 +713,40 @@ def _compute_world(session, args, vprint):
                 del r.subregions[key]
                 continue
 
-            sub_pop = sub.totals['population']
+            sub_pop = sub.totals["population"]
             sub_pop_total += sub_pop
             for field in (
-                'totals', 'covid_metrics', 'vaccination_metrics',
-                    'mobility_metrics'):
-                if not (field == 'mobility_metrics' and not r.parent):
+                "totals",
+                "covid_metrics",
+                "vaccination_metrics",
+                "mobility_metrics",
+            ):
+                if not (field == "mobility_metrics" and not r.parent):
                     for name, value in getattr(sub, field).items():
                         if name not in getattr(r, field):
                             fn, pv = (field, name), (sub_pop, value)
                             fieldname_popvals.setdefault(fn, []).append(pv)
 
-        pop = r.totals['population']
+        pop = r.totals["population"]
         if pop == 0:
-            pop = r.totals['population'] = sub_pop_total
+            pop = r.totals["population"] = sub_pop_total
         if sub_pop_total > pop * 1.1:
-            warn(f'Overpopulation: {r.path()} has {pop}p, '
-                 f'{sub_pop_total}p in parts')
+            warn(
+                f"Overpopulation: {r.path()} has {pop}p, "
+                f"{sub_pop_total}p in parts"
+            )
         if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
-            warn(f'Underpopulation: {r.path()} has {pop}p, '
-                 f'{sub_pop_total}p in parts')
+            warn(
+                f"Underpopulation: {r.path()} has {pop}p, "
+                f"{sub_pop_total}p in parts"
+            )
 
         for (field, name), popvals in fieldname_popvals.items():
             metric_pop = sum(p for p, v in popvals)
             if abs(metric_pop - pop) > pop * 0.1:
                 continue  # Don't synthesize if population doesn't match.
 
-            if field == 'totals':
+            if field == "totals":
                 r.totals[name] = sum(v for p, v in popvals)
                 continue
 
@@ -621,9 +761,10 @@ def _compute_world(session, args, vprint):
                 next_frame = next_pop * next_val.frame.loc[:end]
                 frame = frame.add(next_frame, fill_value=0)
             getattr(r, field)[name] = replace(
-                first_val, frame=frame / metric_pop, credits=credits)
+                first_val, frame=frame / metric_pop, credits=credits
+            )
 
-    vprint('Rolling up metrics...')
+    vprint("Rolling up metrics...")
     roll_up_metrics(world)
 
     #
@@ -638,22 +779,40 @@ def _compute_world(session, args, vprint):
         if m is not None:
             first = m.frame.index[0].astimezone(latest.tz)
             weeks = (latest - first) // pandas.Timedelta(days=7)
-            dates = pandas.date_range(end=latest, periods=weeks, freq='7D')
+            dates = pandas.date_range(end=latest, periods=weeks, freq="7D")
             value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
             if (~numpy.isnan(value)).any():
                 region.map_metrics[m_name] = replace(
-                    m, frame=pandas.DataFrame({'value': value}, index=dates),
-                    color=col, increase_color=i_col, decrease_color=d_col)
+                    m,
+                    frame=pandas.DataFrame({"value": value}, index=dates),
+                    color=col,
+                    increase_color=i_col,
+                    decrease_color=d_col,
+                )
 
     def make_map_metrics(region):
         for sub in region.subregions.values():
             make_map_metrics(sub)
 
-        mul = region.totals['population'] / 50  # 100K => 2K, 10Mp => 200K
-        add_map_metric(region, 'positives / 100Kp', 'positives x2K', mul,
-                       '#0000FF50', '#0000FFA0', '#00FF00A0')
-        add_map_metric(region, 'deaths / 10Mp', 'deaths x200K', mul,
-                       '#FF000050', '#FF0000A0', None)
+        mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
+        add_map_metric(
+            region,
+            "positives / 100Kp",
+            "positives x2K",
+            mul,
+            "#0000FF50",
+            "#0000FFA0",
+            "#00FF00A0",
+        )
+        add_map_metric(
+            region,
+            "deaths / 10Mp",
+            "deaths x200K",
+            mul,
+            "#FF000050",
+            "#FF0000A0",
+            None,
+        )
 
     make_map_metrics(world)
     return world
@@ -667,10 +826,11 @@ def _unified_skeleton(session):
         region = parent.subregions.get(key)
         if not region:
             region = parent.subregions[key] = Region(
-                name=name or key, short_name=short_name or key, parent=parent)
+                name=name or key, short_name=short_name or key, parent=parent
+            )
         return region
 
-    world = Region(name='World', short_name='World')
+    world = Region(name="World", short_name="World")
     for id, p in fetch_unified_dataset.get_places(session).items():
         if not (p.Population > 0):
             continue  # Analysis requires population data.
@@ -681,28 +841,45 @@ def _unified_skeleton(session):
         else:
             region.iso_code = p.ISO1_2C
 
-        if p.ID[:7] in ('US36666', 'US36005', 'US36047',
-                        'US36061', 'US36081', 'US36085'):
-            region = subregion(region, 'NYC', 'New York City')
-        elif p.ID[:7] in ('US49003', 'US49005', 'US49033'):
-            region = subregion(region, 'Bear River', 'Bear River Area')
-        elif p.ID[:7] in ('US49023', 'US49027', 'US49039',
-                          'US49041', 'US49031', 'US49055'):
-            region = subregion(region, 'Central Utah', 'Central Utah Area')
-        elif p.ID[:7] in ('US49007', 'US49015', 'US49019'):
-            region = subregion(region, 'Southeast Utah', 'Southeast Utah Area')
-        elif p.ID[:7] in ('US49001', 'US49017', 'US49021',
-                          'US49025', 'US49053'):
-            region = subregion(region, 'Southwest Utah', 'Southwest Utah Area')
-        elif p.ID[:7] in ('US49009', 'US49013', 'US49047'):
-            region = subregion(region, 'TriCounty', 'TriCounty Area')
-        elif p.ID[:7] in ('US49057', 'US49029'):
-            region = subregion(region, 'Weber-Morgan', 'Weber-Morgan Area')
+        if p.ID[:7] in (
+            "US36666",
+            "US36005",
+            "US36047",
+            "US36061",
+            "US36081",
+            "US36085",
+        ):
+            region = subregion(region, "NYC", "New York City")
+        elif p.ID[:7] in ("US49003", "US49005", "US49033"):
+            region = subregion(region, "Bear River", "Bear River Area")
+        elif p.ID[:7] in (
+            "US49023",
+            "US49027",
+            "US49039",
+            "US49041",
+            "US49031",
+            "US49055",
+        ):
+            region = subregion(region, "Central Utah", "Central Utah Area")
+        elif p.ID[:7] in ("US49007", "US49015", "US49019"):
+            region = subregion(region, "Southeast Utah", "Southeast Utah Area")
+        elif p.ID[:7] in (
+            "US49001",
+            "US49017",
+            "US49021",
+            "US49025",
+            "US49053",
+        ):
+            region = subregion(region, "Southwest Utah", "Southwest Utah Area")
+        elif p.ID[:7] in ("US49009", "US49013", "US49047"):
+            region = subregion(region, "TriCounty", "TriCounty Area")
+        elif p.ID[:7] in ("US49057", "US49029"):
+            region = subregion(region, "Weber-Morgan", "Weber-Morgan Area")
 
-        if p.Admin2 and p.ID != 'US36666':
+        if p.Admin2 and p.ID != "US36666":
             region = subregion(region, p.Admin2)
 
-        if p.ZCTA[:4] == '0000':  # NYC borough pseudo-ZIP
+        if p.ZCTA[:4] == "0000":  # NYC borough pseudo-ZIP
             region.name = region.short_name = p.Admin3  # Use borough name.
         elif p.Admin3:
             region = subregion(region, p.ZCTA or p.Admin3, p.Admin3)
@@ -715,18 +892,19 @@ def _unified_skeleton(session):
             region.iso_code = p.ISO2_UID
 
         region.unified_id = p.ID
-        region.totals['population'] = p.Population
+        region.totals["population"] = p.Population
         if p.Latitude or p.Longitude:
             region.lat_lon = (p.Latitude, p.Longitude)
 
-    world.totals['population'] = sum(
-        s.totals['population'] for s in world.subregions.values())
+    world.totals["population"] = sum(
+        s.totals["population"] for s in world.subregions.values()
+    )
     return world
 
 
 def _trend_metric(
-        c, em, ord, cred,
-        v=None, raw=None, cum=None, mins=None, maxs=None):
+    c, em, ord, cred, v=None, raw=None, cum=None, mins=None, maxs=None
+):
     """Returns a Metric with data massaged appropriately."""
 
     assert (v is not None) or (raw is not None) or (cum is not None)
@@ -736,44 +914,45 @@ def _trend_metric(
 
     if (v is not None) and (raw is not None):
         assert v.index is raw.index
-        df = pandas.DataFrame({'raw': raw, 'value': v})
-    elif (v is not None):
-        df = pandas.DataFrame({'value': v})
-    elif (raw is not None):
-        nonzero_is, = (raw.values > 0).nonzero()  # Skip first nonzero.
+        df = pandas.DataFrame({"raw": raw, "value": v})
+    elif v is not None:
+        df = pandas.DataFrame({"value": v})
+    elif raw is not None:
+        (nonzero_is,) = (raw.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
         first_i = max(0, min(first_i, len(raw) - 14))
         smooth = raw.iloc[first_i:].rolling(7).mean()
-        df = pandas.DataFrame({'raw': raw, 'value': smooth})
+        df = pandas.DataFrame({"raw": raw, "value": smooth})
     else:
-        raise ValueError(f'No data for metric')
+        raise ValueError(f"No data for metric")
 
     if not pandas.api.types.is_datetime64_any_dtype(df.index.dtype):
         raise ValueError(f'Bad trend index dtype "{df.index.dtype}"')
     if df.index.duplicated().any():
         dups = df.index.duplicated(keep=False)
-        raise ValueError(f'Dup trend dates: {df.index[dups]}')
+        raise ValueError(f"Dup trend dates: {df.index[dups]}")
 
     # Assume that mins/maxs are raw and need smoothing (true so far).
     if mins is not None:
-        df['min'] = mins.loc[df.value.first_valid_index():].rolling(7).mean()
+        df["min"] = mins.loc[df.value.first_valid_index() :].rolling(7).mean()
     if maxs is not None:
-        df['max'] = maxs.loc[df.value.first_valid_index():].rolling(7).mean()
+        df["max"] = maxs.loc[df.value.first_valid_index() :].rolling(7).mean()
 
     return Metric(frame=df, color=c, emphasis=em, order=ord, credits=cred)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
     import signal
     from covid import combine_data
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
-        parents=[cache_policy.argument_parser, argument_parser])
-    parser.add_argument('--print_credits', action='store_true')
-    parser.add_argument('--print_data', action='store_true')
-    parser.add_argument('--region_regex')
+        parents=[cache_policy.argument_parser, argument_parser]
+    )
+    parser.add_argument("--print_credits", action="store_true")
+    parser.add_argument("--print_data", action="store_true")
+    parser.add_argument("--region_regex")
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
@@ -783,43 +962,52 @@ if __name__ == '__main__':
     def print_tree(prefix, parents, key, r):
         if r.matches_regex(region_regex):
             line = (
-                f'{prefix}{r.totals["population"] or -1:9.0f}p <' +
-                '.h'[any('hosp' in k for k in r.covid_metrics.keys())] +
-                '.m'[bool(r.map_metrics)] +
-                '.c'[bool(r.covid_metrics)] +
-                '.v'[bool(r.covid_metrics)] +
-                '.x'[bool(r.vaccination_metrics)] +
-                '.g'[bool(r.mobility_metrics)] +
-                '.p'[bool(r.policy_changes)] + '>')
+                f'{prefix}{r.totals["population"] or -1:9.0f}p <'
+                + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]
+                + ".m"[bool(r.map_metrics)]
+                + ".c"[bool(r.covid_metrics)]
+                + ".v"[bool(r.covid_metrics)]
+                + ".x"[bool(r.vaccination_metrics)]
+                + ".g"[bool(r.mobility_metrics)]
+                + ".p"[bool(r.policy_changes)]
+                + ">"
+            )
             if key != r.short_name:
-                line = f'{line} [{key}]'
-            line = f'{line} {parents}{r.short_name}'
+                line = f"{line} [{key}]"
+            line = f"{line} {parents}{r.short_name}"
             if r.name not in (key, r.short_name):
-                line = f'{line} ({r.name})'
+                line = f"{line} ({r.name})"
             print(line)
-            print(f'{prefix}    ' + ' '.join(
-                f'{k}={v}' for k, v in sorted(r.totals.items())))
+            print(
+                f"{prefix}    "
+                + " ".join(f"{k}={v}" for k, v in sorted(r.totals.items()))
+            )
             for cat, metrics in (
-                    ('map', r.map_metrics),
-                    ('cov', r.covid_metrics),
-                    ('var', r.variant_metrics),
-                    ('vax', r.vaccination_metrics),
-                    ('mob', r.mobility_metrics)):
+                ("map", r.map_metrics),
+                ("cov", r.covid_metrics),
+                ("var", r.variant_metrics),
+                ("vax", r.vaccination_metrics),
+                ("mob", r.mobility_metrics),
+            ):
                 for name, m in metrics.items():
-                    print(f'{prefix}    {len(m.frame):3d}d '
-                          f'=>{m.frame.index.max().date()} '
-                          f'last={m.frame.value.iloc[-1]:<3.0f} '
-                          f'{cat}: {name}')
+                    print(
+                        f"{prefix}    {len(m.frame):3d}d "
+                        f"=>{m.frame.index.max().date()} "
+                        f"last={m.frame.value.iloc[-1]:<3.0f} "
+                        f"{cat}: {name}"
+                    )
                     if args.print_credits:
                         print(f'{prefix}        {" ".join(m.credits.values())}')
                     if args.print_data:
                         print(m.frame)
 
             for c in r.policy_changes:
-                print(f'{prefix}      {c.date.date()} {c.score:+2d} '
-                      f'{c.emoji} {c.text}')
+                print(
+                    f"{prefix}      {c.date.date()} {c.score:+2d} "
+                    f"{c.emoji} {c.text}"
+                )
 
         for k, sub in r.subregions.items():
-            print_tree(prefix + '  ', f'{parents}{r.short_name}/', k, sub)
+            print_tree(prefix + "  ", f"{parents}{r.short_name}/", k, sub)
 
-    print_tree('', '', world.short_name, world)
+    print_tree("", "", world.short_name, world)
