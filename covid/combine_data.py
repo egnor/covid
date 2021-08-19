@@ -44,7 +44,7 @@ argument_group.add_argument("--no_google_mobility", action="store_true")
 argument_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 argument_group.add_argument("--no_state_policy", action="store_true")
 argument_group.add_argument("--no_unified_dataset", action="store_true")
-argument_group.add_argument("--no_unified_hydromet", action="store_true")
+argument_group.add_argument("--add_unified_hydromet", action="store_true")
 argument_group.add_argument(
     "--prune_regex", default=r"World/(BR|CL)/[A-Z]*/.*|World/.*/.*/.*/.*"
 )
@@ -222,12 +222,12 @@ def _compute_world(session, args, vprint):
         unified_credits = fetch_unified_dataset.credits()
         unified_covid = fetch_unified_dataset.get_covid(session)
 
-        if args.no_unified_hydromet:
-            hydromet_by_uid = None
-        else:
+        if args.add_unified_hydromet:
             vprint("Loading unified dataset (hydromet)...")
             unified_hydromet = fetch_unified_dataset.get_hydromet(session)
             hydromet_by_uid = unified_hydromet.groupby(level="ID", sort=False)
+        else:
+            hydromet_by_uid = None
 
         vprint("Merging unified datasets...")
         for uid, df in unified_covid.groupby(level="ID", sort=False):
@@ -695,6 +695,7 @@ def _compute_world(session, args, vprint):
             for field in (
                 "totals",
                 "covid_metrics",
+                "variant_metrics",
                 "vaccination_metrics",
                 "mobility_metrics",
             ):
