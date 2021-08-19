@@ -5,7 +5,6 @@ import io
 
 import pandas
 
-
 REPO_DIR = "https://raw.githubusercontent.com/hodcroftlab/covariants/master"
 CLUSTER_TABLES_DIR = f"{REPO_DIR}/cluster_tables"
 COUNTRY_JSON_FILES = [
@@ -55,6 +54,7 @@ def credits():
 if __name__ == "__main__":
     import argparse
     import signal
+
     from covid import cache_policy
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)

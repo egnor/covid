@@ -2,16 +2,23 @@
 
 import argparse
 import collections
+import itertools
 import os.path
 import pickle
 import re
 import sys
 import traceback
 import warnings
-from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from dataclasses import field
+from dataclasses import replace
+from typing import Dict
+from typing import List
+from typing import Optional
+from typing import Tuple
 from warnings import warn
 
+import matplotlib.cm
 import numpy
 import pandas
 import pandas.api.types
@@ -26,7 +33,6 @@ from covid import fetch_google_mobility
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
 from covid import fetch_unified_dataset
-
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
@@ -123,31 +129,6 @@ class Region:
             or rx.fullmatch(r.path().replace(" ", "_"))
         )
 
-    def lookup_path(r, p):
-        p = p.strip("/ ").lower()
-        n = (
-            p[len(r.short_name) :]
-            if p.startswith(r.short_name.lower())
-            else p[len(r.name) :]
-            if p.startswith(r.name.lower())
-            else None
-        )
-        return (
-            r
-            if (n == "")
-            else None
-            if (n is None)
-            else next(
-                (
-                    y
-                    for s in r.subregions.values()
-                    for y in [s.lookup_path(n)]
-                    if y
-                ),
-                None,
-            )
-        )
-
 
 def get_world(session, args, verbose=False):
     """Returns data organized into a tree rooted at a World region.
@@ -165,7 +146,7 @@ def get_world(session, args, verbose=False):
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
         if KNOWN_WARNINGS_REGEX.match(str(message)):
-            print(f"=== {str(message).strip()}")
+            vprint(f"=== {str(message).strip()}")
         else:
             nonlocal warning_count
             warning_count += 1
@@ -181,7 +162,6 @@ def get_world(session, args, verbose=False):
         warnings.showwarning = saved
 
     if warning_count:
-        print()
         raise ValueError(f"{warning_count} warnings found combining data")
 
     vprint(f"Saving cached world: {cache_path}")
@@ -238,7 +218,7 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_unified_dataset:
-        vprint("Loading unified (COVID) dataset...")
+        vprint("Loading unified dataset (COVID)...")
         unified_credits = fetch_unified_dataset.credits()
         unified_covid = fetch_unified_dataset.get_covid(session)
 
@@ -249,7 +229,7 @@ def _compute_world(session, args, vprint):
             unified_hydromet = fetch_unified_dataset.get_hydromet(session)
             hydromet_by_uid = unified_hydromet.groupby(level="ID", sort=False)
 
-        vprint("Merging unified (COVID) dataset...")
+        vprint("Merging unified datasets...")
         for uid, df in unified_covid.groupby(level="ID", sort=False):
             region = region_by_uid.get(uid)
             if not region:
@@ -363,16 +343,9 @@ def _compute_world(session, args, vprint):
         cov_credits = fetch_covariants.credits()
         covar = fetch_covariants.get_variants(session=session)
 
-        totals = covar[covar.region == ""].groupby("variant")["found"].sum()
-        colors = dict(
-            zip(
-                (
-                    vf[0]
-                    for vf in sorted(totals.itertuples(), key=lambda vf: vf[1])
-                ),
-                itertools.cycle(matplotlib.cm.tab20.colors),
-            )
-        )
+        totals = covar.groupby("variant")["found"].sum()
+        vars = [v[0] for v in sorted(totals.items(), key=lambda v: v[1])]
+        colors = dict(zip(vars, itertools.cycle(matplotlib.cm.tab20.colors)))
 
         region_cols = ["country", "region"]
         covar.sort_values(region_cols + ["date"], inplace=True)
@@ -410,37 +383,41 @@ def _compute_world(session, args, vprint):
             for v, vd in rd.groupby("variant", as_index=False, sort=False):
                 if not v:
                     v_others = vd.found
-                    v_scaling = 0.01 / vd.found
+                    v_totals = vd.found
                     continue
 
                 if v in region.variant_metrics:
                     warnings.warn(f"Duplicate covariant ({region.path()}): {v}")
                     continue
 
-                if len(v_scaling) != len(vd):
+                if len(v_totals) != len(vd):
                     warnings.warn(
                         f"Bad covariant data ({region.path()}): "
-                        f"len totals={len(v_scaling)} len data={len(vd)}"
+                        f"len totals={len(v_totals)} len data={len(vd)}"
                     )
                     continue
 
-                # XXX consistent colors for variants
                 v_others = v_others - vd.found
                 region.variant_metrics[v] = _trend_metric(
-                    c="tab:orange",
+                    c=colors[v],
                     em=0,
                     ord=0,
                     cred=cov_credits,
-                    v=vd.found * v_scaling,
+                    v=vd.found * 100.0 / v_totals,
                 )
 
-            region.variant_metrics["(other)"] = _trend_metric(
-                c="tab:gray",
+            other_variants = _trend_metric(
+                c=(0.9, 0.9, 0.9),
                 em=0,
                 ord=0,
                 cred=cov_credits,
-                v=v_others * v_scaling,
+                v=v_others * 100.0 / v_totals,
             )
+
+            region.variant_metrics = {
+                "original/other": other_variants,
+                **region.variant_metrics,
+            }
 
     #
     # Add vaccination statistics.
@@ -921,7 +898,7 @@ def _trend_metric(
         (nonzero_is,) = (raw.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
         first_i = max(0, min(first_i, len(raw) - 14))
-        smooth = raw.iloc[first_i:].rolling(7).mean()
+        smooth = raw.iloc[first_i:].clip(lower=0.0).rolling(7).mean()
         df = pandas.DataFrame({"raw": raw, "value": smooth})
     else:
         raise ValueError(f"No data for metric")
@@ -944,6 +921,7 @@ def _trend_metric(
 if __name__ == "__main__":
     import argparse
     import signal
+
     from covid import combine_data
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
@@ -980,7 +958,7 @@ if __name__ == "__main__":
             print(line)
             print(
                 f"{prefix}    "
-                + " ".join(f"{k}={v}" for k, v in sorted(r.totals.items()))
+                + " ".join(f"{k}={v:.0f}" for k, v in sorted(r.totals.items()))
             )
             for cat, metrics in (
                 ("map", r.map_metrics),
@@ -993,7 +971,7 @@ if __name__ == "__main__":
                     print(
                         f"{prefix}    {len(m.frame):3d}d "
                         f"=>{m.frame.index.max().date()} "
-                        f"last={m.frame.value.iloc[-1]:<3.0f} "
+                        f"last={m.frame.value.iloc[-1]:<5.1f} "
                         f"{cat}: {name}"
                     )
                     if args.print_credits:
@@ -1003,7 +981,7 @@ if __name__ == "__main__":
 
             for c in r.policy_changes:
                 print(
-                    f"{prefix}      {c.date.date()} {c.score:+2d} "
+                    f"{prefix}           {c.date.date()} {c.score:+2d} "
                     f"{c.emoji} {c.text}"
                 )
 

@@ -10,7 +10,6 @@ import urllib.parse
 import pandas
 import us
 
-
 API_KEY = "AIzaSyA9L3KnYcG1FDC1EVfH6gNqZbp2FfA5nHw"
 DOC_ID = "1zu9qEWI8PsOI_i8nI_S29HDGHlIp2lfVMsGxpQ5tvAQ"
 
@@ -326,6 +325,7 @@ def credits():
 if __name__ == "__main__":
     import argparse
     import textwrap
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])

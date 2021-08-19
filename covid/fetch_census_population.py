@@ -4,7 +4,6 @@ import json
 
 import pandas
 
-
 URL_BASE = "https://api.census.gov/data/2019/pep/population"
 API_KEY = "c0e3aa89dc3a4a7f3be500700f83c292e5556024"
 
@@ -32,6 +31,7 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])

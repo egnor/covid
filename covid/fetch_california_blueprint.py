@@ -11,7 +11,6 @@ import bs4
 import numpy
 import pandas
 
-
 CountyData = collections.namedtuple("CountyData", "fips name tier_history")
 
 Tier = collections.namedtuple("Tier", "number emoji color name")
@@ -171,6 +170,7 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])

@@ -7,9 +7,9 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
-import toml
 import venv
 
+import toml
 
 parser = argparse.ArgumentParser()
 parser.add_argument(

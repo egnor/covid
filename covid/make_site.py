@@ -9,7 +9,8 @@ import re
 import signal
 
 import dominate
-from dominate import tags, util
+from dominate import tags
+from dominate import util
 
 from covid import cache_policy
 from covid import combine_data
@@ -163,6 +164,7 @@ def make_region_html(region, args):
         for md in (
             r.map_metrics,
             r.covid_metrics,
+            r.variant_metrics,
             r.vaccination_metrics,
             r.mobility_metrics,
         ):

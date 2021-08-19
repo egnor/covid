@@ -2,14 +2,14 @@
 
 import io
 import re
-import requests.exceptions
 import tempfile
 
 import pandas
 import pyreadr
+import requests.exceptions
 
-from covid.cache_policy import cached_path, temp_to_rename
-
+from covid.cache_policy import cached_path
+from covid.cache_policy import temp_to_rename
 
 REPO_DIR = "https://raw.githubusercontent.com/hsbadr/COVID-19/master"
 LOOKUP_CSV_URL = f"{REPO_DIR}/COVID-19_LUT.csv"
@@ -203,6 +203,7 @@ def credits():
 if __name__ == "__main__":
     import argparse
     import signal
+
     from covid import cache_policy
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior

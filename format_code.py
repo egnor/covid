@@ -2,4 +2,5 @@
 
 import subprocess
 
-subprocess.run(["black", "-l", "80", "."], check=True)
+subprocess.run(["black", "--line-length", "80", "."], check=True)
+subprocess.run(["isort", "--force-single-line-imports", "."], check=True)

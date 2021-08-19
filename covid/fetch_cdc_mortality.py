@@ -4,7 +4,6 @@ import io
 
 import pandas
 
-
 # TODO - figure out how to load from CDC rather than hardcoding.
 CANNED_DATA = """
 "Notes"	"State"	"State Code"	Deaths	Population	Crude Rate
@@ -79,6 +78,7 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])

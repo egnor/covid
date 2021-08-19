@@ -78,6 +78,7 @@ def get_data(session):
 if __name__ == "__main__":
     import argparse
     import textwrap
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])

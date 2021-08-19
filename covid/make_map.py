@@ -1,11 +1,13 @@
 """Functions to generate maps based on region metrics."""
 
-import cartopy
-import cartopy.crs
-import cartopy.io.shapereader
 import collections
 import datetime
 import math
+import warnings
+
+import cartopy
+import cartopy.crs
+import cartopy.io.shapereader
 import matplotlib
 import matplotlib.figure
 import matplotlib.lines
@@ -15,11 +17,9 @@ import moviepy.video.VideoClip
 import mplcairo.base
 import numpy
 import pandas
-import warnings
 from shapely.geometry.base import BaseMultipartGeometry
 
 from covid import urls
-
 
 FPS = 3
 
@@ -344,24 +344,3 @@ def _rgb_from_canvas(renderer, bbox):
     y_min, y_max = max(0, math.floor(bbox.y0)), max(0, math.ceil(bbox.y1))
     bgra = renderer._get_buffer()
     return bgra[-y_max:-y_min, x_min:x_max, [2, 1, 0]]
-
-
-if __name__ == "__main__":
-    import argparse
-    import signal
-    from covid import cache_policy
-    from covid import combine_data
-    from pathlib import Path
-
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
-    arg_parents = [cache_policy.argument_parser, combine_data.argument_parser]
-    parser = argparse.ArgumentParser(parents=arg_parents)
-    parser.add_argument("--region", required=True)
-    parser.add_argument("--site_dir", type=Path, default=Path("site_out"))
-    args = parser.parse_args()
-    setup(args, verbose=True)
-
-    session = cache_policy.new_session(args)
-    world = combine_data.get_world(session=session, args=args, verbose=True)
-    region = world.lookup_path(args.region)
-    write_video(region=region, site_dir=args.site_dir, verbose=True)

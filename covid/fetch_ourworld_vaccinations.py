@@ -4,7 +4,6 @@ import io
 
 import pandas
 
-
 REPO_DIR = "https://raw.githubusercontent.com/owid/covid-19-data/master"
 VACCINATIONS_DATA_DIR = f"{REPO_DIR}/public/data/vaccinations"
 LOCATIONS_CSV_URL = f"{VACCINATIONS_DATA_DIR}/locations.csv"
@@ -49,6 +48,7 @@ def credits():
 if __name__ == "__main__":
     import argparse
     import signal
+
     from covid import cache_policy
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)

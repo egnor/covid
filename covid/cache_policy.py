@@ -13,7 +13,6 @@ import cachecontrol.heuristics
 import pandas
 import requests
 
-
 # Reusable command line arguments for log fetching.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group("data caching")

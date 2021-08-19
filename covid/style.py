@@ -4,7 +4,8 @@ import os
 import pathlib
 import zipfile
 
-from dominate import tags, util
+from dominate import tags
+from dominate import util
 
 from covid import urls
 

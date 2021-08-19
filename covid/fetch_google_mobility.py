@@ -48,6 +48,7 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
+
     from covid import cache_policy
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
