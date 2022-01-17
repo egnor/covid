@@ -173,7 +173,7 @@ def _plot_vaccination_metrics(axes, region, detailed):
     axes.set_ylabel("% of pop (cumulative)")
     axes.yaxis.set_label_position("right")
     axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     if detailed:

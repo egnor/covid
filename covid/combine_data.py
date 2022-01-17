@@ -291,15 +291,6 @@ def _compute_world(session, args, vprint):
                         cred=unified_credits,
                         cum=deaths * 1e7 / pop,
                     )
-                    region.vaccination_metrics[
-                        "people died / 100p"
-                    ] = _trend_metric(
-                        c="tab:red",
-                        em=0,
-                        ord=1.7,
-                        cred=unified_credits,
-                        v=deaths * 100 / pop,
-                    )
             if "Tests" in df.index:
                 region.covid_metrics["tests / 10Kp"] = _trend_metric(
                     c="tab:green",
