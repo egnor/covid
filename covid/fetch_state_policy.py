@@ -48,6 +48,7 @@ def get_events(session):
     }
 
     skip_tabs = [
+        "Face Masks Post-June 2021",
         "Information",
         "Vaccine Distribution",
         "Vote By Mail",

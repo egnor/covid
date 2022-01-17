@@ -65,8 +65,8 @@ def _write_chart_image(region, site_dir):
         default=0,
     )
 
-    covid_max = min(300, max(60, (covid_max // 10 + 1) * 10))
-    heights = [covid_max / 25]
+    covid_max = min(1000, max(60, (covid_max // 10 + 1) * 10))
+    heights = [covid_max / 75]
 
     if region.variant_metrics:
         heights.append(2)
@@ -129,8 +129,9 @@ def _plot_covid_metrics(axes, region, detailed):
     axes.set_ylabel("daily change per capita")
     axes.yaxis.set_label_position("right")
     axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     _plot_metrics(axes, region.covid_metrics, detailed=detailed)
 
 
@@ -257,48 +258,42 @@ def _plot_policy_changes(axes, region, detailed):
     for p in region.policy_changes:
         if abs(p.score) >= 2 or p == region.current_policy:
             date_changes.setdefault(p.date.round("d"), []).append(p)
-    for date, changes in date_changes.items():
-        s = changes[0].score
-        color = "tab:orange" if s > 0 else "tab:blue" if s else "tab:gray"
+
+    date_color = {
+        date:
+            "tab:gray" if not any(c.score for c in changes)
+                else "tab:orange" if all(c.score >= 0 for c in changes)
+                    else "tab:blue" if all(c.score <= 0 for c in changes)
+                        else "tab:gray"
+        for date, changes in date_changes.items()
+    }
+
+    for date, color in date_color.items():
         axes.axvline(date, c=color, lw=2, ls="--", alpha=0.7, zorder=1)
 
-    if detailed:
-        if any(changes[0].score < 0 for changes in date_changes.values()):
+    for color in set(date_color.values()):
+        t = {"tab:blue": "closing", "tab:orange": "reopening"}.get(color)
+        if detailed and t:
             artist = matplotlib.lines.Line2D(
-                [],
-                [],
-                c="tab:blue",
-                lw=2,
-                ls="--",
-                alpha=0.7,
-                label="closing changes",
+                [], [], c=color, lw=2, ls="--", alpha=0.7, label=t + " changes",
             )
             _add_to_legend(axes, artist)
 
-        if any(changes[0].score > 0 for changes in date_changes.values()):
-            artist = matplotlib.lines.Line2D(
-                [],
-                [],
-                c="tab:orange",
-                lw=2,
-                ls="--",
-                alpha=0.7,
-                label="reopening changes",
-            )
-            _add_to_legend(axes, artist)
-
-        if date_changes:
-            top = axes.secondary_xaxis("top")
-            top.set_xticks(list(date_changes.keys()))
-            top.set_xticklabels(
-                [
-                    "\n".join(c.emoji.replace("\uFE0F", "") for c in changes)
-                    for changes in date_changes.values()
-                ],
-                fontdict=dict(fontsize=15),
-                linespacing=1.1,
-                font=pathlib.Path(__file__).parent / "NotoColorEmoji.ttf",
-            )
+    if detailed and date_changes:
+        top = axes.secondary_xaxis("top")
+        top.set_xticks(list(date_changes.keys()))
+        top.set_xticklabels(
+            [
+                "\n".join(
+                    emoji.replace("\uFE0F", "")
+                    for emoji in {change.emoji: 1 for change in changes}
+                )
+                for changes in date_changes.values()
+            ],
+            fontdict=dict(fontsize=15),
+            linespacing=1.1,
+            font=pathlib.Path(__file__).parent / "NotoColorEmoji.ttf",
+        )
 
 
 def _setup_xaxis(axes, title=None, titlesize=45):
