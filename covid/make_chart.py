@@ -152,18 +152,21 @@ def _plot_variant_metrics(axes, region, detailed):
     ]
     top_variants = set(name for total, name in sorted(total_name)[-7:])
 
-    baseline = None
+    prev = None
     for i, (name, v) in enumerate(reversed(region.variant_metrics.items())):
-        if baseline is None:
+        if prev is None:
             zeros = numpy.zeros(len(v.frame.value))
-            baseline = pandas.Series(data=zeros, index=v.frame.index)
-        top = baseline + v.frame.value
+            prev = pandas.Series(data=zeros, index=v.frame.index)
+        prev = prev.reindex(v.frame.value.index, copy=False)
+        next = prev.add(v.frame.value, fill_value=0)
+        assert next.index.equals(prev.index)
+
         artist = axes.fill_between(
-            x=v.frame.index, y1=baseline, y2=top, color=v.color, label=name
+            x=next.index, y1=prev, y2=next, color=v.color, label=name
         )
         if name in top_variants:
             _add_to_legend(axes, artist, order=-i)
-        baseline = top
+        prev = next
 
 
 def _plot_vaccination_metrics(axes, region, detailed):
