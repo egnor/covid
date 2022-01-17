@@ -187,45 +187,84 @@ def get_events(session):
             )
 
             score = (
-                +3 if "end stay at home" in norm
-                else -3 if "stay at home" in norm
-                else +2 if "emergency lifted" in norm
-                else -2 if "emergency issued" in norm
-                else -2 if "emergency reinstated" in norm
-                else +2 if ("ended statewide" in norm and "masks" in area_norm)
-                else +2 if ("prevent local" in norm and "masks" in area_norm)
-                else +2 if ("mandate end" in norm and "masks" in area_norm)
-                else -2 if ("mandate start" in norm and "masks" in area_norm)
-                else -2 if ("public spaces" in norm and "masks" in area_norm)
-                else -1 if "masks" in area_norm
-                else +1 if "quarantines ended" in norm
-                else -1 if "quarantine rules" in area_norm
-                else -1 if "suspended elective" in norm
-                else -1 if ("stop" in norm and "incarcerated" in area_norm)
-                else +1 if ("resume" in norm and "incarcerated" in area_norm)
-                else -1 if "began to re-close" in norm
-                else +1 if "began to reopen" in norm
-                else -2 if "closed k-12 schools" in norm
-                else -2 if "closed non-essential businesses" in norm
-                else -2 if "closed restaurants" in norm
-                else -2 if "close indoor dining" in norm
-                else -2 if "closed bars" in norm
-                else -2 if "close bars" in norm
-                else -1 if "physical distance closures" in area_norm
-                else +2 if "reopen bars" in norm
-                else +2 if "reopen businesses" in norm
-                else +2 if "reopen non-essential retail" in norm
-                else +2 if "reopen restaurants" in norm
-                else +2 if "reopened businesses" in norm
-                else +2 if "reopened bars" in norm
-                else +2 if "reopened non-essential retail" in norm
-                else +2 if "reopened restaurants" in norm
-                else -2 if "re-close indoor dining" in norm
-                else -2 if "re-close bars" in norm
-                else -1 if "re-close" in norm
-                else +1 if "reopen" in norm
-                else -1 if "close" in norm
-                else -1 if "banned" in norm
+                +3
+                if "end stay at home" in norm
+                else -3
+                if "stay at home" in norm
+                else +2
+                if "emergency lifted" in norm
+                else -2
+                if "emergency issued" in norm
+                else -2
+                if "emergency reinstated" in norm
+                else +2
+                if ("ended statewide" in norm and "masks" in area_norm)
+                else +2
+                if ("prevent local" in norm and "masks" in area_norm)
+                else +2
+                if ("mandate end" in norm and "masks" in area_norm)
+                else -2
+                if ("mandate start" in norm and "masks" in area_norm)
+                else -2
+                if ("public spaces" in norm and "masks" in area_norm)
+                else -1
+                if "masks" in area_norm
+                else +1
+                if "quarantines ended" in norm
+                else -1
+                if "quarantine rules" in area_norm
+                else -1
+                if "suspended elective" in norm
+                else -1
+                if ("stop" in norm and "incarcerated" in area_norm)
+                else +1
+                if ("resume" in norm and "incarcerated" in area_norm)
+                else -1
+                if "began to re-close" in norm
+                else +1
+                if "began to reopen" in norm
+                else -2
+                if "closed k-12 schools" in norm
+                else -2
+                if "closed non-essential businesses" in norm
+                else -2
+                if "closed restaurants" in norm
+                else -2
+                if "close indoor dining" in norm
+                else -2
+                if "closed bars" in norm
+                else -2
+                if "close bars" in norm
+                else -1
+                if "physical distance closures" in area_norm
+                else +2
+                if "reopen bars" in norm
+                else +2
+                if "reopen businesses" in norm
+                else +2
+                if "reopen non-essential retail" in norm
+                else +2
+                if "reopen restaurants" in norm
+                else +2
+                if "reopened businesses" in norm
+                else +2
+                if "reopened bars" in norm
+                else +2
+                if "reopened non-essential retail" in norm
+                else +2
+                if "reopened restaurants" in norm
+                else -2
+                if "re-close indoor dining" in norm
+                else -2
+                if "re-close bars" in norm
+                else -1
+                if "re-close" in norm
+                else +1
+                if "reopen" in norm
+                else -1
+                if "close" in norm
+                else -1
+                if "banned" in norm
                 else 0
             )
 

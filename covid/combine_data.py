@@ -266,6 +266,15 @@ def _compute_world(session, args, vprint):
                         cred=unified_credits,
                         cum=cases * 1e5 / pop,
                     )
+                    region.vaccination_metrics[
+                        "people tested positive / 100p"
+                    ] = _trend_metric(
+                        c="tab:blue",
+                        em=0,
+                        ord=1.6,
+                        cred=unified_credits,
+                        v=cases * 100 / pop,
+                    )
             if "Deaths" in df.index:
                 deaths = best_data("Deaths")
                 deaths_total = deaths.max()  # avoid glitches
@@ -281,6 +290,15 @@ def _compute_world(session, args, vprint):
                         ord=1.1,
                         cred=unified_credits,
                         cum=deaths * 1e7 / pop,
+                    )
+                    region.vaccination_metrics[
+                        "people died / 100p"
+                    ] = _trend_metric(
+                        c="tab:red",
+                        em=0,
+                        ord=1.7,
+                        cred=unified_credits,
+                        v=deaths * 100 / pop,
                     )
             if "Tests" in df.index:
                 region.covid_metrics["tests / 10Kp"] = _trend_metric(
@@ -463,43 +481,47 @@ def _compute_world(session, args, vprint):
 
             v.total_distributed.fillna(method="ffill", inplace=True)
             v.total_vaccinations.fillna(method="ffill", inplace=True)
+            v.total_boosters.fillna(method="ffill", inplace=True)
             v.people_vaccinated.fillna(method="ffill", inplace=True)
             v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
+            primary_doses = v.total_vaccinations.subtract(
+                v.total_boosters, fill_value=0
+            )
 
             region.vaccination_metrics.update(
                 {
-                    "doses allocated / 100p": _trend_metric(
-                        c="tab:gray",
-                        em=0,
-                        ord=1.0,
-                        cred=vax_credits,
-                        v=v.total_distributed * (100 / pop),
-                    ),
-                    "doses given / 100p": _trend_metric(
-                        c="tab:blue",
+                    "primary doses given / 100p": _trend_metric(
+                        c="tab:brown",
                         em=0,
                         ord=1.1,
                         cred=vax_credits,
-                        v=v.total_vaccinations * (100 / pop),
+                        v=primary_doses * (100 / pop),
+                    ),
+                    "booster doses given / 100p": _trend_metric(
+                        c="tab:purple",
+                        em=0,
+                        ord=1.2,
+                        cred=vax_credits,
+                        v=v.total_boosters * (100 / pop),
                     ),
                     "people given any doses / 100p": _trend_metric(
                         c="tab:orange",
                         em=1,
-                        ord=1.2,
+                        ord=1.3,
                         cred=vax_credits,
                         v=v.people_vaccinated * (100 / pop),
                     ),
-                    "people given all doses / 100p": _trend_metric(
+                    "people fully vaccinated / 100p": _trend_metric(
                         c="tab:green",
                         em=1,
-                        ord=1.3,
+                        ord=1.4,
                         cred=vax_credits,
                         v=v.people_fully_vaccinated * (100 / pop),
                     ),
                     "daily dose rate / 5Kp": _trend_metric(
                         c="tab:cyan",
                         em=0,
-                        ord=1.4,
+                        ord=1.5,
                         cred=vax_credits,
                         v=v.daily_vaccinations * (5000 / pop),
                         raw=v.daily_vaccinations_raw * (5000 / pop),
@@ -931,15 +953,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("--print_credits", action="store_true")
     parser.add_argument("--print_data", action="store_true")
-    parser.add_argument("--region_regex")
+    parser.add_argument("--print_regex")
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = combine_data.get_world(session=session, args=args, verbose=True)
-    region_regex = args.region_regex and re.compile(args.region_regex, re.I)
+    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
-        if r.matches_regex(region_regex):
+        if r.matches_regex(print_regex):
             line = (
                 f'{prefix}{r.totals["population"] or -1:9.0f}p <'
                 + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]

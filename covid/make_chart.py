@@ -65,7 +65,7 @@ def _write_chart_image(region, site_dir):
         default=0,
     )
 
-    covid_max = min(1000, max(60, (covid_max // 10 + 1) * 10))
+    covid_max = min(1000, max(200, (covid_max // 20 + 2) * 20))
     heights = [covid_max / 75]
 
     if region.variant_metrics:
@@ -102,7 +102,7 @@ def _write_chart_image(region, site_dir):
 
     if region.vaccination_metrics:
         vax_axes = axes_list.pop(0)
-        _setup_xaxis(vax_axes, title="Vaccination")
+        _setup_xaxis(vax_axes, title="Immunity")
         _plot_vaccination_metrics(vax_axes, region, detailed=True)
         _plot_policy_changes(vax_axes, region, detailed=False)
         _add_plot_legend(vax_axes)
@@ -169,11 +169,11 @@ def _plot_variant_metrics(axes, region, detailed):
 def _plot_vaccination_metrics(axes, region, detailed):
     """Plots COVID vaccination metrics."""
 
-    axes.set_ylim(0, 150)
+    axes.set_ylim(0, 200)
     axes.set_ylabel("% of pop (cumulative)")
     axes.yaxis.set_label_position("right")
     axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
     axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
     axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
     if detailed:
@@ -260,11 +260,13 @@ def _plot_policy_changes(axes, region, detailed):
             date_changes.setdefault(p.date.round("d"), []).append(p)
 
     date_color = {
-        date:
-            "tab:gray" if not any(c.score for c in changes)
-                else "tab:orange" if all(c.score >= 0 for c in changes)
-                    else "tab:blue" if all(c.score <= 0 for c in changes)
-                        else "tab:gray"
+        date: "tab:gray"
+        if not any(c.score for c in changes)
+        else "tab:orange"
+        if all(c.score >= 0 for c in changes)
+        else "tab:blue"
+        if all(c.score <= 0 for c in changes)
+        else "tab:gray"
         for date, changes in date_changes.items()
     }
 
@@ -275,7 +277,13 @@ def _plot_policy_changes(axes, region, detailed):
         t = {"tab:blue": "closing", "tab:orange": "reopening"}.get(color)
         if detailed and t:
             artist = matplotlib.lines.Line2D(
-                [], [], c=color, lw=2, ls="--", alpha=0.7, label=t + " changes",
+                [],
+                [],
+                c=color,
+                lw=2,
+                ls="--",
+                alpha=0.7,
+                label=t + " changes",
             )
             _add_to_legend(axes, artist)
 
