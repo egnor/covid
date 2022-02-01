@@ -4,198 +4,107 @@ import io
 import re
 
 import pandas
+import pandas.api.types
 import requests.exceptions
 
 from covid.cache_policy import cached_path
 from covid.cache_policy import temp_to_rename
 
-REPO_DIR = "https://raw.githubusercontent.com/hsbadr/COVID-19/master"
-LOOKUP_CSV_URL = f"{REPO_DIR}/COVID-19_LUT.csv"
-COVID19_RDATA_URL = f"{REPO_DIR}/COVID-19.rds"
-HYDROMET_RDATA_URL = f"{REPO_DIR}/Hydromet/Hydromet_YYYYMM.rds"
+REPO_URL = "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master"
+LOOKUP_CSV_URL = f"{REPO_URL}/csse_covid_19_data/UID_ISO_FIPS_LookUp_Table.csv"
+REPORTS_URL = f"{REPO_URL}/csse_covid_19_data/csse_covid_19_daily_reports"
 
-_place_by_id = None
+_places = None
 
 
 def get_places(session):
-    """Returns a dict mapping UID number to place metadata."""
+    """Returns a DataFrame of place metadata."""
 
-    global _place_by_id
-    if _place_by_id is None:
+    global _places
+    if _places is None:
         response = session.get(LOOKUP_CSV_URL)
         response.raise_for_status()
-        places = pandas.read_csv(
-            io.StringIO(response.text),
-            keep_default_na=False,
-            na_values={
-                f: [""] for f in ("Latitude", "Longitude", "Population")
-            },
-        )
-
-        places.Population.fillna(0, inplace=True)
-        places.Population = places.Population.astype(int)
-        _place_by_id = pid = {
-            place.ID: place
-            for place in places.itertuples(index=False, name="Place")
-        }
-
-        # Data error patches. TODO: Remove when fixed upstream.
-        # Puerto Rico
-        pid["US72"] = pid["US72"]._replace(Population=3193694)
-        pid["US72001"] = pid["US72001"]._replace(Population=17363)
-        pid["US72003"] = pid["US72003"]._replace(Population=36694)
-        pid["US72005"] = pid["US72005"]._replace(Population=50265)
-        pid["US72007"] = pid["US72007"]._replace(Population=24814)
-        pid["US72009"] = pid["US72009"]._replace(Population=22108)
-        pid["US72011"] = pid["US72011"]._replace(Population=26161)
-        pid["US72013"] = pid["US72013"]._replace(Population=81966)
-        pid["US72015"] = pid["US72015"]._replace(Population=17238)
-        pid["US72017"] = pid["US72017"]._replace(Population=23727)
-        pid["US72019"] = pid["US72019"]._replace(Population=27725)
-        pid["US72021"] = pid["US72021"]._replace(Population=169269)
-        pid["US72023"] = pid["US72023"]._replace(Population=47515)
-        pid["US72025"] = pid["US72025"]._replace(Population=124606)
-        pid["US72027"] = pid["US72027"]._replace(Population=30504)
-        pid["US72029"] = pid["US72029"]._replace(Population=44674)
-        pid["US72031"] = pid["US72031"]._replace(Population=146984)
-        pid["US72033"] = pid["US72033"]._replace(Population=23121)
-        pid["US72035"] = pid["US72035"]._replace(Population=42409)
-        pid["US72037"] = pid["US72037"]._replace(Population=10904)
-        pid["US72039"] = pid["US72039"]._replace(Population=15808)
-        pid["US72041"] = pid["US72041"]._replace(Population=38307)
-        pid["US72043"] = pid["US72043"]._replace(Population=38336)
-        pid["US72045"] = pid["US72045"]._replace(Population=18648)
-        pid["US72047"] = pid["US72047"]._replace(Population=32293)
-        pid["US72049"] = pid["US72049"]._replace(Population=1714)
-        pid["US72051"] = pid["US72051"]._replace(Population=36141)
-        pid["US72053"] = pid["US72053"]._replace(Population=29454)
-        pid["US72054"] = pid["US72054"]._replace(Population=11317)
-        pid["US72055"] = pid["US72055"]._replace(Population=15383)
-        pid["US72057"] = pid["US72057"]._replace(Population=39465)
-        pid["US72059"] = pid["US72059"]._replace(Population=17623)
-        pid["US72061"] = pid["US72061"]._replace(Population=83728)
-        pid["US72063"] = pid["US72063"]._replace(Population=47093)
-        pid["US72065"] = pid["US72065"]._replace(Population=39218)
-        pid["US72067"] = pid["US72067"]._replace(Population=15518)
-        pid["US72069"] = pid["US72069"]._replace(Population=50653)
-        pid["US72071"] = pid["US72071"]._replace(Population=40423)
-        pid["US72073"] = pid["US72073"]._replace(Population=13891)
-        pid["US72075"] = pid["US72075"]._replace(Population=44679)
-        pid["US72077"] = pid["US72077"]._replace(Population=38155)
-        pid["US72079"] = pid["US72079"]._replace(Population=22010)
-        pid["US72081"] = pid["US72081"]._replace(Population=24276)
-        pid["US72083"] = pid["US72083"]._replace(Population=7927)
-        pid["US72085"] = pid["US72085"]._replace(Population=37007)
-        pid["US72087"] = pid["US72087"]._replace(Population=24553)
-        pid["US72089"] = pid["US72089"]._replace(Population=17665)
-        pid["US72091"] = pid["US72091"]._replace(Population=37287)
-        pid["US72093"] = pid["US72093"]._replace(Population=5430)
-        pid["US72095"] = pid["US72095"]._replace(Population=10321)
-        pid["US72097"] = pid["US72097"]._replace(Population=71530)
-        pid["US72099"] = pid["US72099"]._replace(Population=34891)
-        pid["US72101"] = pid["US72101"]._replace(Population=30335)
-        pid["US72103"] = pid["US72103"]._replace(Population=25761)
-        pid["US72105"] = pid["US72105"]._replace(Population=27349)
-        pid["US72107"] = pid["US72107"]._replace(Population=20220)
-        pid["US72109"] = pid["US72109"]._replace(Population=16211)
-        pid["US72111"] = pid["US72111"]._replace(Population=19249)
-        pid["US72113"] = pid["US72113"]._replace(Population=131881)
-        pid["US72115"] = pid["US72115"]._replace(Population=22918)
-        pid["US72117"] = pid["US72117"]._replace(Population=13656)
-        pid["US72119"] = pid["US72119"]._replace(Population=48025)
-        pid["US72121"] = pid["US72121"]._replace(Population=21712)
-        pid["US72123"] = pid["US72123"]._replace(Population=27128)
-        pid["US72125"] = pid["US72125"]._replace(Population=30227)
-        pid["US72127"] = pid["US72127"]._replace(Population=318441)
-        pid["US72129"] = pid["US72129"]._replace(Population=35989)
-        pid["US72131"] = pid["US72131"]._replace(Population=35528)
-        pid["US72133"] = pid["US72133"]._replace(Population=21209)
-        pid["US72135"] = pid["US72135"]._replace(Population=72025)
-        pid["US72137"] = pid["US72137"]._replace(Population=74271)
-        pid["US72139"] = pid["US72139"]._replace(Population=63674)
-        pid["US72141"] = pid["US72141"]._replace(Population=27395)
-        pid["US72143"] = pid["US72143"]._replace(Population=36061)
-        pid["US72145"] = pid["US72145"]._replace(Population=50023)
-        pid["US72147"] = pid["US72147"]._replace(Population=8386)
-        pid["US72149"] = pid["US72149"]._replace(Population=21372)
-        pid["US72151"] = pid["US72151"]._replace(Population=32282)
-        pid["US72153"] = pid["US72153"]._replace(Population=33575)
-
-        # US Virgin Islands
-        pid["US78020"] = pid["US78020"]._replace(Population=4170)
-        pid["US78030"] = pid["US78030"]._replace(Population=51634)
-
-    return _place_by_id
+        data = io.StringIO(response.text)
+        _places = pandas.read_csv(data, na_values="", keep_default_na=False)
+        for str_col in _places.select_dtypes("object").columns:
+            _places[str_col].fillna("", inplace=True)
+        for int_col in ["code3", "FIPS", "Population"]:
+            _places[int_col].fillna(0, inplace=True)
+            _places[int_col] = _places[int_col].astype(int)
+        _places.rename(columns={"UID": "ID"}, inplace=True)
+        _places.set_index("ID", inplace=True)
+    return _places
 
 
 def get_covid(session):
     """Returns a DataFrame of COVID-19 daily records."""
 
-    cache_path = cached_path(session, f"{COVID19_RDATA_URL}:feather")
+    cache_path = cached_path(session, f"{REPORTS_URL}:feather")
     if cache_path.exists():
         df = pandas.read_feather(cache_path)
     else:
-        df = _read_rdata_url(session, COVID19_RDATA_URL)
-        df = df[(df.Age == "Total") & (df.Sex == "Total")]
-        df.drop(columns=["Age", "Sex"], inplace=True)
-        df.Date = pandas.to_datetime(df.Date, utc=True)
-        # for c in ('Cases', 'Cases_New'):
-        #     df[c].fillna(0, inplace=True)
-        #     df[c] = df[c].astype(int)
+        reports = []
+        start_day = pandas.Timestamp("01-22-2020", tz="UTC")
+        days = pandas.date_range(start_day, pandas.Timestamp.now(tz="UTC"))
+        for day in days:
+            mm_dd_yyyy = day.strftime("%m-%d-%Y")
+            response = session.get(f"{REPORTS_URL}/{mm_dd_yyyy}.csv")
+            if response.status_code != 404:
+                response.raise_for_status()
+                data = io.StringIO(response.text)
+                rep = pandas.read_csv(data, na_values="", keep_default_na=False)
+                rep.drop(
+                    columns=[
+                        "Active",
+                        "Case-Fatality_Ratio",
+                        "Case_Fatality_Ratio",
+                        "Combined_Key",
+                        "FIPS",
+                        "Incident_Rate",
+                        "Incidence_Rate",
+                        "Lat",
+                        "Long_",
+                        "Latitude",
+                        "Longitude",
+                        "Recovered",
+                    ],
+                    inplace=True,
+                    errors="ignore",
+                )
+                rep.rename(
+                    columns={
+                        "Country/Region": "Country_Region",
+                        "Last Update": "Last_Update",
+                        "Province/State": "Province_State",
+                    },
+                    inplace=True,
+                )
+
+                rep["Date"] = day
+                rep.Last_Update = pandas.to_datetime(rep.Last_Update, utc=True)
+                reports.append(rep)
+
+        place_cols = ["Country_Region", "Province_State", "Admin2"]
+        ids = get_places(session).reset_index().set_index(place_cols)[["ID"]]
+
+        df = pandas.concat(reports, ignore_index=True)
+        for str_col in df.select_dtypes("object").columns:
+            df[str_col].fillna("", inplace=True)
+
+        df = df.merge(ids, left_on=place_cols, right_index=True)
+        df.drop(columns=place_cols, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
-    return df.groupby(["ID", "Type", "Source", "Date"]).first()
-
-
-def get_hydromet(session):
-    """Returns a DataFrame of hydrometeological daily records."""
-    cache_path = cached_path(session, f"{HYDROMET_RDATA_URL}:feather")
-    if cache_path.exists():
-        df = pandas.read_feather(cache_path)
-    else:
-        frames = []
-        try:
-            for month in range(120):
-                yyyymm = f"{2020 + month // 12}{1 + month % 12:02d}"
-                url = HYDROMET_RDATA_URL.replace("YYYYMM", yyyymm)
-                frame = _read_rdata_url(session, url)
-                frames.append(frame)
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code != 404:
-                raise
-
-        df = pandas.concat(frames, ignore_index=True)
-        df.Date = pandas.to_datetime(df.Date, utc=True)
-        with temp_to_rename(cache_path) as temp_path:
-            df.to_feather(temp_path)
-
-    return df.groupby(["ID", "Date", "HydrometSource"]).first()
-
-
-def _read_rdata_url(session, url):
-    """Downloads an RData file from an URL and returns it as a DataFrame."""
-
-    response = session.get(url)
-    response.raise_for_status()
-    with tempfile.NamedTemporaryFile() as tf:
-        tf.write(response.content)
-        tf.flush()
-        try:
-            rdata = pyreadr.read_r(tf.name)
-        except BaseException:
-            raise ValueError(f"Error parsing RData: {url}")
-        if len(rdata) != 1:
-            objects = ", ".join(f'"{k}"' for k in rdata.keys())
-            raise ValueError("Multiple R objects ({objects}): {url}")
-
-        frame = next(iter(rdata.values()))
-        # frame['url'] = url.split('/')[-1]
-        return frame
+    df = df.groupby(["ID", "Date"], as_index=False).first()
+    df.set_index(["ID", "Date"], inplace=True, verify_integrity=True)
+    return df
 
 
 def credits():
-    return {"https://github.com/hsbadr/COVID-19": "Unified COVID-19 Dataset"}
+    return {"https://coronavirus.jhu.edu/": "JHU COVID Resource Center"}
 
 
 if __name__ == "__main__":
@@ -206,86 +115,38 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument("--id_regex")
-    parser.add_argument("--print_data", action="store_true")
-    parser.add_argument("--print_types", action="store_true")
+    parser.add_argument("--id", type=int)
     args = parser.parse_args()
     session = cache_policy.new_session(args)
 
     print("Loading places...")
     places = get_places(session)
+    places.info()
+    print()
+
+    print("Cache:", cached_path(session, f"{REPORTS_URL}:feather"))
     print("Loading COVID data...")
     covid = get_covid(session)
-    print("Loading hydromet data...")
-    hydromet = get_hydromet(session)
-
+    covid.info()
     print()
-    print("=== COVID DATA ===")
-    covid.info(null_counts=True)
-    print()
-    codes = {}
-    for (source, type), source_data in covid.groupby(level=["Source", "Type"]):
-        codes[(source, type)] = code = len(codes) + 1
-        place_count = len(source_data.index.unique(level="ID"))
-        print(f'{f"[{code}]":>4} {place_count:4d}p {source:<3} {type}')
 
-    print()
-    print("=== HYDROMET DATA ===")
-    hydromet.info(null_counts=True)
-    print()
-    for source, source_data in hydromet.groupby(level=["HydrometSource"]):
-        codes[source] = code = len(codes) + 1
-        place_count = len(source_data.index.unique(level="ID"))
-        print(f'{f"<{code}>":>4} {place_count:4d}p {source:<3}')
+    if args.id:
+        print(f"=== PLACE ID={args.id} ===")
+        place = places.loc[args.id]
+        print(place)
+        print()
 
-    print()
-    print("=== REGIONS ===")
-    id_regex = args.id_regex and re.compile(args.id_regex, re.I)
-    hydromet_by_id = hydromet.groupby(level="ID")
-    for id, c_data in covid.groupby(level="ID"):
-        if id_regex and not id_regex.fullmatch(id):
-            continue
+        print(f"=== COVID ID={args.id} ===")
+        print(covid.loc[args.id])
 
-        p = places[id]
-        c_by_source_type = c_data.groupby(level=["Source", "Type"])
-        c_refs = [codes[s] for s in c_by_source_type.groups]
-
-        h_data, h_by_type, h_refs = None, None, []
-        if id in hydromet_by_id.groups:
-            h_data = hydromet_by_id.get_group(id)
-            h_by_type = h_data.groupby(level="HydrometSource")
-            h_refs = [codes[s] for s in h_by_type.groups]
-
-        line = f"{p.ID:<11} {p.Population:9d}p"
-        line += f" {p.ISO2_UID}"
-        line += f' [{",".join(str(r) for r in c_refs)}]' if c_refs else ""
-        line += f' <{",".join(str(h) for h in h_refs)}>' if h_refs else ""
-        line += f" f={p.FIPS}" if p.FIPS else ""
-        line += f" z={p.ZCTA}" if p.ZCTA else ""
-        line += " " + ": ".join(a for a in (p.Admin2, p.Admin3) if a)
-        print(line)
-
-        if args.print_data or args.print_types:
-            for (source, type), data in c_by_source_type or []:
-                days = data.index.unique(level="Date")
-                print(
-                    f'  {f"[{codes[source, type]}]":>4}'
-                    f' {min(days).strftime("%Y-%m-%d")}'
-                    f' - {max(days).strftime("%y-%m-%d")}'
-                    f" COV ({source}) {type}"
-                )
-                if args.print_data:
-                    print(data)
-
-            for type, data in h_by_type or []:
-                days = data.index.unique(level="Date")
-                print(
-                    f'  {f"<{codes[type]}>":>4}'
-                    f' {min(days).strftime("%Y-%m-%d")}'
-                    f' - {max(days).strftime("%y-%m-%d")}'
-                    f" Hyd {type}"
-                )
-                if args.print_data:
-                    print(data)
-
-            print()
+    else:
+        print("=== PLACES ===")
+        for place in places.itertuples():
+            print(
+                f"id={place.Index:<8} "
+                f"pop={place.Population:<9} "
+                f"{place.iso2:<2}/{place.iso3:<3}/{place.code3:<3} "
+                + (f"f={place.FIPS:<5} " if place.FIPS else "")
+                + f"{place.Country_Region}/{place.Province_State}/"
+                f"{place.Admin2} "
+            )

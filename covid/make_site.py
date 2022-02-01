@@ -32,7 +32,7 @@ def make_region_page(region, args):
             map_note = " (+map video)"
     except Exception as e:
         print(f"*** Error making {region.path()}: {e} ***")
-        raise Exception(f"Error making {region.path()}")
+        raise Exception(f"Error making {region.path()}") from e
 
     print(f"Made: {region.path()}{map_note}")
 

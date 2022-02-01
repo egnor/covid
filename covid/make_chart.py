@@ -29,7 +29,7 @@ def write_images(region, site_dir):
 
 def _write_thumb_image(region, site_dir):
     # Make thumbnail for index page
-    p = (1 + 5 ** 0.5) / 2  # Nice pleasing aspect ratio.
+    p = (1 + 5**0.5) / 2  # Nice pleasing aspect ratio.
     fig = matplotlib.pyplot.figure(figsize=(8, 8 / p), dpi=50)
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes)

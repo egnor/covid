@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     data = get_mobility(cache_policy.new_session(parser.parse_args()))
-    print(data.dtypes)
+    data.info()
     print()
     print("Arbitrary record:")
     print(data.iloc[len(data) // 2])

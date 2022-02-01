@@ -30,9 +30,9 @@ from covid import fetch_california_blueprint
 from covid import fetch_cdc_mortality
 from covid import fetch_covariants
 from covid import fetch_google_mobility
+from covid import fetch_jhu_csse
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
-from covid import fetch_unified_dataset
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
@@ -43,25 +43,22 @@ argument_group.add_argument("--no_covariants", action="store_true")
 argument_group.add_argument("--no_google_mobility", action="store_true")
 argument_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 argument_group.add_argument("--no_state_policy", action="store_true")
-argument_group.add_argument("--no_unified_dataset", action="store_true")
-argument_group.add_argument("--add_unified_hydromet", action="store_true")
-argument_group.add_argument(
-    "--prune_regex", default=r"World/(BR|CL)/[A-Z]*/.*|World/.*/.*/.*/.*"
-)
+argument_group.add_argument("--no_jhu_csse", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r"|Underpopulation: World/CL(/..)? .*"
-    r"|Underpopulation: World/CO(/...)? .*"
-    r"|Underpopulation: World/PE(/...)? .*"
+    r"|Bad cases: World/US/Alabama/Covington .*"
+    r"|Bad deaths: World/AU .*"
+    r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
+    r"|Duplicate covariant \(World/RS\): .*"
+    r"|No COVID metrics: World/EH"
+    r"|No COVID metrics: World/NG/.*"
+    r"|No COVID metrics: World/PL/.*"
+    r"|No COVID metrics: World/US/Alabama/Covington"
+    r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
     r"|Underpopulation: World/DK .*"
     r"|Underpopulation: World/FR .*"
     r"|Underpopulation: World/NZ .*"
-    r"|Underpopulation: World/PE/CAL .*"
-    r"|Overpopulation: World/CL(/..)? .*"
-    r"|Overpopulation: World/CO(/...)? .*"
-    r"|Overpopulation: World/MX(/...)? .*"
-    r"|Overpopulation: World/PE(/...)? .*"
     r"|Unknown ourworldindata state: Bureau of Prisons"
     r"|Unknown ourworldindata state: Dept of Defense"
     r"|Unknown ourworldindata state: Federated States of Micronesia"
@@ -71,9 +68,6 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Unknown ourworldindata state: Republic of Palau"
     r"|Unknown ourworldindata state: United States"
     r"|Unknown ourworldindata state: Veterans Health"
-    r"|Bad cases: World/BR/PE/Quixaba .*"
-    r"|Bad cases: World/BR/RS/Santa .*"
-    r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
 )
 
 
@@ -104,7 +98,7 @@ class Region:
     iso_code: Optional[str] = None
     fips_code: Optional[int] = None
     zip_code: Optional[int] = None
-    unified_id: Optional[str] = None
+    place_id: Optional[str] = None
     lat_lon: Optional[Tuple[float, float]] = None
     totals: collections.Counter = field(default_factory=collections.Counter)
     parent: Optional["Region"] = field(default=None, repr=0)
@@ -145,13 +139,14 @@ def get_world(session, args, verbose=False):
 
     def show_and_count(message, category, filename, lineno, file, line):
         # Allow known data glitches.
-        if KNOWN_WARNINGS_REGEX.match(str(message)):
-            vprint(f"=== {str(message).strip()}")
+        text = str(message).strip()
+        if KNOWN_WARNINGS_REGEX.fullmatch(text):
+            vprint(f"=== {text}")
         else:
             nonlocal warning_count
             warning_count += 1
             where = f"{os.path.basename(filename)}:{lineno}"
-            print(f"*** #{warning_count} ({where}) {str(message).strip()}")
+            print(f"*** #{warning_count} ({where}) {text}")
             traceback.print_stack(file=sys.stdout)
             print()
 
@@ -182,29 +177,18 @@ def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
     vprint("Loading place data...")
-    world = _unified_skeleton(session)
-
-    prune_regex = args.prune_regex and re.compile(args.prune_regex, re.I)
-
-    def prune_region(region):
-        for id, sub in list(region.subregions.items()):
-            if sub.matches_regex(prune_regex):
-                del region.subregions[id]
-            else:
-                prune_region(sub)
-
-    prune_region(world)
+    world = _make_skeleton(session)
 
     # Index by various forms of ID for merging data in.
     region_by_iso = {}
     region_by_fips = {}
-    region_by_uid = {}
+    region_by_id = {}
 
     def index_region_tree(r):
         for index_dict, key in [
             (region_by_iso, r.iso_code),
             (region_by_fips, r.fips_code),
-            (region_by_uid, r.unified_id),
+            (region_by_id, r.place_id),
         ]:
             if key is not None:
                 index_dict[key] = r
@@ -214,134 +198,62 @@ def _compute_world(session, args, vprint):
     index_region_tree(world)
 
     #
-    # Add metrics from the Unified COVID-19 Dataset.
+    # Add metrics from the JHU CSSE dataset
     #
 
-    if not args.no_unified_dataset:
-        vprint("Loading unified dataset (COVID)...")
-        unified_credits = fetch_unified_dataset.credits()
-        unified_covid = fetch_unified_dataset.get_covid(session)
+    if not args.no_jhu_csse:
+        vprint("Loading JHU CSSE dataset (COVID)...")
+        jhu_credits = fetch_jhu_csse.credits()
+        jhu_covid = fetch_jhu_csse.get_covid(session)
 
-        if args.add_unified_hydromet:
-            vprint("Loading unified dataset (hydromet)...")
-            unified_hydromet = fetch_unified_dataset.get_hydromet(session)
-            hydromet_by_uid = unified_hydromet.groupby(level="ID", sort=False)
-        else:
-            hydromet_by_uid = None
-
-        vprint("Merging unified datasets...")
-        for uid, df in unified_covid.groupby(level="ID", sort=False):
-            region = region_by_uid.get(uid)
+        vprint("Merging JHU CSSE dataset...")
+        for id, df in jhu_covid.groupby(level="ID", sort=False):
+            region = region_by_id.get(id)
             if not region:
-                continue  # Taken out of the skeleton for some reason.
+                continue  # Pruned out of the skeleton
 
+            if df.empty:
+                warnings.warn(f"No COVID data: {region.path()}")
+                continue
+
+            cases, deaths = df.Confirmed.max(), df.Deaths.max()
             pop = region.totals["population"]
+            if not (0 <= cases <= pop):
+                warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
+                continue
+            if not (0 <= deaths <= pop):
+                warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
+                continue
+
             df.reset_index(level="ID", drop=True, inplace=True)
 
-            def best_data(type):
-                for_type = df.xs(type)
-                best_date, best_data = None, None
-                for source, s_data in df.xs(type).groupby(level="Source"):
-                    s_data = s_data.droplevel(level="Source").Cases
-                    s_date = s_data[s_data > 0].last_valid_index()
-                    if best_date is None or s_date > best_date:
-                        best_date, best_data = s_date, s_data
-                return best_data
+            region.totals["positives"] = cases
+            region.covid_metrics["positives / 100Kp"] = _trend_metric(
+                c="tab:blue",
+                em=1,
+                ord=1.0,
+                cred=jhu_credits,
+                cum=df.Confirmed * 1e5 / pop,
+            )
 
-            # COVID metrics
-            # (to avoid some data issues, use cum= to compute our own deltas)
-            if "Confirmed" in df.index:
-                cases = best_data("Confirmed")
-                cases_total = cases.max()  # avoid glitches
-                if cases_total < 0 or cases_total > pop:
-                    warnings.warn(
-                        f"Bad cases: {region.path()} ({cases_total}/{pop}p)"
-                    )
-                else:
-                    region.totals["positives"] = cases_total
-                    region.covid_metrics["positives / 100Kp"] = _trend_metric(
-                        c="tab:blue",
-                        em=1,
-                        ord=1.0,
-                        cred=unified_credits,
-                        cum=cases * 1e5 / pop,
-                    )
-                    region.vaccination_metrics[
-                        "people tested positive / 100p"
-                    ] = _trend_metric(
-                        c="tab:blue",
-                        em=0,
-                        ord=1.6,
-                        cred=unified_credits,
-                        v=cases * 100 / pop,
-                    )
-            if "Deaths" in df.index:
-                deaths = best_data("Deaths")
-                deaths_total = deaths.max()  # avoid glitches
-                if deaths_total < 0 or deaths_total > pop:
-                    warnings.warn(
-                        f"Bad deaths: {region.path()} ({deaths_total}/{pop}p)"
-                    )
-                else:
-                    region.totals["deaths"] = deaths_total
-                    region.covid_metrics["deaths / 10Mp"] = _trend_metric(
-                        c="tab:red",
-                        em=1,
-                        ord=1.1,
-                        cred=unified_credits,
-                        cum=deaths * 1e7 / pop,
-                    )
-            if "Tests" in df.index:
-                region.covid_metrics["tests / 10Kp"] = _trend_metric(
-                    c="tab:green",
-                    em=0,
-                    ord=2.0,
-                    cred=unified_credits,
-                    cum=best_data("Tests") * 1e4 / pop,
-                )
-            if "Hospitalized" in df.index:
-                hosp = best_data("Hospitalized")
-                if "ICU" in df.index:
-                    hosp = hosp + best_data("ICU")
-                region.covid_metrics["hosp admit / 1Mp"] = _trend_metric(
-                    c="tab:orange",
-                    em=0,
-                    ord=3.0,
-                    cred=unified_credits,
-                    cum=hosp * 1e6 / pop,
-                )
-            if "Hospitalized_Now" in df.index:
-                hosp_now = best_data("Hospitalized_Now")
-                if "ICU_Now" in df.index:
-                    hosp_now = hosp_now + best_data("ICU_Now")
-                region.covid_metrics["hosp current / 100Kp"] = _trend_metric(
-                    c="tab:pink",
-                    em=0,
-                    ord=3.1,
-                    cred=unified_credits,
-                    raw=hosp_now * 1e5 / pop,
-                )
+            region.vaccination_metrics[
+                "people tested positive / 100p"
+            ] = _trend_metric(
+                c="tab:blue",
+                em=0,
+                ord=1.6,
+                cred=jhu_credits,
+                v=df.Confirmed * 100 / pop,
+            )
 
-            # Hydrometeorological data
-            def to_f(c):
-                return c * 1.8 + 32
-
-            if hydromet_by_uid is not None and uid in hydromet_by_uid.groups:
-                for_uid = hydromet_by_uid.get_group(uid)
-                by_source = for_uid.groupby(level="HydrometSource")
-                df = by_source.get_group(by_source["T"].count().idxmax())
-                df.reset_index(
-                    level=("ID", "HydrometSource"), drop=True, inplace=True
-                )
-                region.mobility_metrics["temp °F"] = _trend_metric(
-                    c="tab:gray",
-                    em=1,
-                    ord=2.0,
-                    cred=unified_credits,
-                    raw=to_f(df["T"]),
-                    mins=to_f(df.Tmin),
-                    maxs=to_f(df.Tmax),
-                )
+            region.totals["deaths"] = deaths
+            region.covid_metrics["deaths / 10Mp"] = _trend_metric(
+                c="tab:red",
+                em=1,
+                ord=1.1,
+                cred=jhu_credits,
+                cum=df.Deaths * 1e7 / pop,
+            )
 
     #
     # Add variant breakdown
@@ -367,6 +279,7 @@ def _compute_world(session, args, vprint):
                 "Curacao": "Curaçao",
                 "South Korea": "Republic Of Korea",
                 "Sint Maarten": "Sint Maarten (Dutch part)",
+                "Democratic Republic of the Congo": "Congo, The Democratic Republic of the",
             }.get(r[0], r[0])
             try:
                 countries = [pycountry.countries.lookup(c_find)]
@@ -383,9 +296,9 @@ def _compute_world(session, args, vprint):
 
             r_find = {"Washington DC": "District of Columbia"}.get(r[1], r[1])
             if r_find:
-                region = region.subregions.get(r_find)
+                path, region = region.path(), region.subregions.get(r_find)
                 if region is None:
-                    warnings.warn(f"Unknown covariant region: {r[0]}/{r_find}")
+                    warnings.warn(f"Unknown covariant region: {path}/{r_find}")
                     continue
 
             v_totals = v_others = []
@@ -466,8 +379,8 @@ def _compute_world(session, args, vprint):
                     continue
 
             pop = region.totals.get("population", 0)
-            if not pop:
-                warn(f"No population for ourworldindata: {region.path}")
+            if not (pop > 0):
+                warn(f"No population: {region.path()} (pop={pop})")
                 continue
 
             v.total_distributed.fillna(method="ffill", inplace=True)
@@ -700,6 +613,7 @@ def _compute_world(session, args, vprint):
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
             if not sub.covid_metrics:
+                warnings.warn(f"No COVID metrics: {sub.path()}")
                 del r.subregions[key]
                 continue
 
@@ -712,11 +626,11 @@ def _compute_world(session, args, vprint):
                 "vaccination_metrics",
                 "mobility_metrics",
             ):
-                if not (field == "mobility_metrics" and not r.parent):
-                    for name, value in getattr(sub, field).items():
-                        if name not in getattr(r, field):
-                            fn, pv = (field, name), (sub_pop, value)
-                            fieldname_popvals.setdefault(fn, []).append(pv)
+                if field == "mobility_metrics" and not r.parent:
+                    continue  # Mobility gets weird rolled up to the top level
+                for name, value in getattr(sub, field).items():
+                    fn, pv = (field, name), (sub_pop, value)
+                    fieldname_popvals.setdefault(fn, []).append(pv)
 
         pop = r.totals["population"]
         if pop == 0:
@@ -732,27 +646,35 @@ def _compute_world(session, args, vprint):
                 f"{sub_pop_total}p in parts"
             )
 
+        week = pandas.Timedelta(weeks=1)
         for (field, name), popvals in fieldname_popvals.items():
             metric_pop = sum(p for p, v in popvals)
             if abs(metric_pop - pop) > pop * 0.1:
                 continue  # Don't synthesize if population doesn't match.
 
-            if field == "totals":
-                r.totals[name] = sum(v for p, v in popvals)
+            out_dict = getattr(r, field)
+            old_value = out_dict.get(name)
+            if out_dict is r.totals:
+                sub_total = sum(v for p, v in popvals)
+                out_dict[name] = max(old_value or 0, sub_total)
                 continue
 
-            popvals.sort(reverse=True, key=lambda pv: pv[0])  # Highest first.
-            credits = dict(c for p, v in popvals for c in v.credits.items())
             ends = list(sorted(v.frame.index[-1] for p, v in popvals))
             end = ends[len(ends) // 2]  # Use the median end date.
+            if old_value and old_value.frame.index[-1] > end - week:
+                continue  # Higher level has reasonably fresh data already
 
+            popvals.sort(reverse=True, key=lambda pv: pv[0])  # Highest first.
             first_pop, first_val = popvals[0]  # Most populated entry.
             frame = first_pop * first_val.frame.loc[:end]
             for next_pop, next_val in popvals[1:]:
                 next_frame = next_pop * next_val.frame.loc[:end]
                 frame = frame.add(next_frame, fill_value=0)
-            getattr(r, field)[name] = replace(
-                first_val, frame=frame / metric_pop, credits=credits
+
+            out_dict[name] = replace(
+                first_val,
+                frame=frame / metric_pop,
+                credits=dict(c for p, v in popvals for c in v.credits.items()),
             )
 
     vprint("Rolling up metrics...")
@@ -809,87 +731,63 @@ def _compute_world(session, args, vprint):
     return world
 
 
-def _unified_skeleton(session):
+def _make_skeleton(session):
     """Returns a region tree for the world with no metrics populated."""
 
-    def subregion(parent, key, name=None, short_name=None):
+    def subregion(parent, key, name=None):
         key = str(key)
         region = parent.subregions.get(key)
         if not region:
             region = parent.subregions[key] = Region(
-                name=name or key, short_name=short_name or key, parent=parent
+                name=name or key, short_name=key, parent=parent
             )
         return region
 
     world = Region(name="World", short_name="World")
-    for id, p in fetch_unified_dataset.get_places(session).items():
+    for p in fetch_jhu_csse.get_places(session).itertuples(name="Place"):
         if not (p.Population > 0):
             continue  # Analysis requires population data.
 
-        region = subregion(world, p.ISO1_2C, p.Admin0)
-        if p.Admin1:
-            region = subregion(region, p.Admin1, p.Admin1, p.ISO2)
-        else:
-            region.iso_code = p.ISO1_2C
+        try:
+            # Put territories under the parent, even with their own ISO codes
+            country_key = pycountry.countries.lookup(p.Country_Region).alpha_2
+        except LookupError:
+            country_key = p.iso2
 
-        if p.ID[:7] in (
-            "US36666",
-            "US36005",
-            "US36047",
-            "US36061",
-            "US36081",
-            "US36085",
-        ):
+        region = subregion(world, country_key, p.Country_Region)
+        region.iso_code = country_key
+
+        if p.Province_State:
+            region = subregion(region, p.Province_State)
+            if p.iso2 != country_key:
+                region.iso_code = p.iso2  # Must be for a territory
+
+        if p.FIPS in (36005, 36047, 36061, 36081, 36085):
             region = subregion(region, "NYC", "New York City")
-        elif p.ID[:7] in ("US49003", "US49005", "US49033"):
+        elif p.FIPS in (49003, 49005, 49033):
             region = subregion(region, "Bear River", "Bear River Area")
-        elif p.ID[:7] in (
-            "US49023",
-            "US49027",
-            "US49039",
-            "US49041",
-            "US49031",
-            "US49055",
-        ):
+        elif p.FIPS in (49023, 49027, 49039, 49041, 49031, 49055):
             region = subregion(region, "Central Utah", "Central Utah Area")
-        elif p.ID[:7] in ("US49007", "US49015", "US49019"):
+        elif p.FIPS in (49007, 49015, 49019):
             region = subregion(region, "Southeast Utah", "Southeast Utah Area")
-        elif p.ID[:7] in (
-            "US49001",
-            "US49017",
-            "US49021",
-            "US49025",
-            "US49053",
-        ):
+        elif p.FIPS in (49001, 49017, 49021, 49025, 49053):
             region = subregion(region, "Southwest Utah", "Southwest Utah Area")
-        elif p.ID[:7] in ("US49009", "US49013", "US49047"):
+        elif p.FIPS in (49009, 49013, 49047):
             region = subregion(region, "TriCounty", "TriCounty Area")
-        elif p.ID[:7] in ("US49057", "US49029"):
+        elif p.FIPS in (49057, 49029):
             region = subregion(region, "Weber-Morgan", "Weber-Morgan Area")
 
-        if p.Admin2 and p.ID != "US36666":
+        if p.Admin2:
             region = subregion(region, p.Admin2)
 
-        if p.ZCTA[:4] == "0000":  # NYC borough pseudo-ZIP
-            region.name = region.short_name = p.Admin3  # Use borough name.
-        elif p.Admin3:
-            region = subregion(region, p.ZCTA or p.Admin3, p.Admin3)
-
-        if p.ZCTA:
-            region.zip_code = int(p.ZCTA)
-        elif p.FIPS and p.FIPS.isdigit():
+        if p.FIPS:
             region.fips_code = int(p.FIPS)
-        elif not p.Admin2:
-            region.iso_code = p.ISO2_UID
 
-        region.unified_id = p.ID
+        region.place_id = p.Index
         region.totals["population"] = p.Population
-        if p.Latitude or p.Longitude:
-            region.lat_lon = (p.Latitude, p.Longitude)
+        if p.Lat or p.Long_:
+            region.lat_lon = (p.Lat, p.Long_)
 
-    world.totals["population"] = sum(
-        s.totals["population"] for s in world.subregions.values()
-    )
     return world
 
 
@@ -952,7 +850,7 @@ if __name__ == "__main__":
     print_regex = args.print_regex and re.compile(args.print_regex, re.I)
 
     def print_tree(prefix, parents, key, r):
-        if r.matches_regex(print_regex):
+        if (not print_regex) or r.matches_regex(print_regex):
             line = (
                 f'{prefix}{r.totals["population"] or -1:9.0f}p <'
                 + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]

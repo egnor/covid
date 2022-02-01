@@ -132,8 +132,8 @@ def write_video(region, site_dir, verbose=False):
                 )
             )
 
-            now_radii = [0.5 * (a ** 0.5) for a in now_areas]
-            prev_radii = [0.5 * (a ** 0.5) for a in prev_areas]
+            now_radii = [0.5 * (a**0.5) for a in now_areas]
+            prev_radii = [0.5 * (a**0.5) for a in prev_areas]
             ring_widths = [n - p for n, p in zip(now_radii, prev_radii)]
             ring_areas = [(n + p) ** 2 for n, p in zip(now_radii, prev_radii)]
             if metric.increase_color:
@@ -245,15 +245,9 @@ def _setup_axes(figure, region):
         axes.set_box_aspect(0.505)
         axes.set_extent((-179, 179, -89, 89), _lat_lon_crs)
     else:
-
-        def m(g):
-            return isinstance(g, BaseMultipartGeometry)
-
-        def split(g):
-            return (p for s in g for p in split(s)) if m(g) else (g,)
-
-        def area(g):
-            return _area_crs.project_geometry(g, _lat_lon_crs).area
+        m = lambda g: isinstance(g, BaseMultipartGeometry)
+        split = lambda g: (p for s in g for p in split(s)) if m(g) else (g,)
+        area = lambda g: _area_crs.project_geometry(g, _lat_lon_crs).area
 
         shapes = a1_region_shapes or a0_region_shapes
         parts = (
