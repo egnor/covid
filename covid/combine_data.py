@@ -443,7 +443,7 @@ def _compute_world(session, args, vprint):
         vprint("Loading and merging CDC mortality data...")
         cdc_credits = fetch_cdc_mortality.credits()
         cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-        y2020 = pandas.DatetimeIndex(["2020-01-01", "2021-12-31"], tz="UTC")
+        y2020 = pandas.DatetimeIndex(["2020-01-01", "2029-12-31"], tz="UTC")
         for mort in cdc_mortality.itertuples(name="Mortality"):
             region = region_by_fips.get(mort.Index)
             if region is None:
