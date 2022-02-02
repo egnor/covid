@@ -32,7 +32,7 @@ def get_prevalence(session):
 
 def get_credits():
     return {
-        "https://www.cdc.gov/coronavirus/2019-ncov/cases-updates/blood-bank-serosurvey.html": "US CDC Serology Surveillance"
+        "https://covid.cdc.gov/covid-data-tracker/": "US CDC COVID Data Tracker"
     }
 
 
@@ -44,7 +44,6 @@ if __name__ == "__main__":
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument("--id", type=int)
     args = parser.parse_args()
     session = cache_policy.new_session(args)
 

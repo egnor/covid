@@ -93,7 +93,6 @@ def get_covid(session):
         df = df.merge(ids, left_on=place_cols, right_index=True)
         df.drop(columns=place_cols, inplace=True)
         df.reset_index(drop=True, inplace=True)
-
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
 
