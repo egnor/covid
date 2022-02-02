@@ -143,7 +143,7 @@ def get_events(session):
                 if "businesses" in norm
                 else "🛍️"
                 if "retail" in norm
-                else "🍾"
+                else "🍸"
                 if "alcohol" in norm
                 else "🍝"
                 if ("restaurants" in norm or "dining" in norm)
@@ -176,7 +176,7 @@ def get_events(session):
                 else "💊"
                 if "dea registration" in norm
                 else "⚕️"
-                if "medicaid" in norm
+                if ("medicaid" in norm or "healthcare" in area_norm)
                 else "🩺"
                 if "medical" in norm
                 else "👮"
@@ -187,9 +187,9 @@ def get_events(session):
             )
 
             score = (
-                +3
+                +2
                 if "end stay at home" in norm
-                else -3
+                else -2
                 if "stay at home" in norm
                 else +2
                 if "emergency lifted" in norm
@@ -205,6 +205,8 @@ def get_events(session):
                 if ("mandate end" in norm and "masks" in area_norm)
                 else -2
                 if ("mandate start" in norm and "masks" in area_norm)
+                else -2
+                if ("mandate resumed" in norm and "masks" in area_norm)
                 else -2
                 if ("public spaces" in norm and "masks" in area_norm)
                 else -1

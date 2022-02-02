@@ -27,7 +27,7 @@ import us
 
 from covid import cache_policy
 from covid import fetch_california_blueprint
-from covid import fetch_cdc_mortality
+from covid import fetch_cdc_prevalence
 from covid import fetch_covariants
 from covid import fetch_google_mobility
 from covid import fetch_jhu_csse
@@ -38,16 +38,15 @@ from covid import fetch_state_policy
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group("data gathering")
 argument_group.add_argument("--no_california_blueprint", action="store_true")
-argument_group.add_argument("--no_cdc_mortality", action="store_true")
+argument_group.add_argument("--no_cdc_prevalence", action="store_true")
 argument_group.add_argument("--no_covariants", action="store_true")
 argument_group.add_argument("--no_google_mobility", action="store_true")
+argument_group.add_argument("--no_jhu_csse", action="store_true")
 argument_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 argument_group.add_argument("--no_state_policy", action="store_true")
-argument_group.add_argument("--no_jhu_csse", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r"|Bad cases: World/US/Alabama/Covington .*"
     r"|Bad deaths: World/AU .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
@@ -59,6 +58,8 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Underpopulation: World/DK .*"
     r"|Underpopulation: World/FR .*"
     r"|Underpopulation: World/NZ .*"
+    r"|Unknown CDC state: All .*"
+    r"|Unknown CDC state: CR[0-9] .*"
     r"|Unknown ourworldindata state: Bureau of Prisons"
     r"|Unknown ourworldindata state: Dept of Defense"
     r"|Unknown ourworldindata state: Federated States of Micronesia"
@@ -106,10 +107,10 @@ class Region:
     map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     variant_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    vaccination_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    vaccine_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
+    serology_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
-    current_policy: Optional[PolicyChange] = None
 
     def path(r):
         return f"{r.parent.path()}/{r.short_name}" if r.parent else r.name
@@ -180,9 +181,9 @@ def _compute_world(session, args, vprint):
     world = _make_skeleton(session)
 
     # Index by various forms of ID for merging data in.
+    region_by_id = {}
     region_by_iso = {}
     region_by_fips = {}
-    region_by_id = {}
 
     def index_region_tree(r):
         for index_dict, key in [
@@ -216,7 +217,7 @@ def _compute_world(session, args, vprint):
                 warnings.warn(f"No COVID data: {region.path()}")
                 continue
 
-            cases, deaths = df.Confirmed.max(), df.Deaths.max()
+            cases, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
             pop = region.totals["population"]
             if not (0 <= cases <= pop):
                 warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
@@ -226,8 +227,9 @@ def _compute_world(session, args, vprint):
                 continue
 
             df.reset_index(level="ID", drop=True, inplace=True)
-
             region.totals["positives"] = cases
+            region.totals["deaths"] = deaths
+
             region.covid_metrics["positives / 100Kp"] = _trend_metric(
                 c="tab:blue",
                 em=1,
@@ -236,23 +238,20 @@ def _compute_world(session, args, vprint):
                 cum=df.Confirmed * 1e5 / pop,
             )
 
-            region.vaccination_metrics[
-                "people tested positive / 100p"
-            ] = _trend_metric(
-                c="tab:blue",
-                em=0,
-                ord=1.6,
-                cred=jhu_credits,
-                v=df.Confirmed * 100 / pop,
-            )
-
-            region.totals["deaths"] = deaths
             region.covid_metrics["deaths / 10Mp"] = _trend_metric(
                 c="tab:red",
                 em=1,
                 ord=1.1,
                 cred=jhu_credits,
                 cum=df.Deaths * 1e7 / pop,
+            )
+
+            region.vaccine_metrics["infections / 100p"] = _trend_metric(
+                c="tab:blue",
+                em=0,
+                ord=1.6,
+                cred=jhu_credits,
+                v=df.Confirmed * 100 / pop,
             )
 
     #
@@ -302,7 +301,7 @@ def _compute_world(session, args, vprint):
                     continue
 
             v_totals = v_others = []
-            for v, vd in rd.groupby("variant", as_index=False, sort=False):
+            for v, vd in rd.groupby("variant", as_index=False):
                 if not v:
                     v_others = vd.found
                     v_totals = vd.found
@@ -342,7 +341,7 @@ def _compute_world(session, args, vprint):
             }
 
     #
-    # Add vaccination statistics.
+    # Add vaccination statistics
     #
 
     if not args.no_ourworld_vaccinations:
@@ -373,9 +372,13 @@ def _compute_world(session, args, vprint):
                 if not state:
                     warnings.warn(f"Unknown ourworldindata state: {s}")
                     continue
+
                 region = region_by_fips.get(int(state.fips))
                 if region is None:
-                    warnings.warn(f"FIPS missing: {state.fips} (state.name)")
+                    warnings.warn(
+                        "Missing ourworldindata FIPS: "
+                        f"{state.fips} (state.name)"
+                    )
                     continue
 
             pop = region.totals.get("population", 0)
@@ -388,39 +391,29 @@ def _compute_world(session, args, vprint):
             v.total_boosters.fillna(method="ffill", inplace=True)
             v.people_vaccinated.fillna(method="ffill", inplace=True)
             v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
-            primary_doses = v.total_vaccinations.subtract(
-                v.total_boosters, fill_value=0
-            )
 
-            region.vaccination_metrics.update(
+            region.vaccine_metrics.update(
                 {
-                    "primary doses given / 100p": _trend_metric(
-                        c="tab:brown",
-                        em=0,
-                        ord=1.1,
-                        cred=vax_credits,
-                        v=primary_doses * (100 / pop),
-                    ),
-                    "booster doses given / 100p": _trend_metric(
-                        c="tab:purple",
+                    "people given any doses / 100p": _trend_metric(
+                        c="tab:olive",
                         em=0,
                         ord=1.2,
-                        cred=vax_credits,
-                        v=v.total_boosters * (100 / pop),
-                    ),
-                    "people given any doses / 100p": _trend_metric(
-                        c="tab:orange",
-                        em=1,
-                        ord=1.3,
                         cred=vax_credits,
                         v=v.people_vaccinated * (100 / pop),
                     ),
                     "people fully vaccinated / 100p": _trend_metric(
                         c="tab:green",
                         em=1,
-                        ord=1.4,
+                        ord=1.3,
                         cred=vax_credits,
                         v=v.people_fully_vaccinated * (100 / pop),
+                    ),
+                    "booster doses given / 100p": _trend_metric(
+                        c="tab:purple",
+                        em=1,
+                        ord=1.4,
+                        cred=vax_credits,
+                        v=v.total_boosters * (100 / pop),
                     ),
                     "daily dose rate / 5Kp": _trend_metric(
                         c="tab:cyan",
@@ -434,33 +427,57 @@ def _compute_world(session, args, vprint):
             )
 
     #
-    # Add baseline mortality data from CDC figures for US states.
-    # TODO: Include seasonal variation and county level data?
-    # TODO: Some sort of proper excess mortality plotting?
+    # Add prevalence estimates
     #
 
-    if not args.no_cdc_mortality:
-        vprint("Loading and merging CDC mortality data...")
-        cdc_credits = fetch_cdc_mortality.credits()
-        cdc_mortality = fetch_cdc_mortality.get_states(session=session)
-        y2020 = pandas.DatetimeIndex(["2020-01-01", "2029-12-31"], tz="UTC")
-        for mort in cdc_mortality.itertuples(name="Mortality"):
-            region = region_by_fips.get(mort.Index)
-            if region is None:
-                continue  # Filtered out for one reason or another.
+    if not args.no_cdc_prevalence:
+        vprint("Loading and merging CDC prevalence estimates...")
+        cdc_credits = fetch_cdc_prevalence.get_credits()
+        cdc_data = fetch_cdc_prevalence.get_prevalence(session)
 
-            mort_10M = mort.Deaths / 365 * 1e7 / region.totals["population"]
-            region.covid_metrics.update(
+        rcols = ["Region Abbreviation", "Region"]
+        for (abbr, name), v in cdc_data.groupby(rcols, as_index=False):
+            state = us.states.lookup(abbr.split("-")[0])
+            if not state:
+                warnings.warn(f"Unknown CDC state: {abbr} ({name})")
+                continue
+
+            region = region_by_fips.get(int(state.fips))
+            if region is None:
+                warnings.warn(f"Missing CDC FIPS: {state.fips} ({state.name})")
+                continue
+
+            name = " ".join(name.replace("Region", "").split())
+            name = name.replace(state.name, state.abbr)
+            name = name.replace("Southern", "S.").replace("Northern", "N.")
+            name = name.replace("Western", "W.").replace("Eastern", "E.")
+            name = name.replace("Southeastern", "SE.")
+            name = name.replace("Northeastern", "NE.")
+            name = name.replace("Southwestern", "SW.")
+            name = name.replace("Northwestern", "NW.")
+            name = f" ({name})" if (name.lower() != state.abbr.lower()) else ""
+
+            # plot midmonth (data spans the month)
+            v.reset_index(rcols, drop=True, inplace=True)
+            v.index = v.index + pandas.Timedelta(days=14)
+            region_i = len(region.serology_metrics) // 2
+            region.serology_metrics.update(
                 {
-                    f"historical deaths / 10Mp ({mort_10M:.1f})": Metric(
-                        color="black",
-                        emphasis=-1,
-                        order=4.0,
-                        credits=cdc_credits,
-                        frame=pandas.DataFrame(
-                            {"value": [mort_10M] * 2}, index=y2020
-                        ),
-                    )
+                    f"infected or vax{name}": _trend_metric(
+                        c=matplotlib.cm.tab20b.colors[region_i],
+                        em=1,
+                        ord=1.0,
+                        cred=cdc_credits,
+                        v=v["Rate %[Total Prevalence] Combined"],
+                    ),
+
+                    f"infected{name}": _trend_metric(
+                        c=matplotlib.cm.tab20c.colors[region_i + 4],
+                        em=0,
+                        ord=1.1,
+                        cred=cdc_credits,
+                        v=v["Rate %[Total Prevalence] Infection"],
+                    ),
                 }
             )
 
@@ -475,6 +492,7 @@ def _compute_world(session, args, vprint):
         for f, events in state_policy.groupby(level="state_fips", sort=False):
             region = region_by_fips.get(f)
             if region is None:
+                warnings.warn(f"Unknown state policy FIPS: {f}")
                 continue
 
             for e in events.itertuples():
@@ -499,23 +517,18 @@ def _compute_world(session, args, vprint):
                 continue
 
             for date, tier in sorted(county.tier_history.items()):
-                if tier.number >= 10:
-                    region.current_policy = PolicyChange(
-                        date=date,
-                        emoji=tier.emoji,
-                        score=+3,
-                        text=tier.color,
-                        credits=cal_credits,
-                    )
-                else:
-                    region.current_policy = PolicyChange(
+                text = tier.color
+                if tier.number < 10:
+                    text = f"Entered {tier.color} tier ({tier.name})"
+                region.policy_changes.append(
+                    PolicyChange(
                         date=date,
                         emoji=tier.emoji,
                         score=(-3 if tier.number <= 2 else +3),
-                        text=f"Entered {tier.color} tier ({tier.name})",
+                        text=text,
                         credits=cal_credits,
                     )
-                region.policy_changes.append(region.current_policy)
+                )
 
     def sort_policy_changes(r):
         def sort_key(p):
@@ -622,9 +635,9 @@ def _compute_world(session, args, vprint):
             for field in (
                 "totals",
                 "covid_metrics",
-                "variant_metrics",
-                "vaccination_metrics",
+                "vaccine_metrics",
                 "mobility_metrics",
+                # Don't roll up variant or serology metrics
             ):
                 if field == "mobility_metrics" and not r.parent:
                     continue  # Mobility gets weird rolled up to the top level
@@ -856,8 +869,8 @@ if __name__ == "__main__":
                 + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]
                 + ".m"[bool(r.map_metrics)]
                 + ".c"[bool(r.covid_metrics)]
-                + ".v"[bool(r.covid_metrics)]
-                + ".x"[bool(r.vaccination_metrics)]
+                + ".v"[bool(r.vaccine_metrics)]
+                + ".s"[bool(r.serology_metrics)]
                 + ".g"[bool(r.mobility_metrics)]
                 + ".p"[bool(r.policy_changes)]
                 + ">"
@@ -876,7 +889,8 @@ if __name__ == "__main__":
                 ("map", r.map_metrics),
                 ("cov", r.covid_metrics),
                 ("var", r.variant_metrics),
-                ("vax", r.vaccination_metrics),
+                ("vax", r.vaccine_metrics),
+                ("ser", r.serology_metrics),
                 ("mob", r.mobility_metrics),
             ):
                 for name, m in metrics.items():

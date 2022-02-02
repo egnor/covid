@@ -4,7 +4,6 @@ import io
 import re
 
 import pandas
-import pandas.api.types
 import requests.exceptions
 
 from covid.cache_policy import cached_path

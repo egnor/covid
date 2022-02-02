@@ -67,9 +67,6 @@ def make_region_html(region, args):
 
             write_breadcrumbs(region.parent)
             util.text(region.name)
-            if region.current_policy and region.current_policy.emoji:
-                util.text(" ")
-                tags.span(region.current_policy.emoji, cls="emoji")
 
         with tags.div():
             pop = region.totals["population"]
@@ -101,7 +98,6 @@ def make_region_html(region, args):
 
         tags.img(cls="graphic", src=doc_link(urls.chart_image(region)))
 
-        cp = region.current_policy
         notables = [p for p in region.policy_changes if p.score]
         if notables:
             tags.h2(
@@ -165,7 +161,8 @@ def make_region_html(region, args):
             r.map_metrics,
             r.covid_metrics,
             r.variant_metrics,
-            r.vaccination_metrics,
+            r.vaccine_metrics,
+            r.serology_metrics,
             r.mobility_metrics,
         ):
             credits.update(c for m in md.values() for c in m.credits.items())
@@ -182,9 +179,6 @@ def make_subregion_html(doc_url, region):
     region_href = urls.link(doc_url, urls.region_page(region))
     with tags.a(cls="subregion", href=region_href):
         with tags.div(cls="subregion_label", __pretty=False):
-            if region.current_policy and region.current_policy.emoji:
-                tags.span(region.current_policy.emoji, cls="emoji")
-                util.text("\xa0")
             util.text(region.name)
             tags.div(
                 f'{region.totals["population"]:,.0f}\xa0pop, '
