@@ -1,7 +1,6 @@
 """Module to retrieve variant fraction data from coviariants.org."""
 
 import collections
-import io
 
 import pandas
 
@@ -15,11 +14,6 @@ COUNTRY_JSON_FILES = [
 
 def get_variants(session):
     out = collections.defaultdict(list)
-    countries = []
-    regions = []
-    variants = []
-    dates = []
-    samples = []
     for country, url in COUNTRY_JSON_FILES:
         country_response = session.get(url)
         country_response.raise_for_status()

@@ -1,11 +1,9 @@
 """Main program to generate COVID stats static site."""
 
 import argparse
-import collections
 import multiprocessing
 import os
 import pathlib
-import re
 import signal
 
 import dominate

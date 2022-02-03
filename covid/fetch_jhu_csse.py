@@ -1,10 +1,8 @@
 """Module to retrieve data from the JHU CSSE dashboard."""
 
 import io
-import re
 
 import pandas
-import requests.exceptions
 
 from covid.cache_policy import cached_path
 from covid.cache_policy import temp_to_rename

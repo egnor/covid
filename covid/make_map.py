@@ -1,6 +1,5 @@
 """Functions to generate maps based on region metrics."""
 
-import collections
 import datetime
 import math
 import warnings
@@ -15,7 +14,6 @@ import matplotlib.pyplot
 import moviepy.video.io.bindings
 import moviepy.video.VideoClip
 import mplcairo.base
-import numpy
 import pandas
 from shapely.geometry.base import BaseMultipartGeometry
 

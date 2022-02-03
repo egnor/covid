@@ -1,7 +1,5 @@
 """Functions that generate trend charts from region metrics."""
 
-import collections
-import os
 import pathlib
 
 import matplotlib

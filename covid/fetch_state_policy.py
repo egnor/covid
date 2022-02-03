@@ -2,8 +2,6 @@
 (tinyurl.com/statepolicies)."""
 
 import collections
-import io
-import json
 import re
 import urllib.parse
 
@@ -24,8 +22,6 @@ def get_events(session):
     doc_json = doc_response.json()
     tab_titles = [s["properties"]["title"] for s in doc_json["sheets"]]
 
-    fetch_params = {"key": API_KEY, "ranges": ",".join(tab_titles[:2])}
-    fetch_query = urllib.parse.urlencode(fetch_params)
     fetch_response = session.get(
         f"{doc_url}/values:batchGet?key={urllib.parse.quote(API_KEY)}"
         + "&valueRenderOption=UNFORMATTED_VALUE"

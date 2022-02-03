@@ -15,8 +15,8 @@ def _get_table(session, prefix, mult):
     df = pandas.read_csv(io.StringIO(response.text))
     df.date = pandas.to_datetime(df.date, utc=True)
     df = df[
-        df.indicator.str.startswith(prefix + " ") &
-        ~df.indicator.str.endswith(" per million")
+        df.indicator.str.startswith(prefix + " ")
+        & ~df.indicator.str.endswith(" per million")
     ]
     df.indicator = df.indicator.str.slice(start=len(prefix) + 1)
     df.value = df.value * mult

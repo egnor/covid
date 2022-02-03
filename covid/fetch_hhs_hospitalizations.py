@@ -35,7 +35,7 @@ def get_hospitalizations(session):
         ["fips_code", "hospital_pk", "collection_week"],
         drop=True,
         inplace=True,
-        verify_integrity=True
+        verify_integrity=True,
     )
     df.sort_index(inplace=True)
     return df

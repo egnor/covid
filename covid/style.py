@@ -1,11 +1,9 @@
 """Module to set up website collateral (favicons, style sheets, etc)."""
 
-import os
 import pathlib
 import zipfile
 
 from dominate import tags
-from dominate import util
 
 from covid import urls
 

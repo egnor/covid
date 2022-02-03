@@ -1,14 +1,12 @@
 """Module to retrieve the California Blueprint Data Chart."""
 
 import collections
-import io
 import re
 import urllib.parse
 import warnings
 
 import addfips
 import bs4
-import numpy
 import pandas
 
 CountyData = collections.namedtuple("CountyData", "fips name tier_history")
@@ -65,7 +63,7 @@ def get_counties(session):
         try:
             for f, c in _counties_from_xlsx(session, xlsx_url).items():
                 counties.setdefault(f, c).tier_history.update(c.tier_history)
-        except Exception as e:
+        except Exception:
             raise ValueError(f"Error parsing CA .xlsx: {xlsx_url}")
 
     out = {}

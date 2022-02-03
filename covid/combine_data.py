@@ -1,7 +1,6 @@
 """Functions that combine data sources into a combined representation."""
 
 import argparse
-import collections
 import itertools
 import os.path
 import pickle
@@ -9,13 +8,7 @@ import re
 import sys
 import traceback
 import warnings
-from dataclasses import dataclass
-from dataclasses import field
 from dataclasses import replace
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
 from warnings import warn
 
 import matplotlib.cm
@@ -25,6 +18,7 @@ import pandas.api.types
 import pycountry
 import us
 
+from covid import build_atlas
 from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_prevalence
@@ -35,6 +29,8 @@ from covid import fetch_jhu_csse
 from covid import fetch_ourworld_hospitalizations
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
+from covid.region_data import Metric
+from covid.region_data import PolicyChange
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
@@ -71,59 +67,6 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Unknown OWID vax state: United States"
     r"|Unknown OWID vax state: Veterans Health"
 )
-
-
-@dataclass(frozen=True)
-class Metric:
-    frame: pandas.DataFrame
-    color: str
-    emphasis: int = 0
-    order: float = 0
-    increase_color: Optional[str] = None
-    decrease_color: Optional[str] = None
-    credits: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PolicyChange:
-    date: pandas.Timestamp
-    score: int
-    emoji: str
-    text: str
-    credits: Dict[str, str]
-
-
-@dataclass(eq=False)
-class Region:
-    name: str
-    short_name: str
-    iso_code: Optional[str] = None
-    fips_code: Optional[int] = None
-    zip_code: Optional[int] = None
-    place_id: Optional[str] = None
-    lat_lon: Optional[Tuple[float, float]] = None
-    totals: collections.Counter = field(default_factory=collections.Counter)
-    parent: Optional["Region"] = field(default=None, repr=0)
-    subregions: Dict[str, "Region"] = field(default_factory=dict, repr=0)
-    map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    variant_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    vaccine_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    serology_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
-
-    def path(r):
-        return f"{r.parent.path()}/{r.short_name}" if r.parent else r.name
-
-    def matches_regex(r, rx):
-        rx = rx if isinstance(rx, re.Pattern) else (rx and re.compile(rx, re.I))
-        return bool(
-            not rx
-            or rx.fullmatch(r.name)
-            or rx.fullmatch(r.path())
-            or rx.fullmatch(r.path().replace(" ", "_"))
-        )
 
 
 def get_world(session, args, verbose=False):
@@ -179,25 +122,7 @@ def _compute_world(session, args, vprint):
     """Assembles a World region from data, allowing warnings."""
 
     vprint("Loading place data...")
-    world = _make_skeleton(session)
-
-    # Index by various forms of ID for merging data in.
-    region_by_id = {}
-    region_by_iso = {}
-    region_by_fips = {}
-
-    def index_region_tree(r):
-        for index_dict, key in [
-            (region_by_iso, r.iso_code),
-            (region_by_fips, r.fips_code),
-            (region_by_id, r.place_id),
-        ]:
-            if key is not None:
-                index_dict[key] = r
-        for sub in r.subregions.values():
-            index_region_tree(sub)
-
-    index_region_tree(world)
+    atlas = build_atlas.get_atlas(session)
 
     #
     # Add metrics from the JHU CSSE dataset
@@ -210,7 +135,7 @@ def _compute_world(session, args, vprint):
 
         vprint("Merging JHU CSSE dataset...")
         for id, df in jhu_covid.groupby(level="ID", sort=False):
-            region = region_by_id.get(id)
+            region = atlas.by_jhu_id.get(id)
             if not region:
                 continue  # Pruned out of the skeleton
 
@@ -290,7 +215,7 @@ def _compute_world(session, args, vprint):
                     warnings.warn(f'Unknown covariant country: "{c_find}"')
                     continue
 
-            region = region_by_iso.get(countries[0].alpha_2)
+            region = atlas.by_iso2.get(countries[0].alpha_2)
             if region is None:
                 continue  # Valid country but not in skeleton
 
@@ -353,7 +278,7 @@ def _compute_world(session, args, vprint):
         vprint("Merging CDC vaccination data...")
         for fips, v in vax_data.groupby("FIPS", as_index=False, sort=False):
             v.reset_index(level="FIPS", drop=True, inplace=True)
-            region = region_by_fips.get(fips)
+            region = atlas.by_fips.get(fips)
             if region is None:
                 warnings.warn(f"Missing CDC vax FIPS: {fips}")
                 continue
@@ -415,7 +340,7 @@ def _compute_world(session, args, vprint):
                     warnings.warn(f"Unknown OWID vax country code: {iso3}")
                     continue
 
-            region = region_by_iso.get(cc.alpha_2) if cc else world
+            region = atlas.by_iso2.get(cc.alpha_2) if cc else atlas.world
             if region is None:
                 warnings.warn(f"Missing OWID vax country: {cc.alpha_2}")
                 continue
@@ -428,7 +353,7 @@ def _compute_world(session, args, vprint):
                         warnings.warn(f"Unknown OWID vax state: {admin2}")
                         continue
 
-                    region = region_by_fips.get(int(st.fips))
+                    region = atlas.by_fips.get(int(st.fips))
                     if region is None:
                         warnings.warn(f"Missing OWID vax FIPS: {st.fips}")
                         continue
@@ -497,7 +422,7 @@ def _compute_world(session, args, vprint):
                 warnings.warn(f"Unknown OWID hosp country code: {iso3}")
                 continue
 
-            region = region_by_iso.get(cc.alpha_2)
+            region = atlas.by_iso2.get(cc.alpha_2)
             if region is None:
                 warnings.warn(f"Missing OWID hosp country: {cc.alpha_2}")
                 continue
@@ -537,7 +462,7 @@ def _compute_world(session, args, vprint):
         rcols = ["Region Abbreviation", "Region"]
         for (abbr, name), v in cdc_data.groupby(rcols, as_index=False):
             if abbr.lower() == "all":
-                region, name = region_by_iso.get("US"), ""
+                region, name = atlas.by_iso2.get("US"), ""
                 if region is None:
                     warnings.warn(f"Missing US for CDC")
                     continue
@@ -547,7 +472,7 @@ def _compute_world(session, args, vprint):
                     warnings.warn(f"Unknown CDC sero state: {abbr} ({name})")
                     continue
 
-                region = region_by_fips.get(int(s.fips))
+                region = atlas.by_fips.get(int(s.fips))
                 if region is None:
                     warnings.warn(f"Missing CDC sero FIPS: {s.fips} ({s.name})")
                     continue
@@ -595,7 +520,7 @@ def _compute_world(session, args, vprint):
         policy_credits = fetch_state_policy.credits()
         state_policy = fetch_state_policy.get_events(session=session)
         for f, events in state_policy.groupby(level="state_fips", sort=False):
-            region = region_by_fips.get(f)
+            region = atlas.by_fips.get(f)
             if region is None:
                 warnings.warn(f"Unknown state policy FIPS: {f}")
                 continue
@@ -616,7 +541,7 @@ def _compute_world(session, args, vprint):
         cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         for county in cal_counties.values():
-            region = region_by_fips.get(county.fips)
+            region = atlas.by_fips.get(county.fips)
             if region is None:
                 warnings.warn(f"FIPS {county.fips} (CA {county.name}) missing")
                 continue
@@ -635,15 +560,10 @@ def _compute_world(session, args, vprint):
                     )
                 )
 
-    def sort_policy_changes(r):
-        def sort_key(p):
-            return (p.date.date(), -abs(p.score), p.score)
-
-        r.policy_changes.sort(key=sort_key)
-        for sub in r.subregions.values():
-            sort_policy_changes(sub)
-
-    sort_policy_changes(world)
+    for r in atlas.by_jhu_id.values():
+        r.policy_changes.sort(
+            key=lambda p: (p.date.date(), -abs(p.score), p.score)
+        )
 
     #
     # Add mobility data where it's available.
@@ -667,9 +587,9 @@ def _compute_world(session, args, vprint):
         mobility_data.set_index(keys="date", inplace=True)
         for g, m in mobility_data.groupby(gcols, as_index=False, sort=False):
             if g[5]:
-                region = region_by_fips.get(g[5])
+                region = atlas.by_fips.get(g[5])
             else:
-                region = region_by_iso.get(g[0])
+                region = atlas.by_iso2.get(g[0])
                 for n in g[1:4]:
                     if region and n:
                         region = region.subregions.get(n)
@@ -814,14 +734,14 @@ def _compute_world(session, args, vprint):
                 cat.clear()
 
     vprint("Rolling up metrics...")
-    roll_up_metrics(world)
+    roll_up_metrics(atlas.world)
 
     #
     # Interpolate synchronized weekly map metrics from time series metrics.
     #
 
     # Sync map metric weekly data points to this end date.
-    latest = max(m.frame.index[-1] for m in world.covid_metrics.values())
+    latest = max(m.frame.index[-1] for m in atlas.world.covid_metrics.values())
 
     def add_map_metric(region, c_name, m_name, mul, col, i_col, d_col):
         m = region.covid_metrics.get(c_name)
@@ -864,77 +784,11 @@ def _compute_world(session, args, vprint):
             None,
         )
 
-    make_map_metrics(world)
-    return world
+    make_map_metrics(atlas.world)
+    return atlas.world
 
 
-def _make_skeleton(session):
-    """Returns a region tree for the world with no metrics populated."""
-
-    def subregion(parent, key, name=None):
-        key = str(key)
-        region = parent.subregions.get(key)
-        if not region:
-            region = parent.subregions[key] = Region(
-                name=name or key, short_name=key, parent=parent
-            )
-        return region
-
-    world = Region(name="World", short_name="World")
-    for p in fetch_jhu_csse.get_places(session).itertuples(name="Place"):
-        if not (p.Population > 0):
-            continue  # Analysis requires population data.
-
-        try:
-            # Put territories under the parent, even with their own ISO codes
-            iso2 = pycountry.countries.lookup(p.Country_Region).alpha_2
-        except LookupError:
-            iso2 = p.iso2
-
-        region = subregion(world, iso2, p.Country_Region)
-        region.iso_code = iso2
-
-        if p.Province_State:
-            region = subregion(region, p.Province_State)
-            if p.iso2 != iso2:
-                region.iso_code = p.iso2  # Must be for a territory
-
-        if p.FIPS in (36005, 36047, 36061, 36081, 36085):
-            region = subregion(region, "NYC", "New York City")
-        elif p.FIPS in (49003, 49005, 49033):
-            region = subregion(region, "Bear River", "Bear River Area")
-        elif p.FIPS in (49023, 49027, 49039, 49041, 49031, 49055):
-            region = subregion(region, "Central Utah", "Central Utah Area")
-        elif p.FIPS in (49007, 49015, 49019):
-            region = subregion(region, "Southeast Utah", "Southeast Utah Area")
-        elif p.FIPS in (49001, 49017, 49021, 49025, 49053):
-            region = subregion(region, "Southwest Utah", "Southwest Utah Area")
-        elif p.FIPS in (49009, 49013, 49047):
-            region = subregion(region, "TriCounty", "TriCounty Area")
-        elif p.FIPS in (49057, 49029):
-            region = subregion(region, "Weber-Morgan", "Weber-Morgan Area")
-
-        if p.Admin2:
-            region = subregion(region, p.Admin2)
-
-        if p.FIPS:
-            region.fips_code = int(p.FIPS)
-
-        region.place_id = p.Index
-        region.totals["population"] = p.Population
-        if p.Lat or p.Long_:
-            region.lat_lon = (p.Lat, p.Long_)
-
-    # Initialize world population for direct world metrics
-    world.totals["population"] = sum(
-        sub.totals["population"] for sub in world.subregions.values()
-    )
-    return world
-
-
-def _trend_metric(
-    c, em, ord, cred, v=None, raw=None, cum=None, mins=None, maxs=None
-):
+def _trend_metric(c, em, ord, cred, v=None, raw=None, cum=None):
     """Returns a Metric with data massaged appropriately."""
 
     assert (v is not None) or (raw is not None) or (cum is not None)
@@ -962,12 +816,6 @@ def _trend_metric(
         dups = df.index.duplicated(keep=False)
         raise ValueError(f"Dup trend dates: {df.index[dups]}")
 
-    # Assume that mins/maxs are raw and need smoothing (true so far).
-    if mins is not None:
-        df["min"] = mins.loc[df.value.first_valid_index() :].rolling(7).mean()
-    if maxs is not None:
-        df["max"] = maxs.loc[df.value.first_valid_index() :].rolling(7).mean()
-
     return Metric(frame=df, color=c, emphasis=em, order=ord, credits=cred)
 
 
@@ -975,71 +823,18 @@ if __name__ == "__main__":
     import argparse
     import signal
 
-    from covid import combine_data
-
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser]
     )
     parser.add_argument("--print_credits", action="store_true")
     parser.add_argument("--print_data", action="store_true")
-    parser.add_argument("--print_regex")
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
-    world = combine_data.get_world(session=session, args=args, verbose=True)
-    print_regex = args.print_regex and re.compile(args.print_regex, re.I)
-
-    def print_tree(prefix, parents, key, r):
-        if (not print_regex) or r.matches_regex(print_regex):
-            line = (
-                f'{prefix}{r.totals["population"] or -1:9.0f}p <'
-                + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]
-                + ".m"[bool(r.map_metrics)]
-                + ".c"[bool(r.covid_metrics)]
-                + ".v"[bool(r.vaccine_metrics)]
-                + ".s"[bool(r.serology_metrics)]
-                + ".g"[bool(r.mobility_metrics)]
-                + ".p"[bool(r.policy_changes)]
-                + ">"
-            )
-            if key != r.short_name:
-                line = f"{line} [{key}]"
-            line = f"{line} {parents}{r.short_name}"
-            if r.name not in (key, r.short_name):
-                line = f"{line} ({r.name})"
-            print(line)
-            print(
-                f"{prefix}    "
-                + " ".join(f"{k}={v:.0f}" for k, v in sorted(r.totals.items()))
-            )
-            for cat, metrics in (
-                ("map", r.map_metrics),
-                ("cov", r.covid_metrics),
-                ("var", r.variant_metrics),
-                ("vax", r.vaccine_metrics),
-                ("ser", r.serology_metrics),
-                ("mob", r.mobility_metrics),
-            ):
-                for name, m in metrics.items():
-                    print(
-                        f"{prefix}    {len(m.frame):3d}d "
-                        f"=>{m.frame.index.max().date()} "
-                        f"last={m.frame.value.iloc[-1]:<5.1f} "
-                        f"{cat}: {name}"
-                    )
-                    if args.print_credits:
-                        print(f'{prefix}        {" ".join(m.credits.values())}')
-                    if args.print_data:
-                        print(m.frame)
-
-            for c in r.policy_changes:
-                print(
-                    f"{prefix}           {c.date.date()} {c.score:+2d} "
-                    f"{c.emoji} {c.text}"
-                )
-
-        for k, sub in r.subregions.items():
-            print_tree(prefix + "  ", f"{parents}{r.short_name}/", k, sub)
-
-    print_tree("", "", world.short_name, world)
+    world = get_world(session=session, args=args, verbose=True)
+    print(
+        world.debug_tree(
+            with_credits=args.print_credits, with_data=args.print_data
+        )
+    )
