@@ -19,9 +19,8 @@ def get_vaccinations(session):
     else:
         response = session.get(DATA_URL)
         response.raise_for_status()
-        data = io.StringIO(response.text)
         df = pandas.read_csv(
-            data,
+            io.StringIO(response.text),
             dtype={"FIPS": "Int64"},
             na_values=["UNK"],
             parse_dates=["Date"],
@@ -50,7 +49,7 @@ def get_vaccinations(session):
     return df
 
 
-def get_credits():
+def credits():
     return {
         "https://covid.cdc.gov/covid-data-tracker/": "US CDC COVID Data Tracker"
     }

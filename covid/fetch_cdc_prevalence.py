@@ -11,8 +11,7 @@ COMBINED_URL = "https://data.cdc.gov/api/views/wi5c-cscz/rows.csv"
 def _get_dataset(session, url):
     response = session.get(url)
     response.raise_for_status()
-    data = io.StringIO(response.text)
-    df = pandas.read_csv(data)
+    df = pandas.read_csv(io.StringIO(response.text))
     df.rename(columns=lambda c: " ".join(c.split()), inplace=True)
     for date_col in ("Year and Month", "Median Donation Date"):
         df[date_col] = pandas.to_datetime(df[date_col], utc=True)
@@ -30,7 +29,7 @@ def get_prevalence(session):
     )
 
 
-def get_credits():
+def credits():
     return {
         "https://covid.cdc.gov/covid-data-tracker/": "US CDC COVID Data Tracker"
     }

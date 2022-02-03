@@ -32,20 +32,22 @@ from covid import fetch_cdc_vaccinations
 from covid import fetch_covariants
 from covid import fetch_google_mobility
 from covid import fetch_jhu_csse
+from covid import fetch_ourworld_hospitalizations
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
-argument_group = argument_parser.add_argument_group("data gathering")
-argument_group.add_argument("--no_california_blueprint", action="store_true")
-argument_group.add_argument("--no_cdc_prevalence", action="store_true")
-argument_group.add_argument("--no_cdc_vaccinations", action="store_true")
-argument_group.add_argument("--no_covariants", action="store_true")
-argument_group.add_argument("--no_google_mobility", action="store_true")
-argument_group.add_argument("--no_jhu_csse", action="store_true")
-argument_group.add_argument("--no_ourworld_vaccinations", action="store_true")
-argument_group.add_argument("--no_state_policy", action="store_true")
+arg_group = argument_parser.add_argument_group("data gathering")
+arg_group.add_argument("--no_california_blueprint", action="store_true")
+arg_group.add_argument("--no_cdc_prevalence", action="store_true")
+arg_group.add_argument("--no_cdc_vaccinations", action="store_true")
+arg_group.add_argument("--no_covariants", action="store_true")
+arg_group.add_argument("--no_google_mobility", action="store_true")
+arg_group.add_argument("--no_jhu_csse", action="store_true")
+arg_group.add_argument("--no_ourworld_hospitalizations", action="store_true")
+arg_group.add_argument("--no_ourworld_vaccinations", action="store_true")
+arg_group.add_argument("--no_state_policy", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
@@ -53,20 +55,21 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
     r"|Missing CDC vax FIPS: (66|78).*"
-    r"|Missing OWID country: (GG|JE|NU|NR|PN|TK|TM|TV)"
+    r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
     r"|No COVID metrics: World/(EH|NG|PL).*"
     r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
     r"|Underpopulation: World/(DK|FR|NZ) .*"
     r"|Unknown CDC sero state: CR[0-9] .*"
-    r"|Unknown OWID state: Bureau of Prisons"
-    r"|Unknown OWID state: Dept of Defense"
-    r"|Unknown OWID state: Federated States of Micronesia"
-    r"|Unknown OWID state: Indian Health Svc"
-    r"|Unknown OWID state: Long Term Care"
-    r"|Unknown OWID state: Marshall Islands"
-    r"|Unknown OWID state: Republic of Palau"
-    r"|Unknown OWID state: United States"
-    r"|Unknown OWID state: Veterans Health"
+    r"|Unknown OWID vax country code: OWID.*"
+    r"|Unknown OWID vax state: Bureau of Prisons"
+    r"|Unknown OWID vax state: Dept of Defense"
+    r"|Unknown OWID vax state: Federated States of Micronesia"
+    r"|Unknown OWID vax state: Indian Health Svc"
+    r"|Unknown OWID vax state: Long Term Care"
+    r"|Unknown OWID vax state: Marshall Islands"
+    r"|Unknown OWID vax state: Republic of Palau"
+    r"|Unknown OWID vax state: United States"
+    r"|Unknown OWID vax state: Veterans Health"
 )
 
 
@@ -239,7 +242,7 @@ def _compute_world(session, args, vprint):
             region.covid_metrics["daily deaths / 10Mp"] = _trend_metric(
                 c="tab:red",
                 em=1,
-                ord=1.1,
+                ord=1.3,
                 cred=jhu_credits,
                 cum=df.Deaths * 1e7 / pop,
             )
@@ -343,9 +346,11 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_cdc_vaccinations:
-        vprint("Loading and merging CDC vaccination data...")
-        vax_credits = fetch_cdc_vaccinations.get_credits()
+        vprint("Loading CDC vaccination data...")
+        vax_credits = fetch_cdc_vaccinations.credits()
         vax_data = fetch_cdc_vaccinations.get_vaccinations(session=session)
+
+        vprint("Merging CDC vaccination data...")
         for fips, v in vax_data.groupby("FIPS", as_index=False, sort=False):
             v.reset_index(level="FIPS", drop=True, inplace=True)
             region = region_by_fips.get(fips)
@@ -358,30 +363,30 @@ def _compute_world(session, args, vprint):
                 warn(f"No population: {region.path()} (pop={pop})")
                 continue
 
-            region.vaccine_metrics.update(
-                {
-                    "people given any doses / 100p": _trend_metric(
-                        c="tab:olive",
-                        em=0,
-                        ord=1.2,
-                        cred=vax_credits,
-                        v=v.Administered_Dose1_Recip * (100 / pop),
-                    ),
-                    "people fully vaccinated / 100p": _trend_metric(
-                        c="tab:green",
-                        em=1,
-                        ord=1.3,
-                        cred=vax_credits,
-                        v=v.Series_Complete_Yes * (100 / pop),
-                    ),
-                    "booster doses given / 100p": _trend_metric(
-                        c="tab:purple",
-                        em=1,
-                        ord=1.4,
-                        cred=vax_credits,
-                        v=v.Booster_Doses * (100 / pop),
-                    ),
-                }
+            vax_metrics = region.vaccine_metrics
+
+            vax_metrics["people given any doses / 100p"] = _trend_metric(
+                c="tab:olive",
+                em=0,
+                ord=1.2,
+                cred=vax_credits,
+                v=v.Administered_Dose1_Recip * (100 / pop),
+            )
+
+            vax_metrics["people fully vaccinated / 100p"] = _trend_metric(
+                c="tab:green",
+                em=1,
+                ord=1.3,
+                cred=vax_credits,
+                v=v.Series_Complete_Yes * (100 / pop),
+            )
+
+            vax_metrics["booster doses given / 100p"]: _trend_metric(
+                c="tab:purple",
+                em=1,
+                ord=1.4,
+                cred=vax_credits,
+                v=v.Booster_Doses * (100 / pop),
             )
 
     if not args.no_ourworld_vaccinations:
@@ -392,33 +397,45 @@ def _compute_world(session, args, vprint):
         vax_data.state.fillna("", inplace=True)  # Or groupby() drops them.
         vax_data.sort_values(by=vcols + ["date"], inplace=True)
         vax_data.set_index(keys="date", inplace=True)
-        for (iso, s), v in vax_data.groupby(vcols, as_index=False, sort=False):
-            if iso.startswith("OWID"):
-                continue  # Special ourworldindata regions, not real countries
+        for (iso3, admin2), v in vax_data.groupby(vcols, as_index=False):
+            if iso3 == "OWID_WRL":
+                cc = None
+            elif iso3 == "OWID_ENG":
+                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "England"
+            elif iso3 == "OWID_SCT":
+                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "Scotland"
+            elif iso3 == "OWID_NIR":
+                cc = pycountry.countries.get(alpha_2="GB")
+                admin2 = "Northern Ireland"
+            elif iso3 == "OWID_WLS":
+                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "Wales"
+            else:
+                cc = pycountry.countries.get(alpha_3=iso3)
+                if cc is None:
+                    warnings.warn(f"Unknown OWID vax country code: {iso3}")
+                    continue
 
-            country = pycountry.countries.get(alpha_3=iso)
-            if country is None:
-                warnings.warn(f"Unknown OWID country code: {iso}")
-                continue
-
-            region = region_by_iso.get(country.alpha_2)
+            region = region_by_iso.get(cc.alpha_2) if cc else world
             if region is None:
-                warnings.warn(f"Missing OWID country: {country.alpha_2}")
+                warnings.warn(f"Missing OWID vax country: {cc.alpha_2}")
                 continue
 
-            if s:
-                # Data includes "New York State", lookup() needs "New York"
-                state = us.states.lookup(s.replace(" State", ""))
-                if not state:
-                    warnings.warn(f"Unknown OWID state: {s}")
-                    continue
+            if admin2:
+                if cc.alpha_2 == "US":
+                    # Data includes "New York State", lookup() needs "New York"
+                    st = us.states.lookup(admin2.replace(" State", ""))
+                    if not st:
+                        warnings.warn(f"Unknown OWID vax state: {admin2}")
+                        continue
 
-                region = region_by_fips.get(int(state.fips))
-                if region is None:
-                    warnings.warn(
-                        "Missing OWID FIPS: {state.fips} (state.name)"
-                    )
-                    continue
+                    region = region_by_fips.get(int(st.fips))
+                    if region is None:
+                        warnings.warn(f"Missing OWID vax FIPS: {st.fips}")
+                        continue
+                else:
+                    region = region.subregions.get(admin2)
+                    if region is None:
+                        warnings.warn(f"Unknown OWID vax subregion: {admin2}")
 
             pop = region.totals.get("population", 0)
             if not (pop > 0):
@@ -431,38 +448,81 @@ def _compute_world(session, args, vprint):
             v.people_vaccinated.fillna(method="ffill", inplace=True)
             v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
 
-            region.vaccine_metrics.update(
-                {
-                    "people given any doses / 100p": _trend_metric(
-                        c="tab:olive",
-                        em=0,
-                        ord=1.2,
-                        cred=vax_credits,
-                        v=v.people_vaccinated * (100 / pop),
-                    ),
-                    "people fully vaccinated / 100p": _trend_metric(
-                        c="tab:green",
-                        em=1,
-                        ord=1.3,
-                        cred=vax_credits,
-                        v=v.people_fully_vaccinated * (100 / pop),
-                    ),
-                    "booster doses given / 100p": _trend_metric(
-                        c="tab:purple",
-                        em=1,
-                        ord=1.4,
-                        cred=vax_credits,
-                        v=v.total_boosters * (100 / pop),
-                    ),
-                    "daily dose rate / 5Kp": _trend_metric(
-                        c="tab:cyan",
-                        em=0,
-                        ord=1.5,
-                        cred=vax_credits,
-                        v=v.daily_vaccinations * (5000 / pop),
-                        raw=v.daily_vaccinations_raw * (5000 / pop),
-                    ),
-                }
+            vax_metrics = region.vaccine_metrics
+            vax_metrics["people given any doses / 100p"] = _trend_metric(
+                c="tab:olive",
+                em=0,
+                ord=1.2,
+                cred=vax_credits,
+                v=v.people_vaccinated * (100 / pop),
+            )
+
+            vax_metrics["people fully vaccinated / 100p"] = _trend_metric(
+                c="tab:green",
+                em=1,
+                ord=1.3,
+                cred=vax_credits,
+                v=v.people_fully_vaccinated * (100 / pop),
+            )
+
+            vax_metrics["booster doses given / 100p"] = _trend_metric(
+                c="tab:purple",
+                em=1,
+                ord=1.4,
+                cred=vax_credits,
+                v=v.total_boosters * (100 / pop),
+            )
+
+            vax_metrics["daily dose rate / 5Kp"] = _trend_metric(
+                c="tab:cyan",
+                em=0,
+                ord=1.5,
+                cred=vax_credits,
+                v=v.daily_vaccinations * (5000 / pop),
+                raw=v.daily_vaccinations_raw * (5000 / pop),
+            )
+
+    #
+    # Add hospitalization data
+    #
+
+    if not args.no_ourworld_hospitalizations:
+        vprint("Loading and merging ourworldindata hospitalization data...")
+        hosp_credits = fetch_ourworld_hospitalizations.credits()
+        occ_df = fetch_ourworld_hospitalizations.get_occupancy(session)
+        adm_df = fetch_ourworld_hospitalizations.get_admissions(session)
+        for iso3, v in adm_df.groupby("iso_code", as_index=False):
+            cc = pycountry.countries.get(alpha_3=iso3)
+            if cc is None:
+                warnings.warn(f"Unknown OWID hosp country code: {iso3}")
+                continue
+
+            region = region_by_iso.get(cc.alpha_2)
+            if region is None:
+                warnings.warn(f"Missing OWID hosp country: {cc.alpha_2}")
+                continue
+
+            pop = region.totals.get("population", 0)
+            if not (pop > 0):
+                warn(f"No population: {region.path()} (pop={pop})")
+                continue
+
+            v.reset_index("iso_code", drop=True, inplace=True)
+
+            region.covid_metrics["hospital admissions / 1Mp"] = _trend_metric(
+                c="tab:orange",
+                em=0,
+                ord=1.1,
+                cred=hosp_credits,
+                v=v["new hospital admissions"] * (1e6 / pop),
+            )
+
+            region.covid_metrics["ICU admissions / 1Mp"] = _trend_metric(
+                c="tab:pink",
+                em=0,
+                ord=1.2,
+                cred=hosp_credits,
+                v=v["new ICU admissions"] * (1e6 / pop),
             )
 
     #
@@ -471,7 +531,7 @@ def _compute_world(session, args, vprint):
 
     if not args.no_cdc_prevalence:
         vprint("Loading and merging CDC prevalence estimates...")
-        cdc_credits = fetch_cdc_prevalence.get_credits()
+        cdc_credits = fetch_cdc_prevalence.credits()
         cdc_data = fetch_cdc_prevalence.get_prevalence(session)
 
         rcols = ["Region Abbreviation", "Region"]
@@ -510,23 +570,20 @@ def _compute_world(session, args, vprint):
             v.reset_index(rcols, drop=True, inplace=True)
             v.index = v.index + pandas.Timedelta(days=14)
             region_i = len(region.serology_metrics) // 2
-            region.serology_metrics.update(
-                {
-                    f"infected or vax{name}": _trend_metric(
-                        c=matplotlib.cm.tab20b.colors[region_i],
-                        em=1,
-                        ord=1.0,
-                        cred=cdc_credits,
-                        v=v["Rate %[Total Prevalence] Combined"],
-                    ),
-                    f"infected{name}": _trend_metric(
-                        c=matplotlib.cm.tab20c.colors[region_i + 4],
-                        em=0,
-                        ord=1.1,
-                        cred=cdc_credits,
-                        v=v["Rate %[Total Prevalence] Infection"],
-                    ),
-                }
+            region.serology_metrics[f"infected or vax{name}"] = _trend_metric(
+                c=matplotlib.cm.tab20b.colors[region_i],
+                em=1,
+                ord=1.0,
+                cred=cdc_credits,
+                v=v["Rate %[Total Prevalence] Combined"],
+            )
+
+            region.serology_metrics[f"infected{name}"] = _trend_metric(
+                c=matplotlib.cm.tab20c.colors[region_i + 4],
+                em=0,
+                ord=1.1,
+                cred=cdc_credits,
+                v=v["Rate %[Total Prevalence] Infection"],
             )
 
     #
@@ -738,7 +795,20 @@ def _compute_world(session, args, vprint):
                 credits=dict(c for p, v in popvals for c in v.credits.items()),
             )
 
-        # Clean up some categories if we didn't end up with important data
+        # Remove metrics which have no (or very little) valid data
+        for cat in [
+            r.map_metrics,
+            r.covid_metrics,
+            r.variant_metrics,
+            r.vaccine_metrics,
+            r.serology_metrics,
+            r.mobility_metrics,
+        ]:
+            for name, m in list(cat.items()):
+                if m.frame.value.count() < 2:
+                    del cat[name]
+
+        # Clean up some categories if we didn't get any "headline" data
         for cat in [r.vaccine_metrics, r.serology_metrics, r.mobility_metrics]:
             if not any(m.emphasis > 0 for m in cat.values()):
                 cat.clear()
@@ -783,6 +853,7 @@ def _compute_world(session, args, vprint):
             "#0000FFA0",
             "#00FF00A0",
         )
+
         add_map_metric(
             region,
             "daily deaths / 10Mp",
@@ -816,16 +887,16 @@ def _make_skeleton(session):
 
         try:
             # Put territories under the parent, even with their own ISO codes
-            country_key = pycountry.countries.lookup(p.Country_Region).alpha_2
+            iso2 = pycountry.countries.lookup(p.Country_Region).alpha_2
         except LookupError:
-            country_key = p.iso2
+            iso2 = p.iso2
 
-        region = subregion(world, country_key, p.Country_Region)
-        region.iso_code = country_key
+        region = subregion(world, iso2, p.Country_Region)
+        region.iso_code = iso2
 
         if p.Province_State:
             region = subregion(region, p.Province_State)
-            if p.iso2 != country_key:
+            if p.iso2 != iso2:
                 region.iso_code = p.iso2  # Must be for a territory
 
         if p.FIPS in (36005, 36047, 36061, 36081, 36085):
@@ -854,6 +925,10 @@ def _make_skeleton(session):
         if p.Lat or p.Long_:
             region.lat_lon = (p.Lat, p.Long_)
 
+    # Initialize world population for direct world metrics
+    world.totals["population"] = sum(
+        sub.totals["population"] for sub in world.subregions.values()
+    )
     return world
 
 

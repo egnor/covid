@@ -40,9 +40,7 @@ def get_vaccinations(session):
 
 
 def credits():
-    return {
-        "https://ourworldindata.org/covid-vaccinations": "Our World In Data"
-    }
+    return {"https://ourworldindata.org/": "Our World In Data"}
 
 
 if __name__ == "__main__":
