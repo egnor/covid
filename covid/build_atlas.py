@@ -4,8 +4,8 @@
 import pycountry
 
 from covid import fetch_jhu_csse
-from covid.region_data import Atlas
 from covid.region_data import Region
+from covid.region_data import RegionAtlas
 
 
 def _get_sub(parent, key, name=None):
@@ -21,9 +21,9 @@ def _get_sub(parent, key, name=None):
 
 
 def get_atlas(session):
-    """Returns an Atlas populated with places."""
+    """Returns an RegionAtlas populated with places."""
 
-    atlas = Atlas()
+    atlas = RegionAtlas()
     atlas.world = Region(name="World", short_name="World")
     for p in fetch_jhu_csse.get_places(session).itertuples(name="Place"):
         if not (p.Population > 0):

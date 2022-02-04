@@ -16,6 +16,7 @@ import requests
 # Reusable command line arguments for log fetching.
 argument_parser = argparse.ArgumentParser(add_help=False)
 argument_group = argument_parser.add_argument_group("data caching")
+argument_group.add_argument("--debug", action="store_true")
 argument_group.add_argument("--debug_http", action="store_true")
 argument_group.add_argument(
     "--cache_time", type=pandas.Timedelta, default=pandas.Timedelta(hours=6)
@@ -47,11 +48,12 @@ class _CacheHeuristic(cachecontrol.heuristics.BaseHeuristic):
 def new_session(args):
     """Returns a new Session with caching per supplied command line args."""
 
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+
     if args.debug_http:
-        logging.basicConfig(level=logging.INFO)
         logging.getLogger("urllib3").setLevel(logging.DEBUG)
         logging.getLogger("cachecontrol").setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
 
     session = requests.Session()
     if args.cache_time:

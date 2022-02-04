@@ -1,0 +1,77 @@
+"""Function to merge basic case metrics into a RegionAtlas"""
+
+import logging
+import warnings
+
+import covid.fetch_jhu_csse
+from covid.region_data import make_metric
+
+
+def add_metrics(session, atlas):
+    logging.info("Loading JHU CSSE dataset...")
+    jhu_credits = covid.fetch_jhu_csse.credits()
+    jhu_covid = covid.fetch_jhu_csse.get_covid(session)
+
+    logging.info("Merging JHU CSSE dataset...")
+    for id, df in jhu_covid.groupby(level="ID", sort=False):
+        region = atlas.by_jhu_id.get(id)
+        if not region:
+            continue  # Pruned out of the skeleton
+
+        if df.empty:
+            warnings.warn(f"No COVID data: {region.path()}")
+            continue
+
+        cases, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
+        pop = region.totals["population"]
+        if not (0 <= cases <= pop):
+            warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
+            continue
+        if not (0 <= deaths <= pop):
+            warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
+            continue
+
+        df.reset_index(level="ID", drop=True, inplace=True)
+        region.totals["positives"] = cases
+        region.totals["deaths"] = deaths
+
+        region.covid_metrics["daily positives / 100Kp"] = make_metric(
+            c="tab:blue",
+            em=1,
+            ord=1.0,
+            cred=jhu_credits,
+            cum=df.Confirmed * 1e5 / pop,
+        )
+
+        region.covid_metrics["daily deaths / 10Mp"] = make_metric(
+            c="tab:red",
+            em=1,
+            ord=1.3,
+            cred=jhu_credits,
+            cum=df.Deaths * 1e7 / pop,
+        )
+
+        region.covid_metrics["total cases / 100p"] = make_metric(
+            c="tab:blue",
+            em=0,
+            ord=1.4,
+            cred=jhu_credits,
+            v=df.Confirmed * 100 / pop,
+        )
+
+
+if __name__ == "__main__":
+    import argparse
+
+    from covid import build_atlas
+    from covid import cache_policy
+    from covid import logging_policy  # noqa
+
+    parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser.add_argument("--print_data", action="store_true")
+
+    args = parser.parse_args()
+    session = cache_policy.new_session(args)
+    atlas = build_atlas.get_atlas(session)
+    add_metrics(session=session, atlas=atlas)
+    print(atlas.world.debug_tree(with_data=args.print_data))

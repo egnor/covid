@@ -2,14 +2,10 @@
 
 import argparse
 import itertools
-import os.path
 import pickle
 import re
-import sys
-import traceback
 import warnings
 from dataclasses import replace
-from warnings import warn
 
 import matplotlib.cm
 import numpy
@@ -25,10 +21,11 @@ from covid import fetch_cdc_prevalence
 from covid import fetch_cdc_vaccinations
 from covid import fetch_covariants
 from covid import fetch_google_mobility
-from covid import fetch_jhu_csse
-from covid import fetch_ourworld_hospitalizations
 from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
+from covid import merge_covid_metrics
+from covid import merge_hospital_metrics
+from covid.logging_policy import collecting_warnings
 from covid.region_data import Metric
 from covid.region_data import PolicyChange
 
@@ -39,9 +36,9 @@ arg_group.add_argument("--no_california_blueprint", action="store_true")
 arg_group.add_argument("--no_cdc_prevalence", action="store_true")
 arg_group.add_argument("--no_cdc_vaccinations", action="store_true")
 arg_group.add_argument("--no_covariants", action="store_true")
+arg_group.add_argument("--no_covid_metrics", action="store_true")
+arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
-arg_group.add_argument("--no_jhu_csse", action="store_true")
-arg_group.add_argument("--no_ourworld_hospitalizations", action="store_true")
 arg_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
 
@@ -80,29 +77,10 @@ def get_world(session, args, verbose=False):
         with cache_path.open(mode="rb") as cache_file:
             return pickle.load(cache_file)
 
-    warning_count = 0
-
-    def show_and_count(message, category, filename, lineno, file, line):
-        # Allow known data glitches.
-        text = str(message).strip()
-        if KNOWN_WARNINGS_REGEX.fullmatch(text):
-            vprint(f"=== {text}")
-        else:
-            nonlocal warning_count
-            warning_count += 1
-            where = f"{os.path.basename(filename)}:{lineno}"
-            print(f"*** #{warning_count} ({where}) {text}")
-            traceback.print_stack(file=sys.stdout)
-            print()
-
-    try:
-        warnings.showwarning, saved = show_and_count, warnings.showwarning
+    with collecting_warnings(allow_regex=KNOWN_WARNINGS_REGEX) as warnings:
         world = _compute_world(session, args, vprint)
-    finally:
-        warnings.showwarning = saved
-
-    if warning_count:
-        raise ValueError(f"{warning_count} warnings found combining data")
+        if warnings:
+            raise ValueError(f"{len(warnings)} warnings found combining data")
 
     vprint(f"Saving cached world: {cache_path}")
     with cache_policy.temp_to_rename(cache_path, mode="wb") as cache_file:
@@ -124,61 +102,11 @@ def _compute_world(session, args, vprint):
     vprint("Loading place data...")
     atlas = build_atlas.get_atlas(session)
 
-    #
-    # Add metrics from the JHU CSSE dataset
-    #
+    if not args.no_covid_metrics:
+        merge_covid_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_jhu_csse:
-        vprint("Loading JHU CSSE dataset (COVID)...")
-        jhu_credits = fetch_jhu_csse.credits()
-        jhu_covid = fetch_jhu_csse.get_covid(session)
-
-        vprint("Merging JHU CSSE dataset...")
-        for id, df in jhu_covid.groupby(level="ID", sort=False):
-            region = atlas.by_jhu_id.get(id)
-            if not region:
-                continue  # Pruned out of the skeleton
-
-            if df.empty:
-                warnings.warn(f"No COVID data: {region.path()}")
-                continue
-
-            cases, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
-            pop = region.totals["population"]
-            if not (0 <= cases <= pop):
-                warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
-                continue
-            if not (0 <= deaths <= pop):
-                warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
-                continue
-
-            df.reset_index(level="ID", drop=True, inplace=True)
-            region.totals["positives"] = cases
-            region.totals["deaths"] = deaths
-
-            region.covid_metrics["daily positives / 100Kp"] = _trend_metric(
-                c="tab:blue",
-                em=1,
-                ord=1.0,
-                cred=jhu_credits,
-                cum=df.Confirmed * 1e5 / pop,
-            )
-
-            region.covid_metrics["daily deaths / 10Mp"] = _trend_metric(
-                c="tab:red",
-                em=1,
-                ord=1.3,
-                cred=jhu_credits,
-                cum=df.Deaths * 1e7 / pop,
-            )
-
-            region.vaccine_metrics["confirmed cases / 100p"] = _trend_metric(
-                c="tab:blue",
-                em=0,
-                ord=1.6,
-                cred=jhu_credits,
-                v=df.Confirmed * 100 / pop,
-            )
+    if not args.no_hospital_metrics:
+        merge_hospital_metrics.add_metrics(session=session, atlas=atlas)
 
     #
     # Add variant breakdown
@@ -285,7 +213,7 @@ def _compute_world(session, args, vprint):
 
             pop = region.totals.get("population", 0)
             if not (pop > 0):
-                warn(f"No population: {region.path()} (pop={pop})")
+                warnings.warn(f"No population: {region.path()} (pop={pop})")
                 continue
 
             vax_metrics = region.vaccine_metrics
@@ -364,7 +292,7 @@ def _compute_world(session, args, vprint):
 
             pop = region.totals.get("population", 0)
             if not (pop > 0):
-                warn(f"No population: {region.path()} (pop={pop})")
+                warnings.warn(f"No population: {region.path()} (pop={pop})")
                 continue
 
             v.total_distributed.fillna(method="ffill", inplace=True)
@@ -405,49 +333,6 @@ def _compute_world(session, args, vprint):
                 cred=vax_credits,
                 v=v.daily_vaccinations * (5000 / pop),
                 raw=v.daily_vaccinations_raw * (5000 / pop),
-            )
-
-    #
-    # Add hospitalization data
-    #
-
-    if not args.no_ourworld_hospitalizations:
-        vprint("Loading and merging ourworldindata hospitalization data...")
-        hosp_credits = fetch_ourworld_hospitalizations.credits()
-        occ_df = fetch_ourworld_hospitalizations.get_occupancy(session)
-        adm_df = fetch_ourworld_hospitalizations.get_admissions(session)
-        for iso3, v in adm_df.groupby("iso_code", as_index=False):
-            cc = pycountry.countries.get(alpha_3=iso3)
-            if cc is None:
-                warnings.warn(f"Unknown OWID hosp country code: {iso3}")
-                continue
-
-            region = atlas.by_iso2.get(cc.alpha_2)
-            if region is None:
-                warnings.warn(f"Missing OWID hosp country: {cc.alpha_2}")
-                continue
-
-            pop = region.totals.get("population", 0)
-            if not (pop > 0):
-                warn(f"No population: {region.path()} (pop={pop})")
-                continue
-
-            v.reset_index("iso_code", drop=True, inplace=True)
-
-            region.covid_metrics["hospital admissions / 1Mp"] = _trend_metric(
-                c="tab:orange",
-                em=0,
-                ord=1.1,
-                cred=hosp_credits,
-                v=v["new hospital admissions"] * (1e6 / pop),
-            )
-
-            region.covid_metrics["ICU admissions / 1Mp"] = _trend_metric(
-                c="tab:pink",
-                em=0,
-                ord=1.2,
-                cred=hosp_credits,
-                v=v["new ICU admissions"] * (1e6 / pop),
             )
 
     #
@@ -674,12 +559,12 @@ def _compute_world(session, args, vprint):
         if pop == 0:
             pop = r.totals["population"] = sub_pop_total
         if sub_pop_total > pop * 1.1:
-            warn(
+            warnings.warn(
                 f"Overpopulation: {r.path()} has {pop}p, "
                 f"{sub_pop_total}p in parts"
             )
         if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
-            warn(
+            warnings.warn(
                 f"Underpopulation: {r.path()} has {pop}p, "
                 f"{sub_pop_total}p in parts"
             )
@@ -821,9 +706,7 @@ def _trend_metric(c, em, ord, cred, v=None, raw=None, cum=None):
 
 if __name__ == "__main__":
     import argparse
-    import signal
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior.
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser]
     )
