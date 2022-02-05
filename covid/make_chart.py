@@ -115,12 +115,12 @@ def _plot_hospital(axes, region):
         default=0,
     )
 
-    ylim = min(400, max(200, (max_value // 20 + 2) * 20))
+    ylim = min(1000, max(240, (max_value // 20 + 2) * 20))
     if not axes:
-        return ylim / 100 if metrics else 0
+        return ylim / 120 if metrics else 0
 
     _setup_xaxis(axes, title="Hospitals")
-    _setup_yaxis(axes, title="patients per cap", ylim=(0, ylim), tick=(50, 10))
+    _setup_yaxis(axes, title="patients per cap", ylim=(0, ylim), tick=(40, 20))
     _plot_metrics(axes, metrics)
 
 

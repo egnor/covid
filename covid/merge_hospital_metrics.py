@@ -45,7 +45,7 @@ def add_metrics(session, atlas):
         metrics["ICU COVID admits / day / 10Mp"] = make_metric(
             c="tab:purple",
             em=0,
-            ord=1.6,
+            ord=1.7,
             cred=owid_credits,
             v=v["new ICU admissions"] * (1e7 / pop),
         )
@@ -73,7 +73,7 @@ def add_metrics(session, atlas):
         metrics["COVID use / 100Kp"] = make_metric(
             c="tab:gray",
             em=1,
-            ord=1.3,
+            ord=1.2,
             cred=owid_credits,
             v=v["hospital occupancy"] * (1e5 / pop),
         )
@@ -81,7 +81,7 @@ def add_metrics(session, atlas):
         metrics["ICU COVID use / 1Mp"] = make_metric(
             c="tab:pink",
             em=1,
-            ord=1.7,
+            ord=1.6,
             cred=owid_credits,
             v=v["ICU occupancy"] * (1e6 / pop),
         )
@@ -127,10 +127,18 @@ def add_metrics(session, atlas):
             v=v.inpatient_beds_used_7_day_avg * (1e5 / pop),
         )
 
+        metrics["COVID use / 100Kp"] = make_metric(
+            c="tab:gray",
+            em=1,
+            ord=1.2,
+            cred=hhs_credits,
+            v=v.inpatient_beds_used_covid_7_day_avg * (1e5 / pop),
+        )
+
         metrics["COVID admits / day / 1Mp"] = make_metric(
             c="black",
             em=0,
-            ord=1.2,
+            ord=1.3,
             cred=hhs_credits,
             v=(
                 v.previous_day_admission_adult_covid_confirmed_7_day_sum
@@ -139,14 +147,6 @@ def add_metrics(session, atlas):
                 + v.previous_day_admission_pediatric_covid_suspected_7_day_sum
             )
             * (1e6 / pop / 7),
-        )
-
-        metrics["COVID use / 100Kp"] = make_metric(
-            c="tab:gray",
-            em=1,
-            ord=1.3,
-            cred=hhs_credits,
-            v=v.inpatient_beds_used_covid_7_day_avg * (1e5 / pop),
         )
 
         metrics["ICU capacity / 1Mp"] = make_metric(
@@ -168,7 +168,7 @@ def add_metrics(session, atlas):
         metrics["ICU COVID use / 1Mp"] = make_metric(
             c="tab:pink",
             em=1,
-            ord=1.7,
+            ord=1.6,
             cred=hhs_credits,
             v=v.staffed_icu_adult_patients_confirmed_and_suspected_covid_7_day_avg
             * (1e6 / pop),
