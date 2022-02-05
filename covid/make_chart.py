@@ -56,15 +56,16 @@ def _write_thumb_image(region, site_dir):
 def _write_chart_image(region, site_dir):
     plotters = [
         _plot_covid,
+        _plot_hospital,
         _plot_variant,
         _plot_vaccine,
         _plot_serology,
         _plot_mobility,
     ]
 
-    plotters, heights = zip(*[
-        (p, h) for p in plotters for h in (p(None, region),) if h > 0
-    ])
+    plotters, heights = zip(
+        *[(p, h) for p in plotters for h in (p(None, region),) if h > 0]
+    )
 
     fig = matplotlib.pyplot.figure(figsize=(10, sum(heights)), dpi=200)
     subplots = fig.subplots(
@@ -88,22 +89,39 @@ def _write_chart_image(region, site_dir):
 
 def _plot_covid(axes, region):
     metrics = region.metrics["covid"]
-    if not metrics:
-        return 0
-
     max_value = max(
-        m.frame.value.max()
-        for m in metrics.values()
-        if m.frame.size > 2 and m.emphasis > 0
+        (m.frame.value.max() for m in metrics.values() if m.emphasis > 0),
+        default=0,
     )
 
     ylim = min(1000, max(200, (max_value // 20 + 2) * 20))
     if not axes:
-        return ylim / 75
+        return ylim / 75 if metrics else 0
 
     _setup_xaxis(axes, title=f"{region.short_name} COVID")
-    _setup_yaxis(axes, title="daily change per capita", ylim=(0, ylim))
-    _plot_metrics(axes, metrics, detailed=True)
+    _setup_yaxis(axes, title="cases per cap", ylim=(0, ylim))
+    _plot_metrics(axes, metrics)
+
+
+def _plot_hospital(axes, region):
+    metrics = region.metrics["hospital"]
+    max_value = max(
+        (
+            m.frame.value.max()
+            if m.emphasis >= 0
+            else m.frame.value.quantile(0.9)
+            for m in metrics.values()
+        ),
+        default=0,
+    )
+
+    ylim = min(400, max(200, (max_value // 20 + 2) * 20))
+    if not axes:
+        return ylim / 100 if metrics else 0
+
+    _setup_xaxis(axes, title="Hospitals")
+    _setup_yaxis(axes, title="patients per cap", ylim=(0, ylim), tick=(50, 10))
+    _plot_metrics(axes, metrics)
 
 
 def _plot_variant(axes, region):
@@ -148,7 +166,7 @@ def _plot_vaccine(axes, region):
     _setup_xaxis(axes, title="Vaccines")
     _setup_yaxis(axes, title="% of pop (cumulative)")
     axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics, detailed=True)
+    _plot_metrics(axes, metrics)
 
 
 def _plot_serology(axes, region):
@@ -159,7 +177,7 @@ def _plot_serology(axes, region):
     _setup_xaxis(axes, title="Serology")
     _setup_yaxis(axes, title="% of age 16+ pop")
     axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics, detailed=True)
+    _plot_metrics(axes, metrics)
 
 
 def _plot_mobility(axes, region):
@@ -170,10 +188,10 @@ def _plot_mobility(axes, region):
     _setup_xaxis(axes, title="Mobility")
     _setup_yaxis(axes, title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10))
     axes.axhline(100, c="black", lw=1)  # Identity line.
-    _plot_metrics(axes, metrics, detailed=True)
+    _plot_metrics(axes, metrics)
 
 
-def _plot_metrics(axes, metrics, detailed):
+def _plot_metrics(axes, metrics, detailed=True):
     for name, m in sorted(metrics.items(), key=lambda nm: nm[1].order):
         if m.emphasis < 1 and not detailed:
             continue
@@ -184,24 +202,17 @@ def _plot_metrics(axes, metrics, detailed):
         zorder = 2.0 - m.order / 100 - m.emphasis / 10
 
         if detailed and ("raw" in m.frame.columns):
+            limit = m.frame.raw.quantile(0.99) * 2
+            masked = m.frame.raw.mask(m.frame.raw.gt(limit))
+
             axes.plot(
                 m.frame.index,
-                m.frame.raw,
+                masked,
                 color=m.color,
                 alpha=alpha * 0.5,
                 zorder=zorder + 0.001,
                 lw=1,
                 ls=style,
-            )
-
-        if "min" in m.frame.columns and "max" in m.frame.columns:
-            axes.fill_between(
-                x=m.frame.index,
-                y1=m.frame["min"],
-                y2=m.frame["max"],
-                color=m.color,
-                alpha=0.2,
-                zorder=zorder - 1,
             )
 
         if "value" in m.frame.columns and m.frame.value.any():

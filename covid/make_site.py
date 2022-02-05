@@ -136,7 +136,7 @@ def make_region_html(region, args):
                     return r.totals.get("population", 0)
 
                 def newpos(r):
-                    m = r.metrics["covid"].get("daily positives / 100Kp")
+                    m = r.metrics["covid"].get("positives / day / 100Kp")
                     return m.frame.value.iloc[-1] * pop(r) if m else 0
 
                 tags.h2("Top 5 by population")

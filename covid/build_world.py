@@ -38,8 +38,9 @@ arg_group.add_argument("--no_cdc_prevalence", action="store_true")
 arg_group.add_argument("--no_cdc_vaccinations", action="store_true")
 arg_group.add_argument("--no_covariants", action="store_true")
 arg_group.add_argument("--no_covid_metrics", action="store_true")
-arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
+arg_group.add_argument("--no_hospital_metrics", action="store_true")
+arg_group.add_argument("--no_maps", action="store_true")
 arg_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
 
@@ -48,7 +49,8 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad deaths: World/AU .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
-    r"|Missing CDC vax FIPS: (66|78).*"
+    r"|Missing CDC vax FIPS: (66|78)\d\d\d"
+    r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
     r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
     r"|No COVID metrics: World/(EH|NG|PL).*"
     r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
@@ -318,7 +320,7 @@ def _compute_world(session, args):
                 v=v.people_fully_vaccinated * (100 / pop),
             )
 
-            vax_metrics["booster doses given / 100p"] = make_metric(
+            vax_metrics["total booster doses / 100p"] = make_metric(
                 c="tab:purple",
                 em=1,
                 ord=1.4,
@@ -326,7 +328,7 @@ def _compute_world(session, args):
                 v=v.total_boosters * (100 / pop),
             )
 
-            vax_metrics["daily dose rate / 5Kp"] = make_metric(
+            vax_metrics["doses / day / 5Kp"] = make_metric(
                 c="tab:cyan",
                 em=0,
                 ord=1.5,
@@ -649,7 +651,7 @@ def _compute_world(session, args):
         mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
         add_map_metric(
             region,
-            "daily positives / 100Kp",
+            "positives / day / 100Kp",
             "positives x2K",
             mul,
             "#0000FF50",
@@ -659,7 +661,7 @@ def _compute_world(session, args):
 
         add_map_metric(
             region,
-            "daily deaths / 10Mp",
+            "deaths / day / 10Mp",
             "deaths x200K",
             mul,
             "#FF000050",
@@ -667,7 +669,9 @@ def _compute_world(session, args):
             None,
         )
 
-    make_map_metrics(atlas.world)
+    if not args.no_maps:
+        make_map_metrics(atlas.world)
+
     return atlas.world
 
 

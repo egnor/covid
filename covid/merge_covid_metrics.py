@@ -35,7 +35,7 @@ def add_metrics(session, atlas):
         region.totals["positives"] = cases
         region.totals["deaths"] = deaths
 
-        region.metrics["covid"]["daily positives / 100Kp"] = make_metric(
+        region.metrics["covid"]["positives / day / 100Kp"] = make_metric(
             c="tab:blue",
             em=1,
             ord=1.0,
@@ -43,7 +43,7 @@ def add_metrics(session, atlas):
             cum=df.Confirmed * 1e5 / pop,
         )
 
-        region.metrics["covid"]["daily deaths / 10Mp"] = make_metric(
+        region.metrics["covid"]["deaths / day / 10Mp"] = make_metric(
             c="tab:red",
             em=1,
             ord=1.3,
