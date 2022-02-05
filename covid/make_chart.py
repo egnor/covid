@@ -32,8 +32,8 @@ def _write_thumb_image(region, site_dir):
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes)
     thumb_axes.set_ylim(0, 100)
-    _plot_covid_metrics(thumb_axes, region.covid_metrics, detailed=False)
-    _plot_immunity_metrics(thumb_axes, region.vaccine_metrics, detailed=False)
+    _plot_metrics(thumb_axes, region.metrics["covid"], detailed=False)
+    _plot_metrics(thumb_axes, region.metrics["vaccine"], detailed=False)
     _plot_policy_changes(thumb_axes, region.policy_changes, detailed=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
@@ -54,29 +54,17 @@ def _write_thumb_image(region, site_dir):
 
 
 def _write_chart_image(region, site_dir):
-    covid_max = max(
-        (
-            m.frame.value.max()
-            for m in region.covid_metrics.values()
-            if m.frame.size > 2 and m.emphasis > 0
-        ),
-        default=0,
-    )
+    plotters = [
+        _plot_covid,
+        _plot_variant,
+        _plot_vaccine,
+        _plot_serology,
+        _plot_mobility,
+    ]
 
-    covid_max = min(1000, max(200, (covid_max // 20 + 2) * 20))
-    heights = [covid_max / 75]
-
-    if region.variant_metrics:
-        heights.append(2)
-
-    if region.vaccine_metrics:
-        heights.append(2)
-
-    if region.serology_metrics:
-        heights.append(2)
-
-    if region.mobility_metrics:
-        heights.append(2)
+    plotters, heights = zip(*[
+        (p, h) for p in plotters for h in (p(None, region),) if h > 0
+    ])
 
     fig = matplotlib.pyplot.figure(figsize=(10, sum(heights)), dpi=200)
     subplots = fig.subplots(
@@ -87,44 +75,10 @@ def _write_chart_image(region, site_dir):
         gridspec_kw=dict(height_ratios=heights),
     )
 
-    axes_list = list(subplots[:, 0])
-    covid_axes = axes_list.pop(0)
-    covid_axes.set_ylim(0, covid_max)
-    _setup_xaxis(covid_axes, title=f"{region.short_name} COVID")
-    _plot_covid_metrics(covid_axes, region.covid_metrics, detailed=True)
-    _plot_policy_changes(covid_axes, region.policy_changes, detailed=True)
-    _add_plot_legend(covid_axes)
-
-    if region.variant_metrics:
-        var_axes = axes_list.pop(0)
-        _setup_xaxis(var_axes, title="Variants")
-        _plot_variant_metrics(var_axes, region.variant_metrics, detailed=True)
-        _add_plot_legend(var_axes)
-
-    if region.vaccine_metrics:
-        vax_axes = axes_list.pop(0)
-        vax_axes.set_ylabel("% of pop (cumulative)")
-        _setup_xaxis(vax_axes, title="Vaccines")
-        _plot_immunity_metrics(vax_axes, region.vaccine_metrics, detailed=True)
-        _plot_policy_changes(vax_axes, region.policy_changes, detailed=False)
-        _add_plot_legend(vax_axes)
-
-    if region.serology_metrics:
-        ser_axes = axes_list.pop(0)
-        ser_axes.set_ylabel("% of age 16+ pop")
-        _setup_xaxis(ser_axes, title="Serology")
-        _plot_immunity_metrics(ser_axes, region.serology_metrics, detailed=True)
-        _plot_policy_changes(ser_axes, region.policy_changes, detailed=False)
-        _add_plot_legend(ser_axes)
-
-    if region.mobility_metrics:
-        mob_axes = axes_list.pop(0)
-        _setup_xaxis(mob_axes, title="Mobility")
-        _plot_mobility_metrics(mob_axes, region.mobility_metrics, detailed=True)
-        _plot_policy_changes(mob_axes, region.policy_changes, detailed=False)
-        _add_plot_legend(mob_axes)
-
-    assert not axes_list
+    for i, (axes, plotter) in enumerate(zip(subplots[:, 0], plotters)):
+        plotter(axes, region)
+        _plot_policy_changes(axes, region.policy_changes, detailed=(i == 0))
+        _add_plot_legend(axes)
 
     fig.align_ylabels()
     fig.tight_layout(pad=0, h_pad=1)
@@ -132,29 +86,33 @@ def _write_chart_image(region, site_dir):
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
-def _plot_covid_metrics(axes, metrics, detailed):
-    """Plots COVID case-related metrics."""
+def _plot_covid(axes, region):
+    metrics = region.metrics["covid"]
+    if not metrics:
+        return 0
 
-    # (This function does not set ylim.)
-    axes.set_ylabel("daily change per capita")
-    axes.yaxis.set_label_position("right")
-    axes.yaxis.tick_right()
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
-    _plot_metrics(axes, metrics, detailed=detailed)
+    max_value = max(
+        m.frame.value.max()
+        for m in metrics.values()
+        if m.frame.size > 2 and m.emphasis > 0
+    )
+
+    ylim = min(1000, max(200, (max_value // 20 + 2) * 20))
+    if not axes:
+        return ylim / 75
+
+    _setup_xaxis(axes, title=f"{region.short_name} COVID")
+    _setup_yaxis(axes, title="daily change per capita", ylim=(0, ylim))
+    _plot_metrics(axes, metrics, detailed=True)
 
 
-def _plot_variant_metrics(axes, metrics, detailed):
-    """Plots COVID variant distribution."""
+def _plot_variant(axes, region):
+    metrics = region.metrics["variant"]
+    if not axes:
+        return 2 if metrics else 0
 
-    axes.set_ylim(0, 100)
-    axes.set_ylabel("% sequenced samples")
-    axes.yaxis.set_label_position("right")
-    axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    _setup_xaxis(axes, title="Variants")
+    _setup_yaxis(axes, title="% sequenced samples")
 
     # Label top variants by frequency, weighting recent frequency heavily
     freq_name = [
@@ -179,34 +137,40 @@ def _plot_variant_metrics(axes, metrics, detailed):
             _add_to_legend(axes, artist, order=-i)
         prev = next
 
-
-def _plot_immunity_metrics(axes, metrics, detailed):
-    """Plots COVID immunity (vaccine or serology) metrics."""
-
-    axes.set_ylim(0, 100)
-    axes.yaxis.set_label_position("right")
-    axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    if detailed:
-        axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics, detailed=detailed)
+    _add_plot_legend(axes)
 
 
-def _plot_mobility_metrics(axes, metrics, detailed):
-    """Plots metrics of population mobility."""
+def _plot_vaccine(axes, region):
+    metrics = region.metrics["vaccine"]
+    if not axes:
+        return 2 if metrics else 0
 
-    axes.set_ylim(0, 150)
-    axes.set_ylabel("% vs Jan 2020")
-    axes.yaxis.set_label_position("right")
-    axes.yaxis.tick_right()
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    if detailed:
-        axes.axhline(100, c="black", lw=1)  # Identity line.
-    _plot_metrics(axes, metrics, detailed=detailed)
+    _setup_xaxis(axes, title="Vaccines")
+    _setup_yaxis(axes, title="% of pop (cumulative)")
+    axes.axhline(100, c="black", lw=1)  # 100% line.
+    _plot_metrics(axes, metrics, detailed=True)
+
+
+def _plot_serology(axes, region):
+    metrics = region.metrics["serology"]
+    if not axes:
+        return 2 if metrics else 0
+
+    _setup_xaxis(axes, title="Serology")
+    _setup_yaxis(axes, title="% of age 16+ pop")
+    axes.axhline(100, c="black", lw=1)  # 100% line.
+    _plot_metrics(axes, metrics, detailed=True)
+
+
+def _plot_mobility(axes, region):
+    metrics = region.metrics["mobility"]
+    if not axes:
+        return 2 if metrics else 0
+
+    _setup_xaxis(axes, title="Mobility")
+    _setup_yaxis(axes, title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10))
+    axes.axhline(100, c="black", lw=1)  # Identity line.
+    _plot_metrics(axes, metrics, detailed=True)
 
 
 def _plot_metrics(axes, metrics, detailed):
@@ -349,6 +313,16 @@ def _setup_xaxis(axes, title=None, titlesize=45):
             ha="center",
             va="center",
         )
+
+
+def _setup_yaxis(axes, title=None, ylim=(0, 100), tick=(20, 10)):
+    axes.set_ylim(*ylim)
+    axes.set_ylabel(title)
+    axes.yaxis.set_label_position("right")
+    axes.yaxis.tick_right()
+    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick[0]))
+    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(tick[1]))
 
 
 def _add_to_legend(axes, *artists, order=0):

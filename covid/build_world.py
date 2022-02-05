@@ -2,6 +2,7 @@
 
 import argparse
 import itertools
+import logging
 import pickle
 import re
 import warnings
@@ -26,8 +27,8 @@ from covid import fetch_state_policy
 from covid import merge_covid_metrics
 from covid import merge_hospital_metrics
 from covid.logging_policy import collecting_warnings
-from covid.region_data import Metric
 from covid.region_data import PolicyChange
+from covid.region_data import make_metric
 
 # Reusable command line arguments for data collection.
 argument_parser = argparse.ArgumentParser(add_help=False)
@@ -66,23 +67,22 @@ KNOWN_WARNINGS_REGEX = re.compile(
 )
 
 
-def get_world(session, args, verbose=False):
+def get_world(session, args):
     """Returns data organized into a tree rooted at a World region.
     Warnings are captured and printed, then raise a ValueError exception."""
 
-    vprint = lambda *a, **k: print(*a, **k) if verbose else None
     cache_path = cache_policy.cached_path(session, _world_cache_key(args))
     if cache_path.exists():
-        vprint(f"Loading cached world: {cache_path}")
+        logging.info(f"Loading cached world: {cache_path}")
         with cache_path.open(mode="rb") as cache_file:
             return pickle.load(cache_file)
 
     with collecting_warnings(allow_regex=KNOWN_WARNINGS_REGEX) as warnings:
-        world = _compute_world(session, args, vprint)
+        world = _compute_world(session, args)
         if warnings:
             raise ValueError(f"{len(warnings)} warnings found combining data")
 
-    vprint(f"Saving cached world: {cache_path}")
+    logging.info(f"Saving cached world: {cache_path}")
     with cache_policy.temp_to_rename(cache_path, mode="wb") as cache_file:
         pickle.dump(world, cache_file)
     return world
@@ -96,10 +96,10 @@ def _world_cache_key(args):
     )
 
 
-def _compute_world(session, args, vprint):
+def _compute_world(session, args):
     """Assembles a World region from data, allowing warnings."""
 
-    vprint("Loading place data...")
+    logging.info("Loading place data...")
     atlas = build_atlas.get_atlas(session)
 
     if not args.no_covid_metrics:
@@ -113,7 +113,7 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_covariants:
-        vprint("Loading and merging CoVariants data...")
+        logging.info("Loading and merging CoVariants data...")
         cov_credits = fetch_covariants.credits()
         covar = fetch_covariants.get_variants(session=session)
 
@@ -161,7 +161,7 @@ def _compute_world(session, args, vprint):
                     v_totals = vd.found
                     continue
 
-                if v in region.variant_metrics:
+                if v in region.metrics["variant"]:
                     warnings.warn(f"Duplicate covariant ({region.path()}): {v}")
                     continue
 
@@ -173,7 +173,7 @@ def _compute_world(session, args, vprint):
                     continue
 
                 v_others = v_others - vd.found
-                region.variant_metrics[v] = _trend_metric(
+                region.metrics["variant"][v] = make_metric(
                     c=colors[v],
                     em=1,
                     ord=0,
@@ -181,7 +181,7 @@ def _compute_world(session, args, vprint):
                     v=vd.found * 100.0 / v_totals,
                 )
 
-            other_variants = _trend_metric(
+            other_variants = make_metric(
                 c=(0.9, 0.9, 0.9),
                 em=1,
                 ord=0,
@@ -189,9 +189,9 @@ def _compute_world(session, args, vprint):
                 v=v_others * 100.0 / v_totals,
             )
 
-            region.variant_metrics = {
+            region.metrics["variant"] = {
                 "original/other": other_variants,
-                **region.variant_metrics,
+                **region.metrics["variant"],
             }
 
     #
@@ -199,11 +199,11 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_cdc_vaccinations:
-        vprint("Loading CDC vaccination data...")
+        logging.info("Loading CDC vaccination data...")
         vax_credits = fetch_cdc_vaccinations.credits()
         vax_data = fetch_cdc_vaccinations.get_vaccinations(session=session)
 
-        vprint("Merging CDC vaccination data...")
+        logging.info("Merging CDC vaccination data...")
         for fips, v in vax_data.groupby("FIPS", as_index=False, sort=False):
             v.reset_index(level="FIPS", drop=True, inplace=True)
             region = atlas.by_fips.get(fips)
@@ -216,9 +216,9 @@ def _compute_world(session, args, vprint):
                 warnings.warn(f"No population: {region.path()} (pop={pop})")
                 continue
 
-            vax_metrics = region.vaccine_metrics
+            vax_metrics = region.metrics["vaccine"]
 
-            vax_metrics["people given any doses / 100p"] = _trend_metric(
+            vax_metrics["people given any doses / 100p"] = make_metric(
                 c="tab:olive",
                 em=0,
                 ord=1.2,
@@ -226,7 +226,7 @@ def _compute_world(session, args, vprint):
                 v=v.Administered_Dose1_Recip * (100 / pop),
             )
 
-            vax_metrics["people fully vaccinated / 100p"] = _trend_metric(
+            vax_metrics["people fully vaccinated / 100p"] = make_metric(
                 c="tab:green",
                 em=1,
                 ord=1.3,
@@ -234,7 +234,7 @@ def _compute_world(session, args, vprint):
                 v=v.Series_Complete_Yes * (100 / pop),
             )
 
-            vax_metrics["booster doses given / 100p"]: _trend_metric(
+            vax_metrics["booster doses given / 100p"]: make_metric(
                 c="tab:purple",
                 em=1,
                 ord=1.4,
@@ -243,7 +243,7 @@ def _compute_world(session, args, vprint):
             )
 
     if not args.no_ourworld_vaccinations:
-        vprint("Loading and merging ourworldindata vaccination data...")
+        logging.info("Loading and merging ourworldindata vaccination data...")
         vax_credits = fetch_ourworld_vaccinations.credits()
         vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
         vcols = ["iso_code", "state"]
@@ -301,8 +301,8 @@ def _compute_world(session, args, vprint):
             v.people_vaccinated.fillna(method="ffill", inplace=True)
             v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
 
-            vax_metrics = region.vaccine_metrics
-            vax_metrics["people given any doses / 100p"] = _trend_metric(
+            vax_metrics = region.metrics["vaccine"]
+            vax_metrics["people given any doses / 100p"] = make_metric(
                 c="tab:olive",
                 em=0,
                 ord=1.2,
@@ -310,7 +310,7 @@ def _compute_world(session, args, vprint):
                 v=v.people_vaccinated * (100 / pop),
             )
 
-            vax_metrics["people fully vaccinated / 100p"] = _trend_metric(
+            vax_metrics["people fully vaccinated / 100p"] = make_metric(
                 c="tab:green",
                 em=1,
                 ord=1.3,
@@ -318,7 +318,7 @@ def _compute_world(session, args, vprint):
                 v=v.people_fully_vaccinated * (100 / pop),
             )
 
-            vax_metrics["booster doses given / 100p"] = _trend_metric(
+            vax_metrics["booster doses given / 100p"] = make_metric(
                 c="tab:purple",
                 em=1,
                 ord=1.4,
@@ -326,7 +326,7 @@ def _compute_world(session, args, vprint):
                 v=v.total_boosters * (100 / pop),
             )
 
-            vax_metrics["daily dose rate / 5Kp"] = _trend_metric(
+            vax_metrics["daily dose rate / 5Kp"] = make_metric(
                 c="tab:cyan",
                 em=0,
                 ord=1.5,
@@ -340,7 +340,7 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_cdc_prevalence:
-        vprint("Loading and merging CDC prevalence estimates...")
+        logging.info("Loading and merging CDC prevalence estimates...")
         cdc_credits = fetch_cdc_prevalence.credits()
         cdc_data = fetch_cdc_prevalence.get_prevalence(session)
 
@@ -379,8 +379,8 @@ def _compute_world(session, args, vprint):
             # plot midmonth (data spans the month)
             v.reset_index(rcols, drop=True, inplace=True)
             v.index = v.index + pandas.Timedelta(days=14)
-            region_i = len(region.serology_metrics) // 2
-            region.serology_metrics[f"infected or vax{name}"] = _trend_metric(
+            region_i = len(region.metrics["serology"]) // 2
+            region.metrics["serology"][f"infected or vax{name}"] = make_metric(
                 c=matplotlib.cm.tab20b.colors[region_i],
                 em=1,
                 ord=1.0,
@@ -388,7 +388,7 @@ def _compute_world(session, args, vprint):
                 v=v["Rate %[Total Prevalence] Combined"],
             )
 
-            region.serology_metrics[f"infected{name}"] = _trend_metric(
+            region.metrics["serology"][f"infected{name}"] = make_metric(
                 c=matplotlib.cm.tab20c.colors[region_i + 4],
                 em=0,
                 ord=1.1,
@@ -401,7 +401,7 @@ def _compute_world(session, args, vprint):
     #
 
     if not args.no_state_policy:
-        vprint("Loading and merging state policy database...")
+        logging.info("Loading and merging state policy database...")
         policy_credits = fetch_state_policy.credits()
         state_policy = fetch_state_policy.get_events(session=session)
         for f, events in state_policy.groupby(level="state_fips", sort=False):
@@ -422,7 +422,7 @@ def _compute_world(session, args, vprint):
                 )
 
     if not args.no_california_blueprint:
-        vprint("Loading and merging California blueprint data chart...")
+        logging.info("Loading and merging California blueprint data chart...")
         cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         for county in cal_counties.values():
@@ -464,10 +464,10 @@ def _compute_world(session, args, vprint):
             "census_fips_code",
         ]
 
-        vprint("Loading Google mobility data...")
+        logging.info("Loading Google mobility data...")
         mobility_credits = fetch_google_mobility.credits()
         mobility_data = fetch_google_mobility.get_mobility(session=session)
-        vprint("Merging Google mobility data...")
+        logging.info("Merging Google mobility data...")
         mobility_data.sort_values(by=gcols + ["date"], inplace=True)
         mobility_data.set_index(keys="date", inplace=True)
         for g, m in mobility_data.groupby(gcols, as_index=False, sort=False):
@@ -483,36 +483,36 @@ def _compute_world(session, args, vprint):
                 continue
 
             pcfb = "percent_change_from_baseline"  # common, long suffix
-            mobility_metrics = {
-                "residential": _trend_metric(
+            region.metrics["mobility"] = {
+                "residential": make_metric(
                     c="tab:brown",
                     em=1,
                     ord=1.0,
                     cred=mobility_credits,
                     raw=100 + m[f"residential_{pcfb}"],
                 ),
-                "retail / recreation": _trend_metric(
+                "retail / recreation": make_metric(
                     c="tab:orange",
                     em=1,
                     ord=1.1,
                     cred=mobility_credits,
                     raw=100 + m[f"retail_and_recreation_{pcfb}"],
                 ),
-                "workplaces": _trend_metric(
+                "workplaces": make_metric(
                     c="tab:red",
                     em=1,
                     ord=1.2,
                     cred=mobility_credits,
                     raw=100 + m[f"workplaces_{pcfb}"],
                 ),
-                "grocery / pharmacy": _trend_metric(
+                "grocery / pharmacy": make_metric(
                     c="tab:blue",
                     em=0,
                     ord=1.4,
                     cred=mobility_credits,
                     raw=100 + m[f"grocery_and_pharmacy_{pcfb}"],
                 ),
-                "transit stations": _trend_metric(
+                "transit stations": make_metric(
                     "tab:purple",
                     em=0,
                     ord=1.5,
@@ -522,38 +522,36 @@ def _compute_world(session, args, vprint):
             }
 
             # Raw daily mobility metrics are confusing, don't show them.
-            for m in mobility_metrics.values():
+            for m in region.metrics["mobility"].values():
                 m.frame.drop(columns=["raw"], inplace=True)
 
-            region.mobility_metrics.update(mobility_metrics)
+            region.metrics["mobility"].update(region.metrics["mobility"])
 
     #
     # Combine metrics from subregions when not defined at the higher level.
     #
 
     def roll_up_metrics(r):
-        category_popvals, sub_pop_total = {}, 0
+        catname_popvals, total_popvals, sub_pop_total = {}, {}, 0
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
-            if not sub.covid_metrics:
+            if not sub.metrics["covid"]:
                 warnings.warn(f"No COVID metrics: {sub.path()}")
                 del r.subregions[key]
                 continue
 
             sub_pop = sub.totals["population"]
             sub_pop_total += sub_pop
-            for category in (
-                "totals",
-                "covid_metrics",
-                "vaccine_metrics",
-                "mobility_metrics",
-                # Don't roll up variant or serology metrics
-            ):
-                if category == "mobility_metrics" and not r.parent:
-                    continue  # Mobility gets weird rolled up to the top level
-                for name, value in getattr(sub, category).items():
-                    fn, pv = (category, name), (sub_pop, value)
-                    category_popvals.setdefault(fn, []).append(pv)
+
+            for name, value in sub.totals.items():
+                total_popvals.setdefault(name, []).append((sub_pop, value))
+
+            for cat, metrics in sub.metrics.items():
+                if cat in ("variant", "serology"):
+                    continue  # TODO: Add a per-metric no-rollup flag?
+                for name, value in metrics.items():
+                    catname, popval = (cat, name), (sub_pop, value)
+                    catname_popvals.setdefault(catname, []).append(popval)
 
         pop = r.totals["population"]
         if pop == 0:
@@ -569,22 +567,25 @@ def _compute_world(session, args, vprint):
                 f"{sub_pop_total}p in parts"
             )
 
+        for name, popvals in total_popvals.items():
+            total_pop = sum(p for p, v in popvals)
+            if abs(total_pop - pop) > pop * 0.1:
+                continue  # Don't synthesize if population doesn't match.
+
+            sub_total = sum(val for pop, val in popvals)
+            r.totals[name] = max(r.totals.get(name, 0), sub_total)
+
         week = pandas.Timedelta(weeks=1)
-        for (category, name), popvals in category_popvals.items():
+        for (cat, name), popvals in catname_popvals.items():
             metric_pop = sum(p for p, v in popvals)
             if abs(metric_pop - pop) > pop * 0.1:
                 continue  # Don't synthesize if population doesn't match.
 
-            out_dict = getattr(r, category)
-            old_value = out_dict.get(name)
-            if out_dict is r.totals:
-                sub_total = sum(v for p, v in popvals)
-                out_dict[name] = max(old_value or 0, sub_total)
-                continue
-
             ends = list(sorted(v.frame.index[-1] for p, v in popvals))
             end = ends[len(ends) // 2]  # Use the median end date.
-            if old_value and old_value.frame.index[-1] > end - week:
+
+            old_metric = r.metrics[cat].get(name)
+            if old_metric and old_metric.frame.index[-1] > end - week:
                 continue  # Higher level has reasonably fresh data already
 
             popvals.sort(reverse=True, key=lambda pv: pv[0])  # Highest first.
@@ -594,49 +595,46 @@ def _compute_world(session, args, vprint):
                 next_frame = next_pop * next_val.frame.loc[:end]
                 frame = frame.add(next_frame, fill_value=0)
 
-            out_dict[name] = replace(
+            r.metrics[cat][name] = replace(
                 first_val,
                 frame=frame / metric_pop,
                 credits=dict(c for p, v in popvals for c in v.credits.items()),
             )
 
         # Remove metrics which have no (or very little) valid data
-        for cat in [
-            r.map_metrics,
-            r.covid_metrics,
-            r.variant_metrics,
-            r.vaccine_metrics,
-            r.serology_metrics,
-            r.mobility_metrics,
-        ]:
+        for cat in r.metrics.values():
             for name, m in list(cat.items()):
                 if m.frame.value.count() < 2:
                     del cat[name]
 
         # Clean up some categories if we didn't get any "headline" data
-        for cat in [r.vaccine_metrics, r.serology_metrics, r.mobility_metrics]:
-            if not any(m.emphasis > 0 for m in cat.values()):
-                cat.clear()
+        for cat in ("vaccine", "serology", "mobility"):
+            if not any(m.emphasis > 0 for m in r.metrics[cat].values()):
+                r.metrics[cat].clear()
 
-    vprint("Rolling up metrics...")
+    logging.info("Rolling up metrics...")
     roll_up_metrics(atlas.world)
+
+    atlas.world.metrics.pop("mobility")  # World mobility rollup is weird.
 
     #
     # Interpolate synchronized weekly map metrics from time series metrics.
     #
 
     # Sync map metric weekly data points to this end date.
-    latest = max(m.frame.index[-1] for m in atlas.world.covid_metrics.values())
+    latest = max(
+        m.frame.index[-1] for m in atlas.world.metrics["covid"].values()
+    )
 
     def add_map_metric(region, c_name, m_name, mul, col, i_col, d_col):
-        m = region.covid_metrics.get(c_name)
+        m = region.metrics["covid"].get(c_name)
         if m is not None:
             first = m.frame.index[0].astimezone(latest.tz)
             weeks = (latest - first) // pandas.Timedelta(days=7)
             dates = pandas.date_range(end=latest, periods=weeks, freq="7D")
             value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
             if (~numpy.isnan(value)).any():
-                region.map_metrics[m_name] = replace(
+                region.metrics["map"][m_name] = replace(
                     m,
                     frame=pandas.DataFrame({"value": value}, index=dates),
                     color=col,
@@ -673,37 +671,6 @@ def _compute_world(session, args, vprint):
     return atlas.world
 
 
-def _trend_metric(c, em, ord, cred, v=None, raw=None, cum=None):
-    """Returns a Metric with data massaged appropriately."""
-
-    assert (v is not None) or (raw is not None) or (cum is not None)
-
-    if cum is not None:
-        raw = cum - cum.shift()  # Assume daily data.
-
-    if (v is not None) and (raw is not None):
-        assert v.index is raw.index
-        df = pandas.DataFrame({"raw": raw, "value": v})
-    elif v is not None:
-        df = pandas.DataFrame({"value": v})
-    elif raw is not None:
-        (nonzero_is,) = (raw.values > 0).nonzero()  # Skip first nonzero.
-        first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
-        first_i = max(0, min(first_i, len(raw) - 14))
-        smooth = raw.iloc[first_i:].clip(lower=0.0).rolling(7).mean()
-        df = pandas.DataFrame({"raw": raw, "value": smooth})
-    else:
-        raise ValueError(f"No data for metric")
-
-    if not pandas.api.types.is_datetime64_any_dtype(df.index.dtype):
-        raise ValueError(f'Bad trend index dtype "{df.index.dtype}"')
-    if df.index.duplicated().any():
-        dups = df.index.duplicated(keep=False)
-        raise ValueError(f"Dup trend dates: {df.index[dups]}")
-
-    return Metric(frame=df, color=c, emphasis=em, order=ord, credits=cred)
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -715,7 +682,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
-    world = get_world(session=session, args=args, verbose=True)
+    world = get_world(session=session, args=args)
     print(
         world.debug_tree(
             with_credits=args.print_credits, with_data=args.print_data

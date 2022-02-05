@@ -22,7 +22,7 @@ def collecting_warnings(allow_regex=None):
     def handler(message, category, filename, lineno, file, line):
         text = str(message).strip()
         if regex and regex.fullmatch(text):
-            logging.info(f"🟡   {text}")
+            logging.info(f"🆗  {text}")
         else:
             collected.append(text)
             saved(message, category, filename, lineno, file, line)

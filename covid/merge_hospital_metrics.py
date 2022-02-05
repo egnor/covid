@@ -32,7 +32,9 @@ def add_metrics(session, atlas):
 
         v.reset_index("iso_code", drop=True, inplace=True)
 
-        region.covid_metrics["hospital admissions / 1Mp"] = make_metric(
+        cov_metrics = region.metrics["covid"]
+
+        cov_metrics["hospital admissions / 1Mp"] = make_metric(
             c="tab:orange",
             em=0,
             ord=1.1,
@@ -40,7 +42,7 @@ def add_metrics(session, atlas):
             v=v["new hospital admissions"] * (1e6 / pop),
         )
 
-        region.covid_metrics["ICU admissions / 1Mp"] = make_metric(
+        cov_metrics["ICU admissions / 1Mp"] = make_metric(
             c="tab:pink",
             em=0,
             ord=1.2,

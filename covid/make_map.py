@@ -1,6 +1,7 @@
 """Functions to generate maps based on region metrics."""
 
 import datetime
+import logging
 import math
 import warnings
 
@@ -30,14 +31,13 @@ _lat_lon_crs = cartopy.crs.PlateCarree()
 _area_crs = cartopy.crs.Mollweide()
 
 
-def setup(args, verbose=False):
+def setup(args):
     """Initialize cartopy globals from command line args."""
 
-    vprint = lambda *a, **k: print(*a, **k) if verbose else None
     cartopy.config["data_dir"] = args.cache_dir / "cartopy"
 
     def earth(category, name):
-        vprint(f"Loading shapes: {category}/{name}")
+        logging.info(f"Loading shapes: {category}/{name}")
         return list(
             cartopy.io.shapereader.Reader(
                 cartopy.io.shapereader.natural_earth(
@@ -52,14 +52,13 @@ def setup(args, verbose=False):
     _water_shapes = earth("physical", "ocean") + earth("physical", "lakes")
 
 
-def write_video(region, site_dir, verbose=False):
+def write_video(region, site_dir):
     """Generates a map timeline video for the specified region."""
 
-    vprint = lambda *a, **k: print(*a, **k) if verbose else None
-    vprint(f"Creating map video: {region.path()}")
+    logging.info(f"Creating map video: {region.path()}")
 
     subs = _mapped_subregions(region)
-    max_time = max(m.frame.index.max() for m in region.map_metrics.values())
+    max_time = max(m.frame.index.max() for m in region.metrics["map"].values())
     d_m_r_v = list(
         (d, m_r_v)
         for d, m_r_v in _date_metric_region_value(subs).items()
@@ -80,7 +79,7 @@ def write_video(region, site_dir, verbose=False):
 
     def make_frame(t):
         frame = round(t * FPS)
-        vprint(f"  {t:>5.2f}s: Frame {frame}")
+        logging.debug(f"  {t:>5.2f}s: Frame {frame}")
         date, m_r_v = d_m_r_v[frame]
         prev_date, prev_m_r_v = d_m_r_v[frame - 1] if frame > 0 else (None, {})
 
@@ -114,7 +113,7 @@ def write_video(region, site_dir, verbose=False):
         )
 
         # Use the main region's map metrics to define ordering and color.
-        for name, metric in region.map_metrics.items():
+        for name, metric in region.metrics["map"].items():
             now_r_v, prev_r_v = m_r_v.get(name, {}), prev_m_r_v.get(name, {})
             now_areas = [scale * max(0, now_r_v.get(r, 0)) for r in subs]
             prev_areas = [scale * max(0, prev_r_v.get(r, 0)) for r in subs]
@@ -167,7 +166,9 @@ def write_video(region, site_dir, verbose=False):
         return _rgb_from_canvas(canvas.get_renderer(), bbox)
 
     seconds = (len(d_m_r_v) - 0.5) / FPS
-    vprint(f"Generating {len(d_m_r_v)} frames ({seconds:.2f}s * {FPS}fps)...")
+    logging.debug(
+        f"Generating {len(d_m_r_v)} frames ({seconds:.2f}s * {FPS}fps)..."
+    )
 
     file_path = urls.file(site_dir, urls.map_video_maybe(region))
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,7 +180,7 @@ def write_video(region, site_dir, verbose=False):
     )
 
     temp_path.rename(file_path)
-    vprint(f"Saved map video: {file_path}")
+    logging.debug(f"Saved map video: {file_path}")
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
@@ -189,14 +190,14 @@ def _mapped_subregions(region):
         r
         for s in region.subregions.values()
         for r in (s.subregions.values() if urls.has_map(s) else (s,))
-        if r.map_metrics and r.lat_lon
+        if r.metrics["map"] and r.lat_lon
     ]
 
 
 def _date_metric_region_value(regions):
     d_m_r_v = {}
     for r in regions:
-        for n, m in r.map_metrics.items():
+        for n, m in r.metrics["map"].items():
             for t in m.frame.itertuples():
                 if pandas.notna(t.value):
                     r_v = d_m_r_v.setdefault(t.Index, {}).setdefault(n, {})

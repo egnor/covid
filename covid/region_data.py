@@ -43,14 +43,12 @@ class Region:
     lat_lon: Optional[Tuple[float, float]] = None
     parent: Optional["Region"] = field(default=None, repr=0)
     subregions: Dict[str, "Region"] = field(default_factory=dict, repr=0)
+
     totals: collections.Counter = field(default_factory=collections.Counter)
-    map_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    covid_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    variant_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    vaccine_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    serology_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
-    mobility_metrics: Dict[str, Metric] = field(default_factory=dict, repr=0)
     policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
+    metrics: Dict[str, Dict[str, Metric]] = field(
+        default_factory=lambda: collections.defaultdict(dict), repr=0
+    )
 
     def path(r):
         return f"{r.parent.path()}/{r.short_name}" if r.parent else r.name
@@ -67,13 +65,7 @@ class Region:
     def debug_line(r):
         return (
             f'{r.totals["population"] or -1:9.0f}p <'
-            + ".h"[any("hosp" in k for k in r.covid_metrics.keys())]
-            + ".m"[bool(r.map_metrics)]
-            + ".c"[bool(r.covid_metrics)]
-            + ".v"[bool(r.vaccine_metrics)]
-            + ".s"[bool(r.serology_metrics)]
-            + ".g"[bool(r.mobility_metrics)]
-            + ".p"[bool(r.policy_changes)]
+            + "|".join(k[:3] for k in r.metrics.keys())
             + f"> {r.path()}"
             + (f" ({r.name})" if r.name != r.short_name else "")
         )
@@ -81,19 +73,12 @@ class Region:
     def debug_block(r, with_credits=False, with_data=False):
         out = r.debug_line()
 
-        for cat, metrics in (
-            ("map", r.map_metrics),
-            ("cov", r.covid_metrics),
-            ("var", r.variant_metrics),
-            ("vax", r.vaccine_metrics),
-            ("ser", r.serology_metrics),
-            ("mob", r.mobility_metrics),
-        ):
+        for cat, metrics in r.metrics.items():
             for name, m in metrics.items():
                 out += (
                     f"\n    {len(m.frame):3d}d =>{m.frame.index.max().date()}"
                     f" last={m.frame.value.iloc[-1]:<5.1f} "
-                    f" {cat}: {name}"
+                    f" {cat[:3]}: {name}"
                 )
                 if with_credits:
                     out += f'\n        {" ".join(m.credits.values())}'

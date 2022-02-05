@@ -37,7 +37,8 @@ def has_map(region):
     non_biggest_pop = sum(
         s.totals["population"]
         for s in region.subregions.values()
-        if s.map_metrics and (s.totals["population"] < 0.5 * rp or has_map(s))
+        if s.metrics["map"]
+        and (s.totals["population"] < 0.5 * rp or has_map(s))
     )
     return len(region.subregions) >= 3 and non_biggest_pop >= 0.1 * rp
 

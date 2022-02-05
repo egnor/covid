@@ -10,8 +10,8 @@ import dominate
 from dominate import tags
 from dominate import util
 
+from covid import build_world
 from covid import cache_policy
-from covid import combine_data
 from covid import make_chart
 from covid import make_map
 from covid import style
@@ -40,7 +40,7 @@ def make_region_html(region, args):
 
     latest = max(
         m.frame.index.max()
-        for m in region.covid_metrics.values()
+        for m in region.metrics["covid"].values()
         if m.emphasis >= 0
     )
 
@@ -136,7 +136,7 @@ def make_region_html(region, args):
                     return r.totals.get("population", 0)
 
                 def newpos(r):
-                    m = (r.covid_metrics or {}).get("daily positives / 100Kp")
+                    m = r.metrics["covid"].get("daily positives / 100Kp")
                     return m.frame.value.iloc[-1] * pop(r) if m else 0
 
                 tags.h2("Top 5 by population")
@@ -155,15 +155,8 @@ def make_region_html(region, args):
 
         r = region
         credits = dict(c for p in r.policy_changes for c in p.credits.items())
-        for md in (
-            r.map_metrics,
-            r.covid_metrics,
-            r.variant_metrics,
-            r.vaccine_metrics,
-            r.serology_metrics,
-            r.mobility_metrics,
-        ):
-            credits.update(c for m in md.values() for c in m.credits.items())
+        for ms in r.metrics.values():
+            credits.update(c for m in ms.values() for c in m.credits.items())
         with tags.p("Sources: ", cls="credits"):
             for i, (url, text) in enumerate(credits.items()):
                 util.text(", ") if i > 0 else None
@@ -189,7 +182,7 @@ def make_subregion_html(doc_url, region):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(
-        parents=[cache_policy.argument_parser, combine_data.argument_parser]
+        parents=[cache_policy.argument_parser, build_world.argument_parser]
     )
     parser.add_argument("--processes", type=int)
     parser.add_argument("--chunk_size", type=int)
@@ -200,8 +193,8 @@ def main():
     args = parser.parse_args()
     make_map.setup(args)
 
-    world = combine_data.get_world(
-        session=cache_policy.new_session(args), args=args, verbose=True
+    world = build_world.get_world(
+        session=cache_policy.new_session(args), args=args
     )
 
     def get_regions(r):
