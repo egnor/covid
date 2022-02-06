@@ -247,15 +247,20 @@ def _setup_axes(figure, region):
         m = lambda g: isinstance(g, BaseMultipartGeometry)
         split = lambda g: (p for s in g for p in split(s)) if m(g) else (g,)
         area = lambda g: _area_crs.project_geometry(g, _lat_lon_crs).area
+        region_shapes = a1_region_shapes or a0_region_shapes
+        if not region_shapes:
+            raise LookupError(
+                f"No shapes for a0={a0_region.name} "
+                f"a1={a1_region.name if a1_region else 'N/A'}"
+            )
 
-        shapes = a1_region_shapes or a0_region_shapes
-        parts = (
-            (s.geometry for s in shapes)
-            if region.fips_code == 15
-            else (p for s in shapes for p in split(s.geometry))  # HI
+        region_shape_parts = (
+            (s.geometry for s in region_shapes)
+            if region.fips_code == 15  # Hawaii
+            else (p for s in region_shapes for p in split(s.geometry))
         )
 
-        main_area, main = max((area(p), p) for p in parts)
+        main_area, main = max((area(p), p) for p in region_shape_parts)
         ((center_lon, center_lat),) = main.centroid.coords
         axes = figure.add_subplot(
             projection=cartopy.crs.Orthographic(
