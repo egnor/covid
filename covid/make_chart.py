@@ -31,22 +31,12 @@ def _write_thumb_image(region, site_dir):
     fig = matplotlib.pyplot.figure(figsize=(8, 8 / p), dpi=50)
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes)
-    thumb_axes.set_ylim(0, 100)
+    thumb_axes.set_ylim(0, 300)
     _plot_metrics(thumb_axes, region.metrics["covid"], detailed=False)
-    _plot_metrics(thumb_axes, region.metrics["vaccine"], detailed=False)
-    _plot_policy_changes(thumb_axes, region.policy_changes, detailed=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
-        which="both",
-        bottom=False,
-        top=False,
-        left=False,
-        right=False,
-        labelbottom=False,
-        labeltop=False,
-        labelleft=False,
-        labelright=False,
+        which="both", bottom=0, left=0, labelbottom=0, labelleft=0
     )
     fig.tight_layout(pad=0.1)
     fig.savefig(urls.file(site_dir, urls.thumb_image(region)))
@@ -308,7 +298,6 @@ def _setup_xaxis(axes, title=None, titlesize=45):
     axes.xaxis.set_minor_locator(week_locator)
     axes.xaxis.set_major_locator(month_locator)
     axes.xaxis.set_major_formatter(month_formatter)
-    axes.xaxis.set_tick_params(which="major", labelbottom=True)
     for label in axes.get_xticklabels():
         label.set_horizontalalignment("left")
 
