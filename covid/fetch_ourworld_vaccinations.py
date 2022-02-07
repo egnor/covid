@@ -45,11 +45,10 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
-    import signal
 
     from covid import cache_policy
+    from covid import logging_policy  # noqa
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     args = parser.parse_args()
     session = cache_policy.new_session(args)

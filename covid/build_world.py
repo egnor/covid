@@ -26,6 +26,7 @@ from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
 from covid import merge_covid_metrics
 from covid import merge_hospital_metrics
+from covid import merge_wastewater_metrics
 from covid.logging_policy import collecting_warnings
 from covid.region_data import PolicyChange
 from covid.region_data import make_metric
@@ -43,6 +44,7 @@ arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_maps", action="store_true")
 arg_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
+arg_group.add_argument("--use_wastewater_metrics", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
@@ -109,6 +111,9 @@ def _compute_world(session, args):
 
     if not args.no_hospital_metrics:
         merge_hospital_metrics.add_metrics(session=session, atlas=atlas)
+
+    if args.use_wastewater_metrics:
+        merge_wastewater_metrics.add_metrics(session=session, atlas=atlas)
 
     #
     # Add variant breakdown
@@ -549,7 +554,7 @@ def _compute_world(session, args):
                 total_popvals.setdefault(name, []).append((sub_pop, value))
 
             for cat, metrics in sub.metrics.items():
-                if cat in ("variant", "serology"):
+                if cat in ("variant", "serology", "wastewater"):
                     continue  # TODO: Add a per-metric no-rollup flag?
                 for name, value in metrics.items():
                     catname, popval = (cat, name), (sub_pop, value)

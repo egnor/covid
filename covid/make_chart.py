@@ -47,6 +47,7 @@ def _write_chart_image(region, site_dir):
     plotters = [
         _plot_covid,
         _plot_hospital,
+        _plot_wastewater,
         _plot_variant,
         _plot_vaccine,
         _plot_serology,
@@ -111,6 +112,17 @@ def _plot_hospital(axes, region):
 
     _setup_xaxis(axes, title="Hospitals")
     _setup_yaxis(axes, title="patients per cap", ylim=(0, ylim), tick=(40, 20))
+    _plot_metrics(axes, metrics)
+
+
+def _plot_wastewater(axes, region):
+    metrics = region.metrics["wastewater"]
+    if not axes:
+        return 2 if metrics else 0
+
+    _setup_xaxis(axes, title="Wastewater")
+    _setup_yaxis(axes, title="% change / day", ylim=(-100, 100))
+    axes.axhline(100, c="black", lw=1)  # 100% line.
     _plot_metrics(axes, metrics)
 
 

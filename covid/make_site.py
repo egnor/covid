@@ -4,7 +4,6 @@ import argparse
 import multiprocessing
 import os
 import pathlib
-import signal
 
 import dominate
 from dominate import tags
@@ -12,6 +11,7 @@ from dominate import util
 
 from covid import build_world
 from covid import cache_policy
+from covid import logging_policy  # noqa
 from covid import make_chart
 from covid import make_map
 from covid import style
@@ -180,7 +180,6 @@ def make_subregion_html(doc_url, region):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, build_world.argument_parser]
     )

@@ -105,11 +105,10 @@ def credits():
 
 if __name__ == "__main__":
     import argparse
-    import signal
 
     from covid import cache_policy
+    from covid import logging_policy  # noqa
 
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # Sane ^C behavior
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
     parser.add_argument("--id", type=int)
     args = parser.parse_args()

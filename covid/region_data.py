@@ -65,7 +65,7 @@ class Region:
     def debug_line(r):
         return (
             f'{r.totals["population"] or -1:9.0f}p <'
-            + "|".join(k[:3] for k in r.metrics.keys())
+            + "|".join(k[:3] for k, v in r.metrics.items() if v)
             + f"> {r.path()}"
             + (f" ({r.name})" if r.name != r.short_name else "")
         )
@@ -76,7 +76,8 @@ class Region:
         for cat, metrics in r.metrics.items():
             for name, m in metrics.items():
                 out += (
-                    f"\n    {len(m.frame):3d}d =>{m.frame.index.max().date()}"
+                    f"\n    {m.frame.value.count():3d}d"
+                    f" =>{m.frame.index.max().date()}"
                     f" last={m.frame.value.iloc[-1]:<5.1f} "
                     f" {cat[:3]}: {name}"
                 )
@@ -94,8 +95,8 @@ class Region:
         return out + ("\n" if "\n" in out else "")
 
     def debug_tree(r, **kwargs):
-        return r.debug_block() + "".join(
-            "\n  " + sub.debug_tree().replace("\n", "\n  ")
+        return r.debug_block(**kwargs) + "".join(
+            "\n  " + sub.debug_tree(**kwargs).replace("\n", "\n  ")
             for sub in r.subregions.values()
         )
 
