@@ -4,7 +4,6 @@ import logging
 import warnings
 
 import matplotlib.cm
-import pycountry
 
 import covid.fetch_cdc_wastewater
 from covid.region_data import make_metric
@@ -39,7 +38,7 @@ def add_metrics(session, atlas):
                 w.reset_index(
                     ["county_fips", "wwtp_id", "key_plot_id"],
                     drop=True,
-                    inplace=True
+                    inplace=True,
                 )
 
                 row = w.iloc[0]

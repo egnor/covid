@@ -1,5 +1,6 @@
 """Build a basic hierarchy of place names to add COVID metrics to."""
 
+import logging
 
 import pycountry
 
@@ -23,6 +24,7 @@ def _get_sub(parent, key, name=None):
 def get_atlas(session):
     """Returns an RegionAtlas populated with places."""
 
+    logging.info("Loading JHU CSSE places...")
     atlas = RegionAtlas()
     atlas.world = Region(name="World", short_name="World")
     for p in fetch_jhu_csse.get_places(session).itertuples(name="Place"):
@@ -100,6 +102,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     session = cache_policy.new_session(args)
 
-    print("Loading place data...")
     atlas = get_atlas(session)
     print(atlas.world.debug_tree())

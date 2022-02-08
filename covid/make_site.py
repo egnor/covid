@@ -68,11 +68,14 @@ def make_region_html(region, args):
 
         with tags.div():
             pop = region.totals["population"]
-            p = region.totals.get("positives", 0)
-            d = region.totals.get("deaths", 0)
-            util.text(f"{pop:,.0f}\xa0pop, ")
-            util.text(f"{p:,.0f}\xa0({100 * p / pop:.2g}%)\xa0pos, ")
-            util.text(f"{d:,.0f}\xa0({100 * d / pop:.2g}%)\xa0died ")
+            vax = region.totals.get("vaccinated", 0)
+            pos = region.totals.get("positives", 0)
+            dead = region.totals.get("deaths", 0)
+            util.text(f"{pop:,.0f}\xa0pop; ")
+            if vax:
+                util.text(f"{vax:,.0f}\xa0({100 * vax / pop:.2g}%)\xa0vax, ")
+            util.text(f"{pos:,.0f}\xa0({100 * pos / pop:.2g}%)\xa0pos, ")
+            util.text(f"{dead:,.0f}\xa0({100 * dead / pop:.2g}%)\xa0died ")
             util.text(f"as of {latest.date()}")
 
         if urls.has_map(region):
@@ -171,11 +174,12 @@ def make_subregion_html(doc_url, region):
     with tags.a(cls="subregion", href=region_href):
         with tags.div(cls="subregion_label", __pretty=False):
             util.text(region.name)
-            tags.div(
-                f'{region.totals["population"]:,.0f}\xa0pop, '
-                f'{region.totals.get("positives", 0):,.0f}\xa0pos, '
-                f'{region.totals.get("deaths", 0):,.0f}\xa0died'
-            )
+            with tags.div():
+                pop = region.totals["population"]
+                util.text(f"{pop:,.0f}\xa0pop")
+                vax = region.totals.get("vaccinated", 0)
+                util.text(f", {100 * vax / pop:,.2g}%\xa0vax" if vax else "")
+
         tags.img(width=200, src=urls.link(doc_url, urls.thumb_image(region)))
 
 

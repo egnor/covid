@@ -19,13 +19,12 @@ from covid import build_atlas
 from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_prevalence
-from covid import fetch_cdc_vaccinations
 from covid import fetch_covariants
 from covid import fetch_google_mobility
-from covid import fetch_ourworld_vaccinations
 from covid import fetch_state_policy
 from covid import merge_covid_metrics
 from covid import merge_hospital_metrics
+from covid import merge_vaccine_metrics
 from covid import merge_wastewater_metrics
 from covid.logging_policy import collecting_warnings
 from covid.region_data import PolicyChange
@@ -36,18 +35,19 @@ argument_parser = argparse.ArgumentParser(add_help=False)
 arg_group = argument_parser.add_argument_group("data gathering")
 arg_group.add_argument("--no_california_blueprint", action="store_true")
 arg_group.add_argument("--no_cdc_prevalence", action="store_true")
-arg_group.add_argument("--no_cdc_vaccinations", action="store_true")
 arg_group.add_argument("--no_covariants", action="store_true")
 arg_group.add_argument("--no_covid_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
 arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_maps", action="store_true")
-arg_group.add_argument("--no_ourworld_vaccinations", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
+arg_group.add_argument("--no_vaccine_metrics", action="store_true")
 arg_group.add_argument("--use_wastewater_metrics", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
+    r"|Bad CDC vax: World/US/Puerto Rico/Arecibo .*"
+    r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
     r"|Bad deaths: World/AU .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
@@ -103,7 +103,6 @@ def _world_cache_key(args):
 def _compute_world(session, args):
     """Assembles a World region from data, allowing warnings."""
 
-    logging.info("Loading place data...")
     atlas = build_atlas.get_atlas(session)
 
     if not args.no_covid_metrics:
@@ -114,6 +113,9 @@ def _compute_world(session, args):
 
     if args.use_wastewater_metrics:
         merge_wastewater_metrics.add_metrics(session=session, atlas=atlas)
+
+    if not args.no_vaccine_metrics:
+        merge_vaccine_metrics.add_metrics(session=session, atlas=atlas)
 
     #
     # Add variant breakdown
@@ -200,147 +202,6 @@ def _compute_world(session, args):
                 "original/other": other_variants,
                 **region.metrics["variant"],
             }
-
-    #
-    # Add vaccination statistics
-    #
-
-    if not args.no_cdc_vaccinations:
-        logging.info("Loading CDC vaccination data...")
-        vax_credits = fetch_cdc_vaccinations.credits()
-        vax_data = fetch_cdc_vaccinations.get_vaccinations(session=session)
-
-        logging.info("Merging CDC vaccination data...")
-        for fips, v in vax_data.groupby("FIPS", as_index=False, sort=False):
-            v.reset_index(level="FIPS", drop=True, inplace=True)
-            region = atlas.by_fips.get(fips)
-            if region is None:
-                warnings.warn(f"Missing CDC vax FIPS: {fips}")
-                continue
-
-            pop = region.totals.get("population", 0)
-            if not (pop > 0):
-                warnings.warn(f"No population: {region.path()} (pop={pop})")
-                continue
-
-            vax_metrics = region.metrics["vaccine"]
-
-            vax_metrics["people given any doses / 100p"] = make_metric(
-                c="tab:olive",
-                em=0,
-                ord=1.2,
-                cred=vax_credits,
-                v=v.Administered_Dose1_Recip * (100 / pop),
-            )
-
-            vax_metrics["people fully vaccinated / 100p"] = make_metric(
-                c="tab:green",
-                em=1,
-                ord=1.3,
-                cred=vax_credits,
-                v=v.Series_Complete_Yes * (100 / pop),
-            )
-
-            vax_metrics["booster doses given / 100p"]: make_metric(
-                c="tab:purple",
-                em=1,
-                ord=1.4,
-                cred=vax_credits,
-                v=v.Booster_Doses * (100 / pop),
-            )
-
-    if not args.no_ourworld_vaccinations:
-        logging.info("Loading and merging ourworldindata vaccination data...")
-        vax_credits = fetch_ourworld_vaccinations.credits()
-        vax_data = fetch_ourworld_vaccinations.get_vaccinations(session=session)
-        vcols = ["iso_code", "state"]
-        vax_data.state.fillna("", inplace=True)  # Or groupby() drops them.
-        vax_data.sort_values(by=vcols + ["date"], inplace=True)
-        vax_data.set_index(keys="date", inplace=True)
-        for (iso3, admin2), v in vax_data.groupby(vcols, as_index=False):
-            if iso3 == "OWID_WRL":
-                cc = None
-            elif iso3 == "OWID_ENG":
-                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "England"
-            elif iso3 == "OWID_SCT":
-                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "Scotland"
-            elif iso3 == "OWID_NIR":
-                cc = pycountry.countries.get(alpha_2="GB")
-                admin2 = "Northern Ireland"
-            elif iso3 == "OWID_WLS":
-                cc, admin2 = pycountry.countries.get(alpha_2="GB"), "Wales"
-            else:
-                cc = pycountry.countries.get(alpha_3=iso3)
-                if cc is None:
-                    warnings.warn(f"Unknown OWID vax country code: {iso3}")
-                    continue
-
-            region = atlas.by_iso2.get(cc.alpha_2) if cc else atlas.world
-            if region is None:
-                warnings.warn(f"Missing OWID vax country: {cc.alpha_2}")
-                continue
-
-            if admin2:
-                if cc.alpha_2 == "US":
-                    # Data includes "New York State", lookup() needs "New York"
-                    st = us.states.lookup(admin2.replace(" State", ""))
-                    if not st:
-                        warnings.warn(f"Unknown OWID vax state: {admin2}")
-                        continue
-
-                    region = atlas.by_fips.get(int(st.fips))
-                    if region is None:
-                        warnings.warn(f"Missing OWID vax FIPS: {st.fips}")
-                        continue
-                else:
-                    region = region.subregions.get(admin2)
-                    if region is None:
-                        warnings.warn(f"Unknown OWID vax subregion: {admin2}")
-
-            pop = region.totals.get("population", 0)
-            if not (pop > 0):
-                warnings.warn(f"No population: {region.path()} (pop={pop})")
-                continue
-
-            v.total_distributed.fillna(method="ffill", inplace=True)
-            v.total_vaccinations.fillna(method="ffill", inplace=True)
-            v.total_boosters.fillna(method="ffill", inplace=True)
-            v.people_vaccinated.fillna(method="ffill", inplace=True)
-            v.people_fully_vaccinated.fillna(method="ffill", inplace=True)
-
-            vax_metrics = region.metrics["vaccine"]
-            vax_metrics["people given any doses / 100p"] = make_metric(
-                c="tab:olive",
-                em=0,
-                ord=1.2,
-                cred=vax_credits,
-                v=v.people_vaccinated * (100 / pop),
-            )
-
-            vax_metrics["people fully vaccinated / 100p"] = make_metric(
-                c="tab:green",
-                em=1,
-                ord=1.3,
-                cred=vax_credits,
-                v=v.people_fully_vaccinated * (100 / pop),
-            )
-
-            vax_metrics["total booster doses / 100p"] = make_metric(
-                c="tab:purple",
-                em=1,
-                ord=1.4,
-                cred=vax_credits,
-                v=v.total_boosters * (100 / pop),
-            )
-
-            vax_metrics["doses / day / 5Kp"] = make_metric(
-                c="tab:cyan",
-                em=0,
-                ord=1.5,
-                cred=vax_credits,
-                v=v.daily_vaccinations * (5000 / pop),
-                raw=v.daily_vaccinations_raw * (5000 / pop),
-            )
 
     #
     # Add prevalence estimates
