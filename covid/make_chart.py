@@ -310,6 +310,7 @@ def _setup_xaxis(axes, title=None, titlesize=45):
     axes.xaxis.set_minor_locator(week_locator)
     axes.xaxis.set_major_locator(month_locator)
     axes.xaxis.set_major_formatter(month_formatter)
+    axes.xaxis.set_tick_params(labelbottom=True)
     for label in axes.get_xticklabels():
         label.set_horizontalalignment("left")
 
