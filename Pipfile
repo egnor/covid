@@ -37,4 +37,4 @@ extras = [ "filecache",]
 version = "~=0.12.6"
 
 [scripts]
-make_site = "python covid/make_site.py"
+make_site = "env PYTHONPATH=. python covid/make_site.py"
