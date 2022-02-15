@@ -23,8 +23,6 @@ def get_vaccinations(session):
             io.StringIO(response.text),
             dtype={"FIPS": "Int64"},
             na_values=["UNK"],
-            parse_dates=["Date"],
-            date_parser=lambda v: pandas.to_datetime(v, utc=True),
         )
 
         df = df[
@@ -38,6 +36,7 @@ def get_vaccinations(session):
         ]
 
         df.dropna(subset=["FIPS"], inplace=True)
+        df.Date = pandas.to_datetime(df.Date, utc=True)
         df.reset_index(drop=True, inplace=True)
         with temp_to_rename(cache_path) as temp_path:
             df.to_feather(temp_path)
