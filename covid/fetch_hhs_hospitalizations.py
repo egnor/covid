@@ -21,7 +21,11 @@ def get_hospitalizations(session):
         response.raise_for_status()
         df = pandas.read_csv(
             io.StringIO(response.text),
-            dtype={"fips_code": "Int64"},
+            dtype={
+                "hospital_pk": str,
+                "fips_code": "Int64",
+                "ccn": str,
+            },
             parse_dates=["collection_week"],
             date_parser=lambda v: pandas.to_datetime(v, utc=True),
         )
