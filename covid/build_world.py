@@ -49,6 +49,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad CDC vax: World/US/Puerto Rico/Arecibo .*"
     r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
     r"|Bad deaths: World/AU .*"
+    r"|Bad OWID vax: World/ET .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
