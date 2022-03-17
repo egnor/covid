@@ -395,8 +395,6 @@ def _compute_world(session, args):
             for m in region.metrics["mobility"].values():
                 m.frame.drop(columns=["raw"], inplace=True)
 
-            region.metrics["mobility"].update(region.metrics["mobility"])
-
     #
     # Combine metrics from subregions when not defined at the higher level.
     #
