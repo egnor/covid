@@ -18,7 +18,6 @@ def add_metrics(session, atlas):
 
     logging.info("Merging CDC vaccination data...")
     for fips, v in cdc_data.groupby("FIPS", as_index=False, sort=False):
-        v.reset_index(level="FIPS", drop=True, inplace=True)
         region = atlas.by_fips.get(fips)
         if region is None:
             warnings.warn(f"Missing CDC vax FIPS: {fips}")
@@ -28,6 +27,14 @@ def add_metrics(session, atlas):
         if not (pop > 0):
             warnings.warn(f"No population: {region.path()} (pop={pop})")
             continue
+
+        v.reset_index(level="FIPS", drop=True, inplace=True)
+        v.Administered_Dose1_Recip.fillna(method="ffill", inplace=True)
+        v.Series_Complete_Yes.fillna(method="ffill", inplace=True)
+        v.Booster_Doses.fillna(method="ffill", inplace=True)
+
+        if v.Series_Complete_Yes.isnull().all():
+            continue  # No actual data
 
         vaxxed = v.Series_Complete_Yes.iloc[-1]
         if not (0 <= vaxxed <= pop * 1.1 + 10000):

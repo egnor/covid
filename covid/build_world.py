@@ -46,7 +46,6 @@ arg_group.add_argument("--use_wastewater_metrics", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
-    r"|Bad CDC vax: World/US/Puerto Rico/Arecibo .*"
     r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
     r"|Bad deaths: World/AU .*"
     r"|Bad OWID vax: World/ET .*"

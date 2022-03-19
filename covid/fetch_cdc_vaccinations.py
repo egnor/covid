@@ -61,6 +61,7 @@ if __name__ == "__main__":
     from covid import logging_policy  # noqa
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser.add_argument("--fips", type=int)
     args = parser.parse_args()
     session = cache_policy.new_session(args)
 
@@ -70,13 +71,23 @@ if __name__ == "__main__":
     df.info(verbose=True, show_counts=True)
     print()
 
-    print("=== COUNTIES ===")
-    for fips, sub_df in df.groupby(level="FIPS", as_index=False):
-        sub_df.reset_index(level="FIPS", drop=True, inplace=True)
-        latest = sub_df.iloc[-1]
-        print(
-            fips,
-            latest.Administered_Dose1_Recip,
-            latest.Series_Complete_Yes,
-            latest.Booster_Doses,
-        )
+    if args.fips:
+        for t in df.loc[args.fips].itertuples():
+            print(
+                t.Index,
+                t.Administered_Dose1_Recip,
+                t.Series_Complete_Yes,
+                t.Booster_Doses,
+            )
+
+    else:
+        print("=== COUNTY FIPS, DOSE1, COMPLETE, BOOSTER ===")
+        for fips, sub_df in df.groupby(level="FIPS", as_index=False):
+            sub_df.reset_index(level="FIPS", drop=True, inplace=True)
+            latest = sub_df.iloc[-1]
+            print(
+                fips,
+                latest.Administered_Dose1_Recip,
+                latest.Series_Complete_Yes,
+                latest.Booster_Doses,
+            )
