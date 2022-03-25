@@ -22,12 +22,15 @@ def add_metrics(session, atlas):
             warnings.warn(f"No COVID data: {region.path()}")
             continue
 
+        df.Confirmed.fillna(method="ffill", inplace=True)
+        df.Deaths.fillna(method="ffill", inplace=True)
+
         cases, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
         pop = region.totals["population"]
-        if not (0 <= cases <= pop):
+        if not (0 <= cases <= pop + 100):
             warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
             continue
-        if not (0 <= deaths <= pop):
+        if not (0 <= deaths <= pop + 100):
             warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
             continue
 
