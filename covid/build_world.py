@@ -522,8 +522,8 @@ def _compute_world(session, args):
         mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
         add_map_metric(
             region,
-            "positives / day / 100Kp",
-            "positives x2K",
+            "COVID cases / day / 100Kp",
+            "cases x2K",
             mul,
             "#0000FF50",
             "#0000FFA0",
@@ -532,7 +532,7 @@ def _compute_world(session, args):
 
         add_map_metric(
             region,
-            "deaths / day / 10Mp",
+            "COVID deaths / day / 10Mp",
             "deaths x200K",
             mul,
             "#FF000050",

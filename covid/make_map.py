@@ -307,7 +307,7 @@ def _setup_axes(figure, region):
                 ls="none",
                 marker="o",
                 ms=11,
-                label="positives x2K (incr.)",
+                label="cases x2K (incr.)",
             ),
             L2D(
                 [],
@@ -318,7 +318,7 @@ def _setup_axes(figure, region):
                 ls="none",
                 marker="o",
                 ms=11,
-                label="positives x2K (decr.)",
+                label="cases x2K (decr.)",
             ),
             L2D(
                 [],

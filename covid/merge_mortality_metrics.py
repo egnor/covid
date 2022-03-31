@@ -30,10 +30,18 @@ def add_metrics(session, atlas):
             warnings.warn(f"No population: {region.path()} (pop={pop})")
             continue
 
-        region.metrics["covid"]["est exc mort / day / 10Mp"] = make_metric(
+        region.metrics["covid"]["all exc deaths / day / 10Mp"] = make_metric(
             c="tab:orange",
             em=0,
             ord=1.4,
+            cred=econ_credits,
+            v=v.daily_excess_deaths * 1e7 / pop,
+        )
+
+        region.metrics["covid"]["est exc deaths / day / 10Mp"] = make_metric(
+            c="tab:pink",
+            em=0,
+            ord=1.5,
             cred=econ_credits,
             v=v.estimated_daily_excess_deaths * 1e7 / pop,
         )

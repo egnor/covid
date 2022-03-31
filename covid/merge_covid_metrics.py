@@ -35,10 +35,10 @@ def add_metrics(session, atlas):
             continue
 
         df.reset_index(level="ID", drop=True, inplace=True)
-        region.totals["positives"] = cases
+        region.totals["cases"] = cases
         region.totals["deaths"] = deaths
 
-        region.metrics["covid"]["positives / day / 100Kp"] = make_metric(
+        region.metrics["covid"]["COVID cases / day / 100Kp"] = make_metric(
             c="tab:blue",
             em=1,
             ord=1.0,
@@ -46,7 +46,7 @@ def add_metrics(session, atlas):
             cum=df.Confirmed * 1e5 / pop,
         )
 
-        region.metrics["covid"]["deaths / day / 10Mp"] = make_metric(
+        region.metrics["covid"]["COVID deaths / day / 10Mp"] = make_metric(
             c="tab:red",
             em=1,
             ord=1.3,
@@ -54,10 +54,10 @@ def add_metrics(session, atlas):
             cum=df.Deaths * 1e7 / pop,
         )
 
-        region.metrics["covid"]["total cases / 100p"] = make_metric(
+        region.metrics["covid"]["cum cases / 100p"] = make_metric(
             c="tab:cyan",
             em=0,
-            ord=1.5,
+            ord=1.6,
             cred=jhu_credits,
             v=df.Confirmed * 100 / pop,
         )
