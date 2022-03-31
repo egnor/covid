@@ -37,7 +37,6 @@ def setup(args):
     cartopy.config["data_dir"] = args.cache_dir / "cartopy"
 
     def earth(category, name):
-        logging.info(f"Loading shapes: {category}/{name}")
         return list(
             cartopy.io.shapereader.Reader(
                 cartopy.io.shapereader.natural_earth(
@@ -47,6 +46,7 @@ def setup(args):
         )
 
     global _admin_0_shapes, _admin_1_shapes, _water_shapes
+    logging.info(f"Loading map shapes...")
     _admin_0_shapes = earth("cultural", "admin_0_countries")
     _admin_1_shapes = earth("cultural", "admin_1_states_provinces")
     _water_shapes = earth("physical", "ocean") + earth("physical", "lakes")

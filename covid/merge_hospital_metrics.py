@@ -17,7 +17,6 @@ def add_metrics(session, atlas):
     adm_df = covid.fetch_ourworld_hospitalizations.get_admissions(session)
     for iso3, v in adm_df.groupby(level="iso_code", as_index=False):
         v.reset_index("iso_code", drop=True, inplace=True)
-
         cc = pycountry.countries.get(alpha_3=iso3)
         if cc is None:
             warnings.warn(f"Unknown OWID admissions country code: {iso3}")
@@ -86,11 +85,9 @@ def add_metrics(session, atlas):
             v=v["ICU occupancy"] * (1e6 / pop),
         )
 
-    logging.info("Loading US HHS hospitalization data...")
+    logging.info("Loading and merging US HHS hospitalization data...")
     hhs_credits = covid.fetch_hhs_hospitalizations.credits()
     hhs_df = covid.fetch_hhs_hospitalizations.get_hospitalizations(session)
-
-    logging.info("Merging US HHS hospitalization data...")
     for fips, per_fips in hhs_df.groupby(level="fips_code", as_index=False):
         region = atlas.by_fips.get(fips)
         if region is None:

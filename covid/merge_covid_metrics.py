@@ -57,7 +57,7 @@ def add_metrics(session, atlas):
         region.metrics["covid"]["total cases / 100p"] = make_metric(
             c="tab:cyan",
             em=0,
-            ord=1.4,
+            ord=1.5,
             cred=jhu_credits,
             v=df.Confirmed * 100 / pop,
         )
