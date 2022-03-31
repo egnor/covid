@@ -3,6 +3,7 @@
 import logging
 import warnings
 
+import numpy
 import pycountry
 
 import covid.fetch_economist_mortality
@@ -13,6 +14,11 @@ def add_metrics(session, atlas):
     logging.info("Loading and merging The Economist's mortality model...")
     econ_credits = covid.fetch_economist_mortality.credits()
     econ_df = covid.fetch_economist_mortality.get_mortality(session)
+
+    # Mask out estimate when real data is present to avoid double-plotting
+    real_data_mask = econ_df.daily_excess_deaths.notna()
+    econ_df.loc[real_data_mask, "estimated_daily_excess_deaths"] = numpy.nan
+
     for iso3, v in econ_df.groupby(level="iso3c", as_index=False):
         v.reset_index("iso3c", drop=True, inplace=True)
         cc = pycountry.countries.get(alpha_3=iso3)
@@ -30,17 +36,17 @@ def add_metrics(session, atlas):
             warnings.warn(f"No population: {region.path()} (pop={pop})")
             continue
 
-        region.metrics["covid"]["all exc deaths / day / 10Mp"] = make_metric(
+        region.metrics["covid"]["all excess deaths / day / 10Mp"] = make_metric(
             c="tab:orange",
-            em=0,
+            em=1,
             ord=1.4,
             cred=econ_credits,
             v=v.daily_excess_deaths * 1e7 / pop,
         )
 
-        region.metrics["covid"]["est exc deaths / day / 10Mp"] = make_metric(
-            c="tab:pink",
-            em=0,
+        region.metrics["covid"]["est excess deaths / day / 10Mp"] = make_metric(
+            c="tab:orange",
+            em=-1,
             ord=1.5,
             cred=econ_credits,
             v=v.estimated_daily_excess_deaths * 1e7 / pop,

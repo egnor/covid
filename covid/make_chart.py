@@ -200,7 +200,7 @@ def _plot_metrics(axes, metrics, detailed=True):
 
         width = 4 if m.emphasis >= 1 else 2
         style = "-" if m.emphasis >= 0 else "--"
-        alpha = 1.0 if m.emphasis >= 0 else 0.5
+        alpha = 1.0 if m.emphasis >= 0 else 0.8
         zorder = 2.0 - m.order / 100 - m.emphasis / 10
 
         if detailed and ("raw" in m.frame.columns):

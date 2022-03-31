@@ -109,7 +109,7 @@ def add_metrics(session, atlas):
 
         metrics = region.metrics["hospital"]
         metrics["capacity / 100Kp"] = make_metric(
-            c="black",
+            c="tab:gray",
             em=-1,
             ord=1.0,
             cred=hhs_credits,
@@ -147,7 +147,7 @@ def add_metrics(session, atlas):
         )
 
         metrics["ICU capacity / 1Mp"] = make_metric(
-            c="tab:purple",
+            c="tab:pink",
             em=-1,
             ord=1.4,
             cred=hhs_credits,

@@ -255,7 +255,7 @@ def _compute_world(session, args):
             v.reset_index(rcols, drop=True, inplace=True)
             v.index = v.index + pandas.Timedelta(days=14)
             region_i = len(region.metrics["serology"]) // 2
-            region.metrics["serology"][f"infected or vax{name}"] = make_metric(
+            region.metrics["serology"][f"infected or vacc{name}"] = make_metric(
                 c=matplotlib.cm.tab20b.colors[region_i],
                 em=1,
                 ord=1.0,
@@ -522,8 +522,8 @@ def _compute_world(session, args):
         mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
         add_map_metric(
             region,
-            "COVID cases / day / 100Kp",
-            "cases x2K",
+            "COVID positives / day / 100Kp",
+            "pos x2K",
             mul,
             "#0000FF50",
             "#0000FFA0",
