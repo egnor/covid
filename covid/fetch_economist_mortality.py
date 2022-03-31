@@ -55,5 +55,6 @@ if __name__ == "__main__":
             cov = row.daily_covid_deaths
             print(
                 f"{row.Index} est={est:<+7.1f} "
-                f"act={act:<+7.1f} cov={cov:<7.1f}")
+                f"act={act:<+7.1f} cov={cov:<7.1f}"
+            )
         print()
