@@ -54,7 +54,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
     r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
     r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
-    r"|No COVID metrics: World/(EH|NG|PL).*"
+    r"|No COVID metrics: World/(EH|MD|NG|PL|RO|SK).*"
     r"|No COVID metrics: World/GB/(Guernsey|Jersey)"
     r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
     r"|Underpopulation: World/(DK|FR|NZ) .*"
