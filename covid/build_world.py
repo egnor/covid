@@ -24,6 +24,7 @@ from covid import fetch_google_mobility
 from covid import fetch_state_policy
 from covid import merge_covid_metrics
 from covid import merge_hospital_metrics
+from covid import merge_mortality_metrics
 from covid import merge_vaccine_metrics
 from covid import merge_wastewater_metrics
 from covid.logging_policy import collecting_warnings
@@ -40,6 +41,7 @@ arg_group.add_argument("--no_covid_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
 arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_maps", action="store_true")
+arg_group.add_argument("--no_mortality_metrics", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
 arg_group.add_argument("--no_vaccine_metrics", action="store_true")
 arg_group.add_argument("--use_wastewater_metrics", action="store_true")
@@ -52,6 +54,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
+    r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"
     r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
     r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
     r"|No COVID metrics: World/(EH|MD|NG|PL|RO|SK).*"
@@ -108,6 +111,9 @@ def _compute_world(session, args):
 
     if not args.no_covid_metrics:
         merge_covid_metrics.add_metrics(session=session, atlas=atlas)
+
+    if not args.no_mortality_metrics:
+        merge_mortality_metrics.add_metrics(session=session, atlas=atlas)
 
     if not args.no_hospital_metrics:
         merge_hospital_metrics.add_metrics(session=session, atlas=atlas)
@@ -249,7 +255,7 @@ def _compute_world(session, args):
             v.reset_index(rcols, drop=True, inplace=True)
             v.index = v.index + pandas.Timedelta(days=14)
             region_i = len(region.metrics["serology"]) // 2
-            region.metrics["serology"][f"infected or vax{name}"] = make_metric(
+            region.metrics["serology"][f"infected or vacc{name}"] = make_metric(
                 c=matplotlib.cm.tab20b.colors[region_i],
                 em=1,
                 ord=1.0,
@@ -516,8 +522,8 @@ def _compute_world(session, args):
         mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
         add_map_metric(
             region,
-            "positives / day / 100Kp",
-            "positives x2K",
+            "COVID positives / day / 100Kp",
+            "pos x2K",
             mul,
             "#0000FF50",
             "#0000FFA0",
@@ -526,7 +532,7 @@ def _compute_world(session, args):
 
         add_map_metric(
             region,
-            "deaths / day / 10Mp",
+            "COVID deaths / day / 10Mp",
             "deaths x200K",
             mul,
             "#FF000050",

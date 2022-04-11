@@ -71,12 +71,14 @@ def make_region_html(region, args):
             vax = region.totals.get("vaccinated", 0)
             pos = region.totals.get("positives", 0)
             dead = region.totals.get("deaths", 0)
-            util.text(f"{pop:,.0f}\xa0pop; ")
+
+            nobreak = lambda t: tags.span(t, cls="nobreak")
+            nobreak(f"{pop:,.0f} pop; ")
             if vax:
-                util.text(f"{vax:,.0f}\xa0({100 * vax / pop:.2g}%)\xa0vax, ")
-            util.text(f"{pos:,.0f}\xa0({100 * pos / pop:.2g}%)\xa0pos, ")
-            util.text(f"{dead:,.0f}\xa0({100 * dead / pop:.2g}%)\xa0died ")
-            util.text(f"as of {latest.date()}")
+                nobreak(f"{vax:,.0f} ({100 * vax / pop:.2g}%) vacc, ")
+            nobreak(f"{pos:,.0f} ({100 * pos / pop:.2g}%) pos, ")
+            nobreak(f"{dead:,.0f} ({100 * dead / pop:.2g}%) deaths ")
+            nobreak(f"as of {latest.date()}")
 
         if urls.has_map(region):
             with tags.div(cls="graphic"):
@@ -138,8 +140,8 @@ def make_region_html(region, args):
                 def pop(r):
                     return r.totals.get("population", 0)
 
-                def newpos(r):
-                    m = r.metrics["covid"].get("positives / day / 100Kp")
+                def pos(r):
+                    m = r.metrics["covid"].get("COVID positives / day / 100Kp")
                     return m.frame.value.iloc[-1] * pop(r) if m else 0
 
                 tags.h2("Top 5 by population")
@@ -147,7 +149,7 @@ def make_region_html(region, args):
                     make_subregion_html(doc_url, s)
 
                 tags.h2("Top 5 by new positives")
-                for s in list(sorted(subs, key=newpos, reverse=True))[:5]:
+                for s in list(sorted(subs, key=pos, reverse=True))[:5]:
                     make_subregion_html(doc_url, s)
 
                 tags.h2(f'All {"divisions" if region.parent else "countries"}')

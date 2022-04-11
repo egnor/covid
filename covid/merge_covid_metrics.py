@@ -25,20 +25,20 @@ def add_metrics(session, atlas):
         df.Confirmed.fillna(method="ffill", inplace=True)
         df.Deaths.fillna(method="ffill", inplace=True)
 
-        cases, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
+        pos, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
         pop = region.totals["population"]
-        if not (0 <= cases <= pop + 100):
-            warnings.warn(f"Bad cases: {region.path()} ({cases}/{pop}p)")
+        if not (0 <= pos <= pop + 100):
+            warnings.warn(f"Bad positives: {region.path()} ({pos}/{pop}p)")
             continue
         if not (0 <= deaths <= pop + 100):
             warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
             continue
 
         df.reset_index(level="ID", drop=True, inplace=True)
-        region.totals["positives"] = cases
+        region.totals["positives"] = pos
         region.totals["deaths"] = deaths
 
-        region.metrics["covid"]["positives / day / 100Kp"] = make_metric(
+        region.metrics["covid"]["COVID positives / day / 100Kp"] = make_metric(
             c="tab:blue",
             em=1,
             ord=1.0,
@@ -46,7 +46,7 @@ def add_metrics(session, atlas):
             cum=df.Confirmed * 1e5 / pop,
         )
 
-        region.metrics["covid"]["deaths / day / 10Mp"] = make_metric(
+        region.metrics["covid"]["COVID deaths / day / 10Mp"] = make_metric(
             c="tab:red",
             em=1,
             ord=1.3,
@@ -54,10 +54,10 @@ def add_metrics(session, atlas):
             cum=df.Deaths * 1e7 / pop,
         )
 
-        region.metrics["covid"]["total cases / 100p"] = make_metric(
+        region.metrics["covid"]["cum positives / 100p"] = make_metric(
             c="tab:cyan",
             em=0,
-            ord=1.4,
+            ord=1.6,
             cred=jhu_credits,
             v=df.Confirmed * 100 / pop,
         )
