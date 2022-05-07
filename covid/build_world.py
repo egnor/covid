@@ -54,7 +54,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
-    r"|Missing Economist mortality country: (KP|KSV|NR|NU|PN|TK|TM|TV)"
+    r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"
     r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
     r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
     r"|No COVID metrics: World/(EH|MD|NG|PL|RO|SK).*"
@@ -62,6 +62,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
     r"|Underpopulation: World/(DK|FR|NZ) .*"
     r"|Unknown CDC sero state: CR[0-9] .*"
+    r"|Unknown Economist mortality country code: KSV"
     r"|Unknown OWID vax country code: OWID.*"
     r"|Unknown OWID vax state: Bureau of Prisons"
     r"|Unknown OWID vax state: Dept of Defense"
