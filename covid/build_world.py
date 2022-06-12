@@ -410,7 +410,7 @@ def _compute_world(session, args):
         catname_popvals, total_popvals, sub_pop_total = {}, {}, 0
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
-            if not any(m.emphasis >= 0 for m in sub.metrics["covid"]):
+            if not any(m.emphasis >= 0 for m in sub.metrics["covid"].values()):
                 warnings.warn(f"No COVID metrics: {sub.path()}")
                 del r.subregions[key]
                 continue
