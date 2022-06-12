@@ -147,6 +147,7 @@ def _compute_world(session, args):
 
             c_find = {
                 "Curacao": "Curaçao",
+                "Laos": "Lao People's Democratic Republic",
                 "South Korea": "Republic Of Korea",
                 "Sint Maarten": "Sint Maarten (Dutch part)",
                 "Democratic Republic of the Congo": "Congo, The Democratic Republic of the",
@@ -409,7 +410,7 @@ def _compute_world(session, args):
         catname_popvals, total_popvals, sub_pop_total = {}, {}, 0
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
-            if not any(m.emphasis >= 0 for m in sub.metrics["covid"])):
+            if not any(m.emphasis >= 0 for m in sub.metrics["covid"]):
                 warnings.warn(f"No COVID metrics: {sub.path()}")
                 del r.subregions[key]
                 continue
