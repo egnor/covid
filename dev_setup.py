@@ -27,6 +27,7 @@ if not venv_dir.is_dir():
     venv.create(venv_dir, symlinks=True, with_pip=True)
 
 check_call(["direnv", "allow", source_dir])
+check_call(["direnv", "exec", source_dir, "pip", "install", "wheel"])
 check_call([
     "direnv", "exec", source_dir, "pip", "install",
     "addfips", "autoflake", "beautifulsoup4", "black",
