@@ -31,10 +31,10 @@ check_call(["direnv", "exec", source_dir, "pip", "install", "wheel"])
 check_call([
     "direnv", "exec", source_dir, "pip", "install",
     "addfips", "autoflake", "beautifulsoup4", "black",
-    "cachecontrol[filecache]", "cattrs", "charset-normalizer", "dominate",
-    "isort", "matplotlib", "moviepy", "mplcairo", "numpy", "openpyxl",
-    "pandas", "pyarrow", "pybind11", "pycountry", "pyreadr", "requests",
-    "scipy", "us", "xlrd",
+    "cachecontrol[filecache]", "cartopy==0.19.0.post1", "cattrs",
+    "charset-normalizer", "dominate", "isort", "matplotlib", "moviepy",
+    "mplcairo", "numpy", "openpyxl", "pandas", "pyarrow", "pybind11",
+    "pycountry", "pyreadr", "requests", "scipy", "us", "xlrd",
 ])
 
 print()
