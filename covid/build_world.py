@@ -19,13 +19,13 @@ from covid import build_atlas
 from covid import cache_policy
 from covid import fetch_california_blueprint
 from covid import fetch_cdc_prevalence
-from covid import fetch_covariants
 from covid import fetch_google_mobility
 from covid import fetch_state_policy
 from covid import merge_covid_metrics
 from covid import merge_hospital_metrics
 from covid import merge_mortality_metrics
 from covid import merge_vaccine_metrics
+from covid import merge_variant_metrics
 from covid import merge_wastewater_metrics
 from covid.logging_policy import collecting_warnings
 from covid.region_data import PolicyChange
@@ -36,7 +36,6 @@ argument_parser = argparse.ArgumentParser(add_help=False)
 arg_group = argument_parser.add_argument_group("data gathering")
 arg_group.add_argument("--no_california_blueprint", action="store_true")
 arg_group.add_argument("--no_cdc_prevalence", action="store_true")
-arg_group.add_argument("--no_covariants", action="store_true")
 arg_group.add_argument("--no_covid_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
 arg_group.add_argument("--no_hospital_metrics", action="store_true")
@@ -44,6 +43,7 @@ arg_group.add_argument("--no_maps", action="store_true")
 arg_group.add_argument("--no_mortality_metrics", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
 arg_group.add_argument("--no_vaccine_metrics", action="store_true")
+arg_group.add_argument("--no_variant_metrics", action="store_true")
 arg_group.add_argument("--use_wastewater_metrics", action="store_true")
 
 
@@ -125,92 +125,8 @@ def _compute_world(session, args):
     if not args.no_vaccine_metrics:
         merge_vaccine_metrics.add_metrics(session=session, atlas=atlas)
 
-    #
-    # Add variant breakdown
-    #
-
-    if not args.no_covariants:
-        logging.info("Loading and merging CoVariants data...")
-        cov_credits = fetch_covariants.credits()
-        covar = fetch_covariants.get_variants(session=session)
-
-        totals = covar.groupby("variant")["found"].sum()
-        vars = [v[0] for v in sorted(totals.items(), key=lambda v: v[1])]
-        colors = dict(zip(vars, itertools.cycle(matplotlib.cm.tab20.colors)))
-
-        region_cols = ["country", "region"]
-        covar.sort_values(region_cols + ["date"], inplace=True)
-        covar.set_index(keys="date", inplace=True)
-        for r, rd in covar.groupby(region_cols, as_index=False, sort=False):
-            if (r[0], r[1]) == ("United States", "USA"):
-                continue  # Covered separately as ("USA", "").
-
-            c_find = {
-                "Curacao": "Curaçao",
-                "Laos": "Lao People's Democratic Republic",
-                "South Korea": "Republic Of Korea",
-                "Sint Maarten": "Sint Maarten (Dutch part)",
-                "Democratic Republic of the Congo": "Congo, The Democratic Republic of the",
-            }.get(r[0], r[0])
-            try:
-                countries = [pycountry.countries.lookup(c_find)]
-            except LookupError:
-                try:
-                    countries = pycountry.countries.search_fuzzy(c_find)
-                except LookupError:
-                    warnings.warn(f'Unknown covariant country: "{c_find}"')
-                    continue
-
-            region = atlas.by_iso2.get(countries[0].alpha_2)
-            if region is None:
-                continue  # Valid country but not in skeleton
-
-            r_find = {"Washington DC": "District of Columbia"}.get(r[1], r[1])
-            if r_find:
-                path, region = region.path(), region.subregions.get(r_find)
-                if region is None:
-                    warnings.warn(f"Unknown covariant region: {path}/{r_find}")
-                    continue
-
-            v_totals = v_others = []
-            for v, vd in rd.groupby("variant", as_index=False):
-                if not v:
-                    v_others = vd.found
-                    v_totals = vd.found
-                    continue
-
-                if v in region.metrics["variant"]:
-                    warnings.warn(f"Duplicate covariant ({region.path()}): {v}")
-                    continue
-
-                if len(v_totals) != len(vd):
-                    warnings.warn(
-                        f"Bad covariant data ({region.path()}): "
-                        f"len totals={len(v_totals)} len data={len(vd)}"
-                    )
-                    continue
-
-                v_others = v_others - vd.found
-                region.metrics["variant"][v] = make_metric(
-                    c=colors[v],
-                    em=1,
-                    ord=0,
-                    cred=cov_credits,
-                    v=vd.found * 100.0 / v_totals,
-                )
-
-            other_variants = make_metric(
-                c=(0.9, 0.9, 0.9),
-                em=1,
-                ord=0,
-                cred=cov_credits,
-                v=v_others * 100.0 / v_totals,
-            )
-
-            region.metrics["variant"] = {
-                "original/other": other_variants,
-                **region.metrics["variant"],
-            }
+    if not args.no_variant_metrics:
+        merge_variant_metrics.add_metrics(session=session, atlas=atlas)
 
     #
     # Add prevalence estimates

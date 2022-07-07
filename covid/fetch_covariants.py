@@ -11,6 +11,13 @@ COUNTRY_JSON_FILES = [
     ("United States", f"{CLUSTER_TABLES_DIR}/USAClusters_data.json"),
 ]
 
+VARIANT_NAMES = {
+    "21K": "21K (Omicron BA.1)",
+    "21L": "21L (Omicron BA.2)",
+    "22A": "21A (Omicron BA.4)",
+    "22B": "21B (Omicron BA.5)",
+    "22C": "21C (Omicron BA.2.12.1)",
+}
 
 def get_variants(session):
     out = collections.defaultdict(list)
@@ -32,6 +39,9 @@ def get_variants(session):
                     )
 
                 variant = "" if key == "total_sequences" else key
+                clade = "".join(variant.split()[:1])
+                variant = VARIANT_NAMES.get(clade, variant)
+
                 out["country"].extend([country or place or ""] * len(data))
                 out["region"].extend([(country and place) or ""] * len(data))
                 out["variant"].extend([variant] * len(data))
