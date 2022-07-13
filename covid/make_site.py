@@ -4,6 +4,7 @@ import argparse
 import multiprocessing
 import os
 import pathlib
+import signal
 
 import dominate
 from dominate import tags
@@ -186,6 +187,7 @@ def make_subregion_html(doc_url, region):
 
 
 def main():
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, build_world.argument_parser]
     )
