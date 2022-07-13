@@ -27,10 +27,10 @@ def add_metrics(session, atlas):
 
         pos, deaths = df.Confirmed.iloc[-1], df.Deaths.iloc[-1]
         pop = region.totals["population"]
-        if not (0 <= pos <= pop + 100):
+        if not (0 <= pos <= pop + 1000):
             warnings.warn(f"Bad positives: {region.path()} ({pos}/{pop}p)")
             continue
-        if not (0 <= deaths <= pop + 100):
+        if not (0 <= deaths <= pop + 1000):
             warnings.warn(f"Bad deaths: {region.path()} ({deaths}/{pop}p)")
             continue
 
