@@ -217,12 +217,17 @@ def main():
     # Process regions using multiple cores.
     processes = args.processes or os.cpu_count() * 2
     chunk_size = args.chunk_size or max(1, len(all_regions) // (4 * processes))
-    with multiprocessing.Pool(processes=args.processes) as pool:
-        pool.starmap(
-            make_region_page,
-            ((r, args) for r in all_regions),
-            chunksize=chunk_size,
-        )
+
+    if processes > 1:
+        with multiprocessing.Pool(processes=args.processes) as pool:
+            pool.starmap(
+                make_region_page,
+                ((r, args) for r in all_regions),
+                chunksize=chunk_size,
+            )
+    else:
+        for r in all_regions:
+            make_region_page(r, args)
 
 
 if __name__ == "__main__":

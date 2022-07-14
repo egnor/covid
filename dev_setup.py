@@ -29,7 +29,7 @@ if not venv_dir.is_dir():
 check_call(["direnv", "allow", source_dir])
 check_call(["direnv", "exec", source_dir, "pip", "install", "wheel"])
 check_call([
-    "direnv", "exec", source_dir, "pip", "install",
+    "direnv", "exec", source_dir, "pip", "install", "--no-binary", "cartopy",
     "addfips", "autoflake", "beautifulsoup4", "black",
     "cachecontrol[filecache]", "cartopy==0.19.0.post1", "cattrs",
     "charset-normalizer", "dominate", "isort", "matplotlib", "moviepy",
