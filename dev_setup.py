@@ -11,7 +11,7 @@ source_dir = Path(__file__).resolve().parent
 print("=== System packages (sudo apt install ...) ===")
 apt_install = [
     "python3", "python3-dev", "python3-pip", "python3-venv",
-    "libcairo-dev", "libgeos-dev", "libproj-dev",
+    "libcairo2-dev", "libgeos-dev", "libproj-dev",
 ]
 dpkg_query_command = ["dpkg-query", "--show", "--showformat=${Package}\\n"]
 installed = set(check_output(dpkg_query_command).decode().split())
