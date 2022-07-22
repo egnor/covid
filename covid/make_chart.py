@@ -165,7 +165,7 @@ def _plot_vaccine(axes, region):
     if not axes:
         return 2 if metrics else 0
 
-    _setup_xaxis(axes, title="Vaccines")
+    _setup_xaxis(axes, title="Vaccination")
     _setup_yaxis(axes, title="% of pop (cumulative)")
     axes.axhline(100, c="black", lw=1)  # 100% line.
     _plot_metrics(axes, metrics)
