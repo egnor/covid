@@ -19,6 +19,7 @@ VARIANT_NAMES = {
     "22C": "21C (Omicron BA.2.12.1)",
 }
 
+
 def get_variants(session):
     out = collections.defaultdict(list)
     for country, url in COUNTRY_JSON_FILES:

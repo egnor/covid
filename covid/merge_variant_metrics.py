@@ -5,7 +5,6 @@ import logging
 import warnings
 
 import matplotlib
-import pandas
 import pycountry
 
 import covid.fetch_covariants

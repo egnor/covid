@@ -2,9 +2,11 @@
 
 import subprocess
 
+print("=== autoflake ===")
 subprocess.run(
     [
         "autoflake",
+        "--exclude=python_venv",
         "--recursive",
         "--in-place",
         "--remove-all-unused-imports",
@@ -14,5 +16,11 @@ subprocess.run(
     ]
 )
 
+print("\n=== black ===")
 subprocess.run(["black", "--line-length", "80", "."], check=True)
-subprocess.run(["isort", "--force-single-line-imports", "."], check=True)
+
+print("\n=== isort ===")
+subprocess.run(
+    ["isort", "--skip=python_venv", "--force-single-line-imports", "."],
+    check=True,
+)

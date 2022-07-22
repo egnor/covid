@@ -1,7 +1,6 @@
 """Functions that combine data sources into a combined representation."""
 
 import argparse
-import itertools
 import logging
 import pickle
 import re
@@ -12,7 +11,6 @@ import matplotlib.cm
 import numpy
 import pandas
 import pandas.api.types
-import pycountry
 import us
 
 from covid import build_atlas
