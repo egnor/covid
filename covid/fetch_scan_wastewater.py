@@ -1,10 +1,11 @@
 """Module to fetch wastewater data from Wastewater SCAN (Stanford/Verily)."""
 
 import io
+import logging
 
 import pandas
 
-DATA_URL = "http://publichealth.verily.com/api/data?format=csv"
+DATA_URL = "https://publichealth.verily.com/api/data?format=csv"
 
 
 def get_wastewater(session):
@@ -19,16 +20,13 @@ def get_wastewater(session):
     )
 
     key_cols = [
-        "City",
-        "State_Abbr",
+        "Plant",
         "Site_Name",
         "Collection_Date",
-        "Sample_ID",
     ]
 
-    df.set_index(key_cols, drop=True, inplace=True, verify_integrity=True)
-    df.sort_index(inplace=True)
-    return df
+    df.set_index(key_cols, drop=True, inplace=True, verify_integrity=False)
+    return df.sort_index()
 
 
 def credits():
@@ -52,13 +50,13 @@ if __name__ == "__main__":
     df.info(verbose=True, show_counts=True)
     print()
 
-    for site, rows in df.groupby(level=["City", "State_Abbr", "Site_Name"]):
+    for site, rows in df.groupby(level=["Plant", "Site_Name"]):
         timestamps = set()
-        print(f"=== {site[0]}, {site[1]} / {site[2]} ===")
+        print(f"=== {site[0]} / {site[1]} ===")
         for row in rows.itertuples():
-            city, state, site, timestamp, id = row.Index
+            plant, site, timestamp = row.Index
             print(
-                f"{id} {timestamp.strftime('%Y-%m-%d')} "
+                f"{row.Sample_ID} {timestamp.strftime('%Y-%m-%d')} "
                 f"N={row.SC2_N_gc_g_dry_weight:<10.1f} "
                 f"S={row.SC2_S_gc_g_dry_weight:<10.1f} "
                 f"RSV={row.RSV_gc_g_dry_weight:<10.1f} "

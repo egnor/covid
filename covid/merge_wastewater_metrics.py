@@ -5,70 +5,74 @@ import warnings
 
 import matplotlib.cm
 
-import covid.fetch_cdc_wastewater
+import covid.fetch_scan_wastewater
 from covid.region_data import make_metric
 
 
+PLANT_FIPS = {
+  "Ann Arbor, MI": 26161,
+  "Coeur d'Alene, ID": 16055,
+  "College Park, GA": 13121,
+  "Contra Costa County, CA": 6013,
+  "Davis, CA": 6113,
+  "Garland, TX": 48113,
+  "Half Moon Bay, CA": 6081,
+  "Jackson, MI": 26075,
+  "Los Angeles County, CA": 6037,
+  "Louisville, KY": 21111,
+  "Novato, CA": 6041,
+  "Oakland, CA": 6001,
+  "Ontario, CA": 6071,
+  "Orange County, FL": 12095,
+  "Parker, CO": 8035,
+  "Paso Robles, CA": 6079,
+  "Petaluma, CA": 6097,
+  "Roswell, GA": 5049,
+  "San Mateo, CA": 6081,
+  "Santa Cruz County, CA": 6087,
+  "Santa Cruz, CA": 6087,
+  "Southeast San Francisco, CA": 6075,
+  "Sunnyvale, TX": 48113,
+  "University of California, Davis, CA": 6113,
+  "West Contra Costa County, CA": 6013,
+}
+
+
 def add_metrics(session, atlas):
-    logging.info("Loading US CDC wastewater data...")
-    cdc_credits = covid.fetch_cdc_wastewater.credits()
-    df = covid.fetch_cdc_wastewater.get_wastewater(session)
+    logging.info("Loading and merging SCAN wastewater data...")
+    scan_credits = covid.fetch_scan_wastewater.credits()
+    df = covid.fetch_scan_wastewater.get_wastewater(session)
 
-    logging.info("Merging US CDC wastewater data...")
-    for fipses, v in df.groupby(level=["county_fips"]):
-        for fips in fipses.split(","):
-            region = atlas.by_fips.get(int(fips))
-            if not region:
-                row = v.iloc[0]
-                warnings.warn(
-                    f"Missing CDC wastewater FIPS: {fips} ({row.county_names})"
-                )
-                continue
+    dups = df.index.duplicated(keep=False)
+    for plant, site, timestamp in df.index[dups]:
+       warnings.warn(
+           "Duplicate SCAN wastewater data: "
+           f"{plant} ({site}) {timestamp.strftime('%Y-%m-%d')}"
+       )
 
-            pop = region.totals.get("population", 0)
-            if not (pop > 0):
-                warnings.warn("No population: {region.path()} (pop={pop})")
-                continue
+    df = df[~dups]
+    for (plant, site), rows in df.groupby(
+        level=["Plant", "Site_Name"], sort=False, as_index=False
+    ):
+        rows.reset_index(["Plant", "Site_Name"], drop=True, inplace=True)
+        fips = PLANT_FIPS.get(plant.split("-")[0].strip())
+        if not fips:
+            warnings.warn(f"No FIPS for SCAN wastewater plant: {plant}")
+            continue
 
-            ww_metrics = region.metrics["wastewater"]
-            for (tp_id, key), w in v.groupby(level=["wwtp_id", "key_plot_id"]):
-                if w.ptc_15d.count() < 2:
-                    continue
+        region = atlas.by_fips.get(fips)
+        if not region:
+            warnings.warn(f"Missing SCAN wastewater FIPS: {fips} ({plant})")
+            continue
 
-                w.reset_index(
-                    ["county_fips", "wwtp_id", "key_plot_id"],
-                    drop=True,
-                    inplace=True,
-                )
-
-                row = w.iloc[0]
-                details = []
-                site = row.sample_location.lower()
-                if site == "before treatment plant":
-                    details.append("upstream")
-                elif site != "treatment plant":
-                    details.append(site)
-                if row.sample_location_specify >= 0:
-                    details.append(f"site {row.sample_location_specify:.0f}")
-
-                matrix = key.split("_")[-1].lower()
-                if matrix == "primary sludge":
-                    details.append("sludge")
-                elif matrix != "raw wastewater":
-                    details.append(key.split("_")[-1].lower())
-
-                name = f"Plant {tp_id}"
-                name += f" ({' '.join(details)})" if details else ""
-                name += f": {row.population_served:,.0f}p"
-
-                w.index = w.index + 0.5 * (w.date_end - w.index)
-                ww_metrics[name] = make_metric(
-                    c=matplotlib.cm.tab20b.colors[(12 + len(ww_metrics)) % 20],
-                    em=1 if row.population_served > 0.25 * pop else 0,
-                    ord=1.0,
-                    cred=cdc_credits,
-                    v=((1 + (w.ptc_15d / 100)) ** (1 / 15) - 1) * 100,
-                )
+        ww_metrics = region.metrics["wastewater"]
+        ww_metrics[site + " (COVID)"] = make_metric(
+            c=matplotlib.cm.tab20b.colors[(12 + len(ww_metrics)) % 20],
+            em=1,
+            ord=1.0,
+            cred=scan_credits,
+            raw=rows.SC2_S_gc_g_dry_weight,
+        )
 
 
 if __name__ == "__main__":
