@@ -1,7 +1,6 @@
 """Module to fetch wastewater data from Wastewater SCAN (Stanford/Verily)."""
 
 import io
-import logging
 
 import pandas
 

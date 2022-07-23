@@ -7,16 +7,13 @@ import re
 import warnings
 from dataclasses import replace
 
-import matplotlib.cm
 import numpy
 import pandas
 import pandas.api.types
-import us
 
 from covid import build_atlas
 from covid import cache_policy
 from covid import fetch_california_blueprint
-from covid import fetch_cdc_prevalence
 from covid import fetch_google_mobility
 from covid import fetch_state_policy
 from covid import merge_covid_metrics
@@ -33,7 +30,6 @@ from covid.region_data import make_metric
 argument_parser = argparse.ArgumentParser(add_help=False)
 arg_group = argument_parser.add_argument_group("data gathering")
 arg_group.add_argument("--no_california_blueprint", action="store_true")
-arg_group.add_argument("--no_cdc_prevalence", action="store_true")
 arg_group.add_argument("--no_covid_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
 arg_group.add_argument("--no_hospital_metrics", action="store_true")
@@ -128,67 +124,6 @@ def _compute_world(session, args):
 
     if not args.no_wastewater_metrics:
         merge_wastewater_metrics.add_metrics(session=session, atlas=atlas)
-
-    #
-    # Add prevalence estimates
-    #
-
-    if not args.no_cdc_prevalence:
-        logging.info("Loading and merging CDC prevalence estimates...")
-        cdc_credits = fetch_cdc_prevalence.credits()
-        cdc_data = fetch_cdc_prevalence.get_prevalence(session)
-
-        rcols = ["Region Abbreviation", "Region"]
-        for (abbr, name), v in cdc_data.groupby(rcols, as_index=False):
-            if abbr.lower() == "all":
-                region, name = atlas.by_iso2.get("US"), ""
-                if region is None:
-                    warnings.warn(f"Missing US for CDC")
-                    continue
-            else:
-                s = us.states.lookup(abbr.split("-")[0])
-                if not s:
-                    warnings.warn(f"Unknown CDC sero state: {abbr} ({name})")
-                    continue
-
-                region = atlas.by_fips.get(int(s.fips))
-                if region is None:
-                    warnings.warn(f"Missing CDC sero FIPS: {s.fips} ({s.name})")
-                    continue
-
-            name = " ".join(name.replace("Region", "").split())
-            if name.lower() == region.name.lower() or not name:
-                name = ""
-            else:
-                for state in us.states.STATES_AND_TERRITORIES:
-                    name = name.replace(state.name, state.abbr)
-                name = name.replace("Southern", "S.").replace("Northern", "N.")
-                name = name.replace("Western", "W.").replace("Eastern", "E.")
-                name = name.replace("Southeastern", "SE.")
-                name = name.replace("Northeastern", "NE.")
-                name = name.replace("Southwestern", "SW.")
-                name = name.replace("Northwestern", "NW.")
-                name = f" ({name})"
-
-            # plot midmonth (data spans the month)
-            v.reset_index(rcols, drop=True, inplace=True)
-            v.index = v.index + pandas.Timedelta(days=14)
-            region_i = len(region.metrics["serology"]) // 2
-            region.metrics["serology"][f"infected or vacc{name}"] = make_metric(
-                c=matplotlib.cm.tab20b.colors[region_i],
-                em=1,
-                ord=1.0,
-                cred=cdc_credits,
-                v=v["Rate %[Total Prevalence] Combined"],
-            )
-
-            region.metrics["serology"][f"infected{name}"] = make_metric(
-                c=matplotlib.cm.tab20c.colors[region_i + 4],
-                em=0,
-                ord=1.1,
-                cred=cdc_credits,
-                v=v["Rate %[Total Prevalence] Infection"],
-            )
 
     #
     # Add policy changes for US states from the state policy database.
@@ -339,11 +274,10 @@ def _compute_world(session, args):
                 total_popvals.setdefault(name, []).append((sub_pop, value))
 
             for cat, metrics in sub.metrics.items():
-                if cat in ("variant", "serology", "wastewater"):
-                    continue  # TODO: Add a per-metric no-rollup flag?
-                for name, value in metrics.items():
-                    catname, popval = (cat, name), (sub_pop, value)
-                    catname_popvals.setdefault(catname, []).append(popval)
+                for name, metric in metrics.items():
+                    if metric.rollup:
+                        catname, popval = (cat, name), (sub_pop, metric)
+                        catname_popvals.setdefault(catname, []).append(popval)
 
         pop = r.totals["population"]
         if pop == 0:

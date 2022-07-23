@@ -79,6 +79,7 @@ def add_metrics(session, atlas):
                 ord=0,
                 cred=cov_credits,
                 v=vd.found * 100.0 / v_totals,
+                rollup=False,
             )
 
         other_variants = make_metric(
@@ -87,6 +88,7 @@ def add_metrics(session, atlas):
             ord=0,
             cred=cov_credits,
             v=v_others * 100.0 / v_totals,
+            rollup=False,
         )
 
         region.metrics["variant"] = {

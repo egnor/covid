@@ -19,6 +19,7 @@ class Metric:
     color: str
     emphasis: int = 0
     order: float = 0
+    rollup: bool = False
     increase_color: Optional[str] = None
     decrease_color: Optional[str] = None
     credits: Dict[str, str] = field(default_factory=dict)
@@ -109,7 +110,7 @@ class RegionAtlas:
     by_fips: Dict[int, Region] = field(default_factory=dict)
 
 
-def make_metric(c, em, ord, cred, v=None, raw=None, cum=None):
+def make_metric(c, em, ord, cred, v=None, raw=None, cum=None, rollup=True):
     """Returns a Metric with data massaged appropriately."""
 
     assert (v is not None) or (raw is not None) or (cum is not None)
@@ -137,4 +138,6 @@ def make_metric(c, em, ord, cred, v=None, raw=None, cum=None):
         dups = df.index.duplicated(keep=False)
         raise ValueError(f"Dup trend dates: {df.index[dups]}")
 
-    return Metric(frame=df, color=c, emphasis=em, order=ord, credits=cred)
+    return Metric(
+        frame=df, color=c, emphasis=em, order=ord, rollup=rollup, credits=cred
+    )

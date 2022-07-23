@@ -50,7 +50,6 @@ def _write_chart_image(region, site_dir):
         _plot_wastewater,
         _plot_variant,
         _plot_vaccine,
-        _plot_serology,
         _plot_mobility,
     ]
 
@@ -90,7 +89,7 @@ def _plot_covid(axes, region):
         return ylim / 75 if metrics else 0
 
     _setup_xaxis(axes, title=f"{region.short_name} COVID")
-    _setup_yaxis(axes, title="cases per cap", ylim=(0, ylim))
+    _setup_yaxis(axes, title="cases per capita", ylim=(0, ylim))
     _plot_metrics(axes, metrics)
 
 
@@ -121,8 +120,9 @@ def _plot_wastewater(axes, region):
         return 2 if metrics else 0
 
     _setup_xaxis(axes, title="Wastewater")
-    _setup_yaxis(axes, title="% change / day", ylim=(-100, 100))
-    axes.axhline(100, c="black", lw=1)  # 100% line.
+    _setup_yaxis(
+        axes, title="RNA per gram solids", ylim=(0, 1500), tick=(200, 100)
+    )
     _plot_metrics(axes, metrics)
 
 
@@ -167,17 +167,6 @@ def _plot_vaccine(axes, region):
 
     _setup_xaxis(axes, title="Vaccination")
     _setup_yaxis(axes, title="% of pop (cumulative)")
-    axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics)
-
-
-def _plot_serology(axes, region):
-    metrics = region.metrics["serology"]
-    if not axes:
-        return 2 if metrics else 0
-
-    _setup_xaxis(axes, title="Serology")
-    _setup_yaxis(axes, title="% of age 16+ pop")
     axes.axhline(100, c="black", lw=1)  # 100% line.
     _plot_metrics(axes, metrics)
 
