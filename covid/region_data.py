@@ -2,7 +2,7 @@
 
 import collections
 import re
-from dataclasses import dataclass
+import dataclasses
 from dataclasses import field
 from typing import Dict
 from typing import List
@@ -13,18 +13,17 @@ import pandas
 import pandas.api.types
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Metric:
     frame: pandas.DataFrame
     color: str
     emphasis: int = 0
     order: float = 0
-    rollup: bool = False
     increase_color: Optional[str] = None
     decrease_color: Optional[str] = None
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class PolicyChange:
     date: pandas.Timestamp
     score: int
@@ -32,7 +31,7 @@ class PolicyChange:
     text: str
 
 
-@dataclass(eq=False)
+@dataclasses.dataclass(eq=False)
 class Metrics:
     total: collections.Counter = field(default_factory=collections.Counter)
     policy: List[PolicyChange] = field(default_factory=list)
@@ -46,7 +45,7 @@ class Metrics:
     wastewater: Dict[str, Metric] = field(default_factory=dict)
 
 
-@dataclass(eq=False)
+@dataclasses.dataclass(eq=False)
 class Region:
     name: str
     path: List[str]
@@ -71,9 +70,10 @@ class Region:
         return "/".join(r.path)
 
     def debug_line(r):
+        metrics_dict = dataclasses.asdict(r.metrics)
         return (
             f'{r.metrics.total["population"] or -1:9.0f}p <'
-            + "|".join(k[:3] for k, v in r.metrics.items() if v)
+            + "|".join(k[:3] for k, v in metrics_dict.items() if v)
             + f"> {r.debug_path()}"
             + (f" ({r.name})" if r.name != r.path[-1] else "")
         )
@@ -81,19 +81,23 @@ class Region:
     def debug_block(r, with_data=False):
         out = r.debug_line()
 
-        for name, url in r.credits.items():
-            out += f"\n    cred {name}: {url}"
+        for url, name in r.credits.items():
+            out += f"\n    {name} ({url})"
 
-        for cat, metrics in r.metrics.items():
-            for name, m in metrics.items():
-                out += (
-                    f"\n    {m.frame.value.count():3d}d"
-                    f" =>{m.frame.index.max().date()}"
-                    f" last={m.frame.value.iloc[-1]:<5.1f} "
-                    f" {cat[:3]}: {name}"
-                )
-                if with_data:
-                    out += "\n" + str(m.frame)
+        for cat, metrics in dataclasses.asdict(r.metrics).items():
+            if isinstance(metrics, dict):
+                for name, m in metrics.items():
+                    if isinstance(m, dict):
+                        frame = m.get("frame")
+                        if frame is not None:
+                            out += (
+                                f"\n    {frame.value.count():3d}d"
+                                f" =>{frame.index.max().date()}"
+                                f" last={frame.value.iloc[-1]:<5.1f} "
+                                f" {cat[:3]}: {name}"
+                            )
+                            if with_data:
+                                out += "\n" + str(frame)
 
         for c in r.metrics.policy:
             out += (
@@ -110,7 +114,7 @@ class Region:
         )
 
 
-@dataclass(eq=False)
+@dataclasses.dataclass(eq=False)
 class RegionAtlas:
     world: Region = None
     by_iso2: Dict[str, Region] = field(default_factory=dict)
@@ -118,7 +122,7 @@ class RegionAtlas:
     by_fips: Dict[int, Region] = field(default_factory=dict)
 
 
-def make_metric(c, em, ord, v=None, raw=None, cum=None, rollup=True):
+def make_metric(c, em, ord, v=None, raw=None, cum=None):
     """Returns a Metric with data massaged appropriately."""
 
     assert (v is not None) or (raw is not None) or (cum is not None)
@@ -146,4 +150,4 @@ def make_metric(c, em, ord, v=None, raw=None, cum=None, rollup=True):
         dups = df.index.duplicated(keep=False)
         raise ValueError(f"Dup trend dates: {df.index[dups]}")
 
-    return Metric(frame=df, color=c, emphasis=em, order=ord, rollup=rollup)
+    return Metric(frame=df, color=c, emphasis=em, order=ord)

@@ -202,7 +202,7 @@ def _plot_metrics(axes, metrics, detailed=True):
                 color=m.color,
                 alpha=alpha * 0.5,
                 zorder=zorder + 0.001,
-                lw=1,
+                lw=0.5,
                 ls=style,
             )
 

@@ -49,8 +49,8 @@ def add_metrics(session, atlas):
         )
 
     df = df[~dups]
-    for (plant, site), rows in df.groupby(
-        level=["Plant", "Site_Name"], sort=False, as_index=False
+    for plant_i, ((plant, site), rows) in enumerate(
+        df.groupby(level=["Plant", "Site_Name"], sort=False, as_index=False)
     ):
         rows.reset_index(["Plant", "Site_Name"], drop=True, inplace=True)
         fips = PLANT_FIPS.get(plant.split("-")[0].strip())
@@ -64,14 +64,20 @@ def add_metrics(session, atlas):
             continue
 
         region.credits.update(covid.fetch_scan_wastewater.credits())
-
         ww_metrics = region.metrics.wastewater
-        ww_metrics[site + " (COVID Kcopies)"] = make_metric(
-            c=matplotlib.cm.tab20b.colors[(12 + len(ww_metrics)) % 20],
+
+        ww_metrics[f"COVID (all) Kcopies ({site})"] = make_metric(
+            c=matplotlib.cm.tab20b.colors[(4 + plant_i * 4) % 20],
             em=1,
             ord=1.0,
             raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
-            rollup=False,
+        )
+
+        ww_metrics[f"COVID BA.4/5 Kcopies ({site})"] = make_metric(
+            c=matplotlib.cm.tab20b.colors[(6 + plant_i * 4) % 20],
+            em=0,
+            ord=1.0,
+            raw=rows.HV_69_70_Del_gc_g_dry_weight * 1e-3,
         )
 
 

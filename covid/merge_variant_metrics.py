@@ -80,7 +80,6 @@ def add_metrics(session, atlas):
                 em=1,
                 ord=0,
                 v=vd.found * 100.0 / v_totals,
-                rollup=False,
             )
 
         other_variants = make_metric(
@@ -88,7 +87,6 @@ def add_metrics(session, atlas):
             em=1,
             ord=0,
             v=v_others * 100.0 / v_totals,
-            rollup=False,
         )
 
         region.metrics.variant = {
