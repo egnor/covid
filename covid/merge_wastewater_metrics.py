@@ -1,7 +1,7 @@
 """Functions to merge wastewater sampling metrics into a RegionAtlas"""
 
 import logging
-import warnings
+from warnings import warn
 
 import matplotlib.cm
 
@@ -39,12 +39,11 @@ PLANT_FIPS = {
 
 def add_metrics(session, atlas):
     logging.info("Loading and merging SCAN wastewater data...")
-    scan_credits = covid.fetch_scan_wastewater.credits()
     df = covid.fetch_scan_wastewater.get_wastewater(session)
 
     dups = df.index.duplicated(keep=False)
     for plant, site, timestamp in df.index[dups]:
-        warnings.warn(
+        warn(
             "Duplicate SCAN wastewater data: "
             f"{plant} ({site}) {timestamp.strftime('%Y-%m-%d')}"
         )
@@ -56,20 +55,21 @@ def add_metrics(session, atlas):
         rows.reset_index(["Plant", "Site_Name"], drop=True, inplace=True)
         fips = PLANT_FIPS.get(plant.split("-")[0].strip())
         if not fips:
-            warnings.warn(f"No FIPS for SCAN wastewater plant: {plant}")
+            warn(f"Unknown SCAN wastewater plant: {plant}")
             continue
 
         region = atlas.by_fips.get(fips)
         if not region:
-            warnings.warn(f"Missing SCAN wastewater FIPS: {fips} ({plant})")
+            warn(f"Missing SCAN wastewater FIPS: {fips} ({plant})")
             continue
 
-        ww_metrics = region.metrics["wastewater"]
+        region.credits.update(covid.fetch_scan_wastewater.credits())
+
+        ww_metrics = region.metrics.wastewater
         ww_metrics[site + " (COVID Kcopies)"] = make_metric(
             c=matplotlib.cm.tab20b.colors[(12 + len(ww_metrics)) % 20],
             em=1,
             ord=1.0,
-            cred=scan_credits,
             raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
             rollup=False,
         )

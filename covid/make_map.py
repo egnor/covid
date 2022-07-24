@@ -3,7 +3,7 @@
 import datetime
 import logging
 import math
-import warnings
+from warnings import warn
 
 import cartopy
 import cartopy.crs
@@ -16,6 +16,8 @@ import moviepy.video.io.bindings
 import moviepy.video.VideoClip
 import mplcairo.base
 import pandas
+import pycountry
+import us.states
 from shapely.geometry.base import BaseMultipartGeometry
 
 from covid import urls
@@ -55,10 +57,10 @@ def setup(args):
 def write_video(region, site_dir):
     """Generates a map timeline video for the specified region."""
 
-    logging.info(f"Creating map video: {region.path()}")
+    logging.info(f"Creating map video: {region.debug_path()}")
 
     subs = _mapped_subregions(region)
-    max_time = max(m.frame.index.max() for m in region.metrics["map"].values())
+    max_time = max(m.frame.index.max() for m in region.metrics.map.values())
     d_m_r_v = list(
         (d, m_r_v)
         for d, m_r_v in _date_metric_region_value(subs).items()
@@ -66,7 +68,7 @@ def write_video(region, site_dir):
     )
 
     if not d_m_r_v:
-        warnings.warn(f"No metrics for map video: {region.path()}")
+        warn(f"No metrics for map video: {region.debug_path()}")
         return
 
     fig = matplotlib.pyplot.figure(figsize=(10, 6.5), dpi=150)
@@ -99,8 +101,8 @@ def write_video(region, site_dir):
         )
 
         lons, lats = zip(*(r.lat_lon for r in subs))
-        scale = 3e4 / region.totals["population"]
-        pop_sizes = [scale * r.totals["population"] for r in subs]
+        scale = 3e4 / region.metrics.total["population"]
+        pop_sizes = [scale * r.metrics.total["population"] for r in subs]
         frame_arts.append(
             axes.scatter(
                 x=lats,
@@ -113,7 +115,7 @@ def write_video(region, site_dir):
         )
 
         # Use the main region's map metrics to define ordering and color.
-        for name, metric in region.metrics["map"].items():
+        for name, metric in region.metrics.map.items():
             now_r_v, prev_r_v = m_r_v.get(name, {}), prev_m_r_v.get(name, {})
             now_areas = [scale * max(0, now_r_v.get(r, 0)) for r in subs]
             prev_areas = [scale * max(0, prev_r_v.get(r, 0)) for r in subs]
@@ -190,14 +192,14 @@ def _mapped_subregions(region):
         r
         for s in region.subregions.values()
         for r in (s.subregions.values() if urls.has_map(s) else (s,))
-        if r.metrics["map"] and r.lat_lon
+        if r.metrics.map and r.lat_lon
     ]
 
 
 def _date_metric_region_value(regions):
     d_m_r_v = {}
     for r in regions:
-        for n, m in r.metrics["map"].items():
+        for n, m in r.metrics.map.items():
             for t in m.frame.itertuples():
                 if pandas.notna(t.value):
                     r_v = d_m_r_v.setdefault(t.Index, {}).setdefault(n, {})
@@ -207,34 +209,34 @@ def _date_metric_region_value(regions):
 
 
 def _setup_axes(figure, region):
-    def get_path(r):
-        return [] if not r else get_path(r.parent) + [r]
+    (a0_name,) = region.path[1:2] or [None]
+    (a1_name,) = region.path[2:3] or [None]
 
-    region_path = get_path(region)
-    (a0_region,) = region_path[1:2] or [None]
-    (a1_region,) = region_path[2:3] or [None]
+    a0_country = a0_name and pycountry.countries.lookup(a0_name)
+    a0_alpha2 = a0_country and a0_country.alpha_2
+
+    a1_fips = None
+    if a0_alpha2 == "US":
+        # https://github.com/unitedstates/python-us/issues/65
+        abbr = us.states.mapping("name", "abbr").get(a1_name)
+        a1_fips = abbr and us.states.lookup(abbr).fips
 
     a0_region_shapes = [
-        s
-        for s in _admin_0_shapes
-        if a0_region and s.attributes["ISO_A2"] == a0_region.iso_code
+        s for s in _admin_0_shapes if s.attributes["ISO_A2"] == a0_alpha2
     ]
     a0_region_a1_shapes = [
-        s
-        for s in _admin_1_shapes
-        if a0_region and s.attributes["iso_a2"] == a0_region.iso_code
+        s for s in _admin_1_shapes if s.attributes["iso_a2"] == a0_alpha2
     ]
     a1_region_shapes = [
         s
         for s in _admin_1_shapes
-        if a1_region
-        and s.attributes["iso_a2"] == a0_region.iso_code
+        if a1_name
+        and s.attributes["iso_a2"] == a0_alpha2
         and (
-            s.attributes["fips"] == "US{a1_region.fips_code:02}"
-            or s.attributes["name"] == a1_region.name
-            or s.attributes["name"] == a1_region.short_name
-            or s.attributes["abbrev"].strip(".") == a1_region.short_name
-            or s.attributes["postal"] == a1_region.short_name
+            (a1_fips and s.attributes["fips"] == "US{a1_fips:02}")
+            or s.attributes["name"] == a1_name
+            or s.attributes["abbrev"].strip(".") == a1_name
+            or s.attributes["postal"] == a1_name
         )
     ]
 
@@ -245,12 +247,14 @@ def _setup_axes(figure, region):
         axes.set_extent((-179, 179, -89, 89), _lat_lon_crs)
     else:
         m = lambda g: isinstance(g, BaseMultipartGeometry)
-        split = lambda g: (p for s in g for p in split(s)) if m(g) else (g,)
+        split = (
+            lambda g: (p for s in g.geoms for p in split(s)) if m(g) else (g,)
+        )
         area = lambda g: _area_crs.project_geometry(g, _lat_lon_crs).area
         region_shapes = a1_region_shapes or a0_region_shapes
         if not region_shapes:
             raise LookupError(
-                f"No shapes for a0={a0_region.name} "
+                f"No shapes for a0={a0_name} "
                 f"a1={a1_region.name if a1_region else 'N/A'}"
             )
 

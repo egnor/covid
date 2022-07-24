@@ -4,47 +4,38 @@ import os
 import re
 
 
-def index_page():
-    return "index.html"
-
-
-def region_prefix(region, _tr=str.maketrans(" /.", "___")):
-    return (
-        ""
-        if not region
-        else ""
-        if region.short_name.lower() == "world" and not region.parent
-        else region_prefix(region.parent)
-        + re.sub(r"[\W]+", "_", region.short_name).strip("_").lower()
-        + "/"
+def _prefix(r_or_p):
+    path = r_or_p.path if hasattr(r_or_p, "path") else r_or_p
+    return "".join(
+        re.sub(r"[\W]+", "_", p).strip("_").lower() + "/" for p in path[1:]
     )
 
 
-def region_page(region):
-    return region_prefix(region) + index_page()
+def region_page(region_or_path):
+    return _prefix(region_or_path) + "index.html"
 
 
-def thumb_image(region):
-    return region_prefix(region) + "thumb.png"
+def thumb_image(region_or_path):
+    return _prefix(region_or_path) + "thumb.png"
 
 
-def chart_image(region):
-    return region_prefix(region) + "chart.png"
+def chart_image(region_or_path):
+    return _prefix(region_or_path) + "chart.png"
 
 
 def has_map(region):
-    rp = region.totals["population"]
+    rp = region.metrics.total["population"]
     non_biggest_pop = sum(
-        s.totals["population"]
+        s.metrics.total["population"]
         for s in region.subregions.values()
-        if s.metrics["map"]
-        and (s.totals["population"] < 0.5 * rp or has_map(s))
+        if s.metrics.map
+        and (s.metrics.total["population"] < 0.5 * rp or has_map(s))
     )
     return len(region.subregions) >= 3 and non_biggest_pop >= 0.1 * rp
 
 
 def map_video_maybe(region):
-    return region_prefix(region) + "map.webm" if has_map(region) else None
+    return _prefix(region) + "map.webm" if has_map(region) else None
 
 
 def link(from_urlpath, to_urlpath):

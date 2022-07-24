@@ -2,7 +2,7 @@
 
 import itertools
 import logging
-import warnings
+from warnings import warn
 
 import matplotlib
 import pycountry
@@ -13,7 +13,6 @@ from covid.region_data import make_metric
 
 def add_metrics(session, atlas):
     logging.info("Loading and merging CoVariants data...")
-    cov_credits = covid.fetch_covariants.credits()
     covar = covid.fetch_covariants.get_variants(session=session)
 
     totals = covar.groupby("variant")["found"].sum()
@@ -40,7 +39,7 @@ def add_metrics(session, atlas):
             try:
                 countries = pycountry.countries.search_fuzzy(c_find)
             except LookupError:
-                warnings.warn(f'Unknown covariant country: "{c_find}"')
+                warn(f'Unknown covariant country: "{c_find}"')
                 continue
 
         region = atlas.by_iso2.get(countries[0].alpha_2)
@@ -49,10 +48,13 @@ def add_metrics(session, atlas):
 
         r_find = {"Washington DC": "District of Columbia"}.get(r[1], r[1])
         if r_find:
-            path, region = region.path(), region.subregions.get(r_find)
+            region = region.subregions.get(r_find)
             if region is None:
-                warnings.warn(f"Unknown covariant region: {path}/{r_find}")
+                path = region.debug_path()
+                warn(f"Unknown covariant region: {path}/{r_find}")
                 continue
+
+        region.credits.update(covid.fetch_covariants.credits())
 
         v_totals = v_others = []
         for v, vd in rd.groupby("variant", as_index=False):
@@ -61,23 +63,22 @@ def add_metrics(session, atlas):
                 v_totals = vd.found
                 continue
 
-            if v in region.metrics["variant"]:
-                warnings.warn(f"Duplicate covariant ({region.path()}): {v}")
+            if v in region.metrics.variant:
+                warn(f"Duplicate covariant ({region.debug_path()}): {v}")
                 continue
 
             if len(v_totals) != len(vd):
-                warnings.warn(
-                    f"Bad covariant data ({region.path()}): "
+                warn(
+                    f"Bad covariant data ({region.debug_path()}): "
                     f"len totals={len(v_totals)} len data={len(vd)}"
                 )
                 continue
 
             v_others = v_others - vd.found
-            region.metrics["variant"][v] = make_metric(
+            region.metrics.variant[v] = make_metric(
                 c=colors[v],
                 em=1,
                 ord=0,
-                cred=cov_credits,
                 v=vd.found * 100.0 / v_totals,
                 rollup=False,
             )
@@ -86,14 +87,13 @@ def add_metrics(session, atlas):
             c=(0.9, 0.9, 0.9),
             em=1,
             ord=0,
-            cred=cov_credits,
             v=v_others * 100.0 / v_totals,
             rollup=False,
         )
 
-        region.metrics["variant"] = {
+        region.metrics.variant = {
             "original/other": other_variants,
-            **region.metrics["variant"],
+            **region.metrics.variant,
         }
 
 

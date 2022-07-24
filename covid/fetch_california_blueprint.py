@@ -3,7 +3,7 @@
 import collections
 import re
 import urllib.parse
-import warnings
+from warnings import warn
 
 import addfips
 import bs4
@@ -45,10 +45,10 @@ def get_counties(session):
                     xlsx_urls.add(url)
 
         if not found:
-            warnings.warn(f"No CA .xlsx links found: {html_url}")
+            warn(f"No CA .xlsx links found: {html_url}")
 
     if not xlsx_urls:
-        warnings.warn(f"No CA blueprint .xlsx files found!")
+        warn(f"No CA blueprint .xlsx files found!")
         return {}
 
     counties = {}
@@ -57,7 +57,7 @@ def get_counties(session):
             continue  # Skip the first sheet, which used color coding only.
 
         if not re.search(r"blueprint[^/]*[.]xlsx", xlsx_url, re.I):
-            warnings.warn(f"Unexpected CA .xlsx link: {xlsx_url}")
+            warn(f"Unexpected CA .xlsx link: {xlsx_url}")
             continue
 
         try:

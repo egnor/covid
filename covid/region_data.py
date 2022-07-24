@@ -22,7 +22,6 @@ class Metric:
     rollup: bool = False
     increase_color: Optional[str] = None
     decrease_color: Optional[str] = None
-    credits: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -31,48 +30,58 @@ class PolicyChange:
     score: int
     emoji: str
     text: str
-    credits: Dict[str, str]
+
+
+@dataclass(eq=False)
+class Metrics:
+    total: collections.Counter = field(default_factory=collections.Counter)
+    policy: List[PolicyChange] = field(default_factory=list)
+    covid: Dict[str, Metric] = field(default_factory=dict)
+    hospital: Dict[str, Metric] = field(default_factory=dict)
+    map: Dict[str, Metric] = field(default_factory=dict)
+    mobility: Dict[str, Metric] = field(default_factory=dict)
+    vaccine: Dict[str, Metric] = field(default_factory=dict)
+    variant: Dict[str, Metric] = field(default_factory=dict)
+    wastewater: Dict[str, Metric] = field(default_factory=dict)
 
 
 @dataclass(eq=False)
 class Region:
     name: str
-    short_name: str
+    path: List[str]
     iso_code: Optional[str] = None
     fips_code: Optional[int] = None
     place_id: Optional[str] = None
     lat_lon: Optional[Tuple[float, float]] = None
-    parent: Optional["Region"] = field(default=None, repr=0)
-    subregions: Dict[str, "Region"] = field(default_factory=dict, repr=0)
-
-    totals: collections.Counter = field(default_factory=collections.Counter)
-    policy_changes: List[PolicyChange] = field(default_factory=list, repr=0)
-    metrics: Dict[str, Dict[str, Metric]] = field(
-        default_factory=lambda: collections.defaultdict(dict), repr=0
-    )
-
-    def path(r):
-        return f"{r.parent.path()}/{r.short_name}" if r.parent else r.name
+    metrics: Metrics = field(default_factory=Metrics)
+    credits: Dict[str, str] = field(default_factory=dict)
+    subregions: Dict[str, "Region"] = field(default_factory=dict, repr=False)
 
     def matches_regex(r, rx):
-        rx = rx if isinstance(rx, re.Pattern) else (rx and re.compile(rx, re.I))
+        rx = rx if hasattr(rx, "fullmatch") else (rx and re.compile(rx, re.I))
         return bool(
             not rx
             or rx.fullmatch(r.name)
-            or rx.fullmatch(r.path())
-            or rx.fullmatch(r.path().replace(" ", "_"))
+            or rx.fullmatch(r.debug_path())
+            or rx.fullmatch(r.debug_path().replace(" ", "_"))
         )
+
+    def debug_path(r):
+        return "/".join(r.path)
 
     def debug_line(r):
         return (
-            f'{r.totals["population"] or -1:9.0f}p <'
+            f'{r.metrics.total["population"] or -1:9.0f}p <'
             + "|".join(k[:3] for k, v in r.metrics.items() if v)
-            + f"> {r.path()}"
-            + (f" ({r.name})" if r.name != r.short_name else "")
+            + f"> {r.debug_path()}"
+            + (f" ({r.name})" if r.name != r.path[-1] else "")
         )
 
-    def debug_block(r, with_credits=False, with_data=False):
+    def debug_block(r, with_data=False):
         out = r.debug_line()
+
+        for name, url in r.credits.items():
+            out += f"\n    cred {name}: {url}"
 
         for cat, metrics in r.metrics.items():
             for name, m in metrics.items():
@@ -82,12 +91,10 @@ class Region:
                     f" last={m.frame.value.iloc[-1]:<5.1f} "
                     f" {cat[:3]}: {name}"
                 )
-                if with_credits:
-                    out += f'\n        {" ".join(m.credits.values())}'
                 if with_data:
                     out += "\n" + str(m.frame)
 
-        for c in r.policy_changes:
+        for c in r.metrics.policy:
             out += (
                 f"\n           {c.date.date()} {c.score:+2d}"
                 f" {c.emoji} {c.text}"
@@ -110,7 +117,7 @@ class RegionAtlas:
     by_fips: Dict[int, Region] = field(default_factory=dict)
 
 
-def make_metric(c, em, ord, cred, v=None, raw=None, cum=None, rollup=True):
+def make_metric(c, em, ord, v=None, raw=None, cum=None, rollup=True):
     """Returns a Metric with data massaged appropriately."""
 
     assert (v is not None) or (raw is not None) or (cum is not None)
@@ -138,6 +145,4 @@ def make_metric(c, em, ord, cred, v=None, raw=None, cum=None, rollup=True):
         dups = df.index.duplicated(keep=False)
         raise ValueError(f"Dup trend dates: {df.index[dups]}")
 
-    return Metric(
-        frame=df, color=c, emphasis=em, order=ord, rollup=rollup, credits=cred
-    )
+    return Metric(frame=df, color=c, emphasis=em, order=ord, rollup=rollup)

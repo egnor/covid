@@ -16,7 +16,7 @@ def _get_sub(parent, key, name=None):
     region = parent.subregions.get(key)
     if not region:
         region = parent.subregions[key] = Region(
-            name=name or key, short_name=key, parent=parent
+            name=name or key, path=parent.path + [key]
         )
     return region
 
@@ -26,7 +26,7 @@ def get_atlas(session):
 
     logging.info("Loading JHU CSSE places...")
     atlas = RegionAtlas()
-    atlas.world = Region(name="World", short_name="World")
+    atlas.world = Region(name="World", path=["World"])
     for p in fetch_jhu_csse.get_places(session).itertuples(name="Place"):
         if not (p.Population > 0):
             continue  # Analysis requires population data.
@@ -67,13 +67,14 @@ def get_atlas(session):
             region.fips_code = int(p.FIPS)
 
         region.place_id = p.Index
-        region.totals["population"] = p.Population
+        region.metrics.total["population"] = p.Population
         if p.Lat or p.Long_:
             region.lat_lon = (p.Lat, p.Long_)
 
     # Initialize world population for direct world metrics
-    atlas.world.totals["population"] = sum(
-        sub.totals["population"] for sub in atlas.world.subregions.values()
+    atlas.world.metrics.total["population"] = sum(
+        sub.metrics.total["population"]
+        for sub in atlas.world.subregions.values()
     )
 
     # Index by various forms of ID for merging data in.

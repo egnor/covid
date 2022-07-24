@@ -1,7 +1,7 @@
 """Function to merge vaccination metrics into a RegionAtlas"""
 
 import logging
-import warnings
+from warnings import warn
 
 import pycountry
 import us
@@ -13,19 +13,18 @@ from covid.region_data import make_metric
 
 def add_metrics(session, atlas):
     logging.info("Loading CDC vaccination data...")
-    cdc_credits = covid.fetch_cdc_vaccinations.credits()
     cdc_data = covid.fetch_cdc_vaccinations.get_vaccinations(session=session)
 
     logging.info("Merging CDC vaccination data...")
     for fips, v in cdc_data.groupby("FIPS", as_index=False, sort=False):
         region = atlas.by_fips.get(fips)
         if region is None:
-            warnings.warn(f"Missing CDC vax FIPS: {fips}")
+            warn(f"Missing CDC vax FIPS: {fips}")
             continue
 
-        pop = region.totals.get("population", 0)
+        pop = region.metrics.total["population"]
         if not (pop > 0):
-            warnings.warn(f"No population: {region.path()} (pop={pop})")
+            warn(f"No population: {region.debug_path()} (pop={pop})")
             continue
 
         v.reset_index(level="FIPS", drop=True, inplace=True)
@@ -38,17 +37,17 @@ def add_metrics(session, atlas):
 
         vaxxed = v.Series_Complete_Yes.iloc[-1]
         if not (0 <= vaxxed <= pop * 1.1 + 10000):
-            warnings.warn(f"Bad CDC vax: {region.path()} ({vaxxed}/{pop}p)")
+            warn(f"Bad CDC vax: {region.debug_path()} ({vaxxed}/{pop}p)")
             continue
 
-        region.totals["vaccinated"] = vaxxed
+        region.credits.update(covid.fetch_cdc_vaccinations.credits())
+        region.metrics.total["vaccinated"] = vaxxed
 
-        vax_metrics = region.metrics["vaccine"]
+        vax_metrics = region.metrics.vaccine
         vax_metrics["people given any doses / 100p"] = make_metric(
             c="tab:olive",
             em=0,
             ord=1.2,
-            cred=cdc_credits,
             v=v.Administered_Dose1_Recip * (100 / pop),
         )
 
@@ -56,7 +55,6 @@ def add_metrics(session, atlas):
             c="tab:green",
             em=1,
             ord=1.3,
-            cred=cdc_credits,
             v=v.Series_Complete_Yes * (100 / pop),
         )
 
@@ -64,12 +62,14 @@ def add_metrics(session, atlas):
             c="tab:purple",
             em=1,
             ord=1.4,
-            cred=cdc_credits,
             v=v.Booster_Doses * (100 / pop),
         )
 
     logging.info("Loading and merging ourworldindata vaccination data...")
-    owid_credits = covid.fetch_ourworld_vaccinations.credits()
+
+    # https://github.com/unitedstates/python-us/issues/65
+    state_abbr_by_name = us.states.mapping("name", "abbr")
+
     owid_data = covid.fetch_ourworld_vaccinations.get_vaccinations(
         session=session
     )
@@ -92,34 +92,35 @@ def add_metrics(session, atlas):
         else:
             cc = pycountry.countries.get(alpha_3=iso3)
             if cc is None:
-                warnings.warn(f"Unknown OWID vax country code: {iso3}")
+                warn(f"Unknown OWID vax country code: {iso3}")
                 continue
 
         region = atlas.by_iso2.get(cc.alpha_2) if cc else atlas.world
         if region is None:
-            warnings.warn(f"Missing OWID vax country: {cc.alpha_2}")
+            warn(f"Missing OWID vax country: {cc.alpha_2}")
             continue
 
         if admin2:
             if cc.alpha_2 == "US":
                 # Data includes "New York State", lookup() needs "New York"
-                st = us.states.lookup(admin2.replace(" State", ""))
-                if not st:
-                    warnings.warn(f"Unknown OWID vax state: {admin2}")
+                abbr = state_abbr_by_name.get(admin2.replace(" State", ""))
+                if not abbr:
+                    warn(f"Unknown OWID vax state: {admin2}")
                     continue
 
-                region = atlas.by_fips.get(int(st.fips))
+                fips = us.states.lookup(abbr).fips
+                region = atlas.by_fips.get(int(fips))
                 if region is None:
-                    warnings.warn(f"Missing OWID vax FIPS: {st.fips}")
+                    warn(f"Missing OWID vax FIPS: {fips}")
                     continue
             else:
                 region = region.subregions.get(admin2)
                 if region is None:
-                    warnings.warn(f"Unknown OWID vax subregion: {admin2}")
+                    warn(f"Unknown OWID vax subregion: {admin2}")
 
-        pop = region.totals.get("population", 0)
+        pop = region.metrics.total["population"]
         if not (pop > 0):
-            warnings.warn(f"No population: {region.path()} (pop={pop})")
+            warn(f"No population: {region.debug_path()} (pop={pop})")
             continue
 
         v.total_distributed.fillna(method="ffill", inplace=True)
@@ -130,17 +131,17 @@ def add_metrics(session, atlas):
 
         vaxxed = v.people_fully_vaccinated.iloc[-1]
         if not (0 <= vaxxed <= pop * 1.1 + 10000):
-            warnings.warn(f"Bad OWID vax: {region.path()} ({vaxxed}/{pop}p)")
+            warn(f"Bad OWID vax: {region.debug_path()} ({vaxxed}/{pop}p)")
             continue
 
-        region.totals["vaccinated"] = vaxxed
+        region.credits.update(covid.fetch_ourworld_vaccinations.credits())
+        region.metrics.total["vaccinated"] = vaxxed
 
-        vax_metrics = region.metrics["vaccine"]
+        vax_metrics = region.metrics.vaccine
         vax_metrics["people given any doses / 100p"] = make_metric(
             c="tab:olive",
             em=0,
             ord=1.2,
-            cred=owid_credits,
             v=v.people_vaccinated * (100 / pop),
         )
 
@@ -148,7 +149,6 @@ def add_metrics(session, atlas):
             c="tab:green",
             em=1,
             ord=1.3,
-            cred=owid_credits,
             v=v.people_fully_vaccinated * (100 / pop),
         )
 
@@ -156,7 +156,6 @@ def add_metrics(session, atlas):
             c="tab:purple",
             em=1,
             ord=1.4,
-            cred=owid_credits,
             v=v.total_boosters * (100 / pop),
         )
 
@@ -164,7 +163,6 @@ def add_metrics(session, atlas):
             c="tab:cyan",
             em=0,
             ord=1.5,
-            cred=owid_credits,
             v=v.daily_vaccinations * (5000 / pop),
             raw=v.daily_vaccinations_raw * (5000 / pop),
         )

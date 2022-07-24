@@ -30,10 +30,10 @@ def make_region_page(region, args):
             make_map.write_video(region, args.site_dir)
             map_note = " (+map video)"
     except Exception as e:
-        print(f"*** Error making {region.path()}: {e} ***")
-        raise Exception(f"Error making {region.path()}") from e
+        print(f"*** Error making {region.debug_path()}: {e} ***")
+        raise Exception(f"Error making {region.debug_path()}") from e
 
-    print(f"Made: {region.path()}{map_note}")
+    print(f"Made: {region.debug_path()}{map_note}")
 
 
 def make_region_html(region, args):
@@ -41,7 +41,7 @@ def make_region_html(region, args):
 
     latest = max(
         m.frame.index.max()
-        for m in region.metrics["covid"].values()
+        for m in region.metrics.covid.values()
         if m.emphasis >= 0
     )
 
@@ -57,21 +57,17 @@ def make_region_html(region, args):
     with doc.body:
         tags.attr(id="map_key_target", tabindex="-1")
         with tags.h1():
+            for part in region.path[:-1]:
+                tags.a(part, href=doc_link(urls.region_page(region)))
+                util.text(" » ")
 
-            def write_breadcrumbs(r):
-                if r is not None:
-                    write_breadcrumbs(r.parent)
-                    tags.a(r.short_name, href=doc_link(urls.region_page(r)))
-                    util.text(" » ")
-
-            write_breadcrumbs(region.parent)
             util.text(region.name)
 
         with tags.div():
-            pop = region.totals["population"]
-            vax = region.totals.get("vaccinated", 0)
-            pos = region.totals.get("positives", 0)
-            dead = region.totals.get("deaths", 0)
+            pop = region.metrics.total["population"]
+            vax = region.metrics.total["vaccinated"]
+            pos = region.metrics.total["positives"]
+            dead = region.metrics.total["deaths"]
 
             nobreak = lambda t: tags.span(t, cls="nobreak")
             nobreak(f"{pop:,.0f} pop; ")
@@ -102,7 +98,7 @@ def make_region_html(region, args):
 
         tags.img(cls="graphic", src=doc_link(urls.chart_image(region)))
 
-        notables = [p for p in region.policy_changes if p.score]
+        notables = [p for p in region.metrics.policy if p.score]
         if notables:
             tags.h2(
                 tags.span("Closing", cls="policy_close"),
@@ -130,19 +126,20 @@ def make_region_html(region, args):
                     )
 
         subs = [
-            r
-            for r in region.subregions.values()
-            if r.matches_regex(args.region_regex)
+            s
+            for s in region.subregions.values()
+            if s.matches_regex(args.region_regex)
         ]
         if subs:
-            sub_pop = sum(s.totals["population"] for s in subs)
-            if len(subs) >= 10 and sub_pop > 0.9 * region.totals["population"]:
+            tot_pop = region.metrics.total["population"]
+            sub_pop = sum(s.metrics.total["population"] for s in subs)
+            if len(subs) >= 10 and sub_pop > 0.9 * tot_pop:
 
                 def pop(r):
-                    return r.totals.get("population", 0)
+                    return r.metrics.total["population"]
 
                 def pos(r):
-                    m = r.metrics["covid"].get("COVID positives / day / 100Kp")
+                    m = r.metrics.covid.get("COVID positives / day / 100Kp")
                     return m.frame.value.iloc[-1] * pop(r) if m else 0
 
                 tags.h2("Top 5 by population")
@@ -153,18 +150,12 @@ def make_region_html(region, args):
                 for s in list(sorted(subs, key=pos, reverse=True))[:5]:
                     make_subregion_html(doc_url, s)
 
-                tags.h2(f'All {"divisions" if region.parent else "countries"}')
-            else:
-                tags.h2("Subdivisions")
+            tags.h2(f'All {"divisions" if region.path[1:] else "countries"}')
             for s in sorted(subs, key=lambda r: r.name):
                 make_subregion_html(doc_url, s)
 
-        r = region
-        credits = dict(c for p in r.policy_changes for c in p.credits.items())
-        for ms in r.metrics.values():
-            credits.update(c for m in ms.values() for c in m.credits.items())
         with tags.p("Sources: ", cls="credits"):
-            for i, (url, text) in enumerate(credits.items()):
+            for i, (url, text) in enumerate(sorted(region.credits.items())):
                 util.text(", ") if i > 0 else None
                 tags.a(text, href=url)
 
@@ -178,9 +169,9 @@ def make_subregion_html(doc_url, region):
         with tags.div(cls="subregion_label", __pretty=False):
             util.text(region.name)
             with tags.div():
-                pop = region.totals["population"]
+                pop = region.metrics.total["population"]
                 util.text(f"{pop:,.0f}\xa0pop")
-                vax = region.totals.get("vaccinated", 0)
+                vax = region.metrics.total["vaccinated"]
                 util.text(f", {100 * vax / pop:,.2g}%\xa0vax" if vax else "")
 
         tags.img(width=200, src=urls.link(doc_url, urls.thumb_image(region)))

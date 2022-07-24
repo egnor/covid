@@ -32,7 +32,7 @@ def _write_thumb_image(region, site_dir):
     thumb_axes = fig.add_subplot()
     _setup_xaxis(thumb_axes)
     thumb_axes.set_ylim(0, 300)
-    _plot_metrics(thumb_axes, region.metrics["covid"], detailed=False)
+    _plot_metrics(thumb_axes, region.metrics.covid, detailed=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
@@ -68,7 +68,7 @@ def _write_chart_image(region, site_dir):
 
     for i, (axes, plotter) in enumerate(zip(subplots[:, 0], plotters)):
         plotter(axes, region)
-        _plot_policy_changes(axes, region.policy_changes, detailed=(i == 0))
+        _plot_policy_changes(axes, region.metrics.policy, detailed=(i == 0))
         _add_plot_legend(axes)
 
     fig.align_ylabels()
@@ -78,7 +78,7 @@ def _write_chart_image(region, site_dir):
 
 
 def _plot_covid(axes, region):
-    metrics = region.metrics["covid"]
+    metrics = region.metrics.covid
     max_value = max(
         (m.frame.value.max() for m in metrics.values() if m.emphasis > 0),
         default=0,
@@ -88,13 +88,13 @@ def _plot_covid(axes, region):
     if not axes:
         return ylim / 75 if metrics else 0
 
-    _setup_xaxis(axes, title=f"{region.short_name} COVID")
+    _setup_xaxis(axes, title=f"{region.path[-1]} COVID")
     _setup_yaxis(axes, title="cases per capita", ylim=(0, ylim))
     _plot_metrics(axes, metrics)
 
 
 def _plot_hospital(axes, region):
-    metrics = region.metrics["hospital"]
+    metrics = region.metrics.hospital
     max_value = max(
         (
             m.frame.value.max()
@@ -115,7 +115,7 @@ def _plot_hospital(axes, region):
 
 
 def _plot_wastewater(axes, region):
-    metrics = region.metrics["wastewater"]
+    metrics = region.metrics.wastewater
     if not axes:
         return 2 if metrics else 0
 
@@ -127,7 +127,7 @@ def _plot_wastewater(axes, region):
 
 
 def _plot_variant(axes, region):
-    metrics = region.metrics["variant"]
+    metrics = region.metrics.variant
     if not axes:
         return 2 if metrics else 0
 
@@ -161,7 +161,7 @@ def _plot_variant(axes, region):
 
 
 def _plot_vaccine(axes, region):
-    metrics = region.metrics["vaccine"]
+    metrics = region.metrics.vaccine
     if not axes:
         return 2 if metrics else 0
 
@@ -172,7 +172,7 @@ def _plot_vaccine(axes, region):
 
 
 def _plot_mobility(axes, region):
-    metrics = region.metrics["mobility"]
+    metrics = region.metrics.mobility
     if not axes:
         return 2 if metrics else 0
 

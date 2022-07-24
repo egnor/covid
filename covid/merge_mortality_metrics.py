@@ -12,7 +12,6 @@ from covid.region_data import make_metric
 
 def add_metrics(session, atlas):
     logging.info("Loading and merging The Economist's mortality model...")
-    econ_credits = covid.fetch_economist_mortality.credits()
     econ_df = covid.fetch_economist_mortality.get_mortality(session)
 
     # Mask out estimate when real data is present to avoid double-plotting
@@ -31,24 +30,24 @@ def add_metrics(session, atlas):
             warnings.warn(f"Missing Economist mortality country: {cc.alpha_2}")
             continue
 
-        pop = region.totals.get("population", 0)
+        pop = region.metrics.total["population"]
         if not (pop > 0):
-            warnings.warn(f"No population: {region.path()} (pop={pop})")
+            warnings.warn(f"No population: {region.debug_path()} (pop={pop})")
             continue
 
-        region.metrics["covid"]["all excess deaths / day / 10Mp"] = make_metric(
+        region.credits.update(covid.fetch_economist_mortality.credits())
+
+        region.metrics.covid["all excess deaths / day / 10Mp"] = make_metric(
             c="tab:orange",
             em=1,
             ord=1.4,
-            cred=econ_credits,
             v=v.daily_excess_deaths * 1e7 / pop,
         )
 
-        region.metrics["covid"]["est excess deaths / day / 10Mp"] = make_metric(
+        region.metrics.covid["est excess deaths / day / 10Mp"] = make_metric(
             c="tab:orange",
             em=-1,
             ord=1.5,
-            cred=econ_credits,
             v=v.estimated_daily_excess_deaths * 1e7 / pop,
         )
 

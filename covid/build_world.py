@@ -4,8 +4,8 @@ import argparse
 import logging
 import pickle
 import re
-import warnings
 from dataclasses import replace
+from warnings import warn
 
 import numpy
 import pandas
@@ -34,11 +34,11 @@ arg_group.add_argument("--no_covid_metrics", action="store_true")
 arg_group.add_argument("--no_google_mobility", action="store_true")
 arg_group.add_argument("--no_hospital_metrics", action="store_true")
 arg_group.add_argument("--no_maps", action="store_true")
+arg_group.add_argument("--no_mortality_metrics", action="store_true")
 arg_group.add_argument("--no_state_policy", action="store_true")
 arg_group.add_argument("--no_vaccine_metrics", action="store_true")
 arg_group.add_argument("--no_variant_metrics", action="store_true")
 arg_group.add_argument("--no_wastewater_metrics", action="store_true")
-arg_group.add_argument("--use_mortality_metrics", action="store_true")
 
 
 KNOWN_WARNINGS_REGEX = re.compile(
@@ -113,7 +113,7 @@ def _compute_world(session, args):
     if not args.no_hospital_metrics:
         merge_hospital_metrics.add_metrics(session=session, atlas=atlas)
 
-    if args.use_mortality_metrics:
+    if not args.no_mortality_metrics:
         merge_mortality_metrics.add_metrics(session=session, atlas=atlas)
 
     if not args.no_vaccine_metrics:
@@ -131,51 +131,51 @@ def _compute_world(session, args):
 
     if not args.no_state_policy:
         logging.info("Loading and merging state policy database...")
-        policy_credits = fetch_state_policy.credits()
         state_policy = fetch_state_policy.get_events(session=session)
         for f, events in state_policy.groupby(level="state_fips", sort=False):
             region = atlas.by_fips.get(f)
             if region is None:
-                warnings.warn(f"Unknown state policy FIPS: {f}")
+                warn(f"Unknown state policy FIPS: {f}")
                 continue
 
+            region.credits.update(fetch_state_policy.credits())
+
             for e in events.itertuples():
-                region.policy_changes.append(
+                region.metrics.policy.append(
                     PolicyChange(
                         date=e.Index[1],
                         score=e.score,
                         emoji=e.emoji,
                         text=e.policy,
-                        credits=policy_credits,
                     )
                 )
 
     if not args.no_california_blueprint:
         logging.info("Loading and merging California blueprint data chart...")
-        cal_credits = fetch_california_blueprint.credits()
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         for county in cal_counties.values():
             region = atlas.by_fips.get(county.fips)
             if region is None:
-                warnings.warn(f"FIPS {county.fips} (CA {county.name}) missing")
+                warn(f"FIPS {county.fips} (CA {county.name}) missing")
                 continue
+
+            region.credits.update(fetch_california_blueprint.credits())
 
             for date, tier in sorted(county.tier_history.items()):
                 text = tier.color
                 if tier.number < 10:
                     text = f"Entered {tier.color} tier ({tier.name})"
-                region.policy_changes.append(
+                region.metrics.policy.append(
                     PolicyChange(
                         date=date,
                         emoji=tier.emoji,
                         score=(-3 if tier.number <= 2 else +3),
                         text=text,
-                        credits=cal_credits,
                     )
                 )
 
     for r in atlas.by_jhu_id.values():
-        r.policy_changes.sort(
+        r.metrics.policy.sort(
             key=lambda p: (p.date.date(), -abs(p.score), p.score)
         )
 
@@ -194,7 +194,6 @@ def _compute_world(session, args):
         ]
 
         logging.info("Loading Google mobility data...")
-        mobility_credits = fetch_google_mobility.credits()
         mobility_data = fetch_google_mobility.get_mobility(session=session)
         logging.info("Merging Google mobility data...")
         mobility_data.sort_values(by=gcols + ["date"], inplace=True)
@@ -211,47 +210,44 @@ def _compute_world(session, args):
             if region is None:
                 continue
 
+            region.credits.update(fetch_google_mobility.credits())
+
             pcfb = "percent_change_from_baseline"  # common, long suffix
-            region.metrics["mobility"] = {
+            region.metrics.mobility = {
                 "residential": make_metric(
                     c="tab:brown",
                     em=1,
                     ord=1.0,
-                    cred=mobility_credits,
                     raw=100 + m[f"residential_{pcfb}"],
                 ),
                 "retail / recreation": make_metric(
                     c="tab:orange",
                     em=1,
                     ord=1.1,
-                    cred=mobility_credits,
                     raw=100 + m[f"retail_and_recreation_{pcfb}"],
                 ),
                 "workplaces": make_metric(
                     c="tab:red",
                     em=1,
                     ord=1.2,
-                    cred=mobility_credits,
                     raw=100 + m[f"workplaces_{pcfb}"],
                 ),
                 "grocery / pharmacy": make_metric(
                     c="tab:blue",
                     em=0,
                     ord=1.4,
-                    cred=mobility_credits,
                     raw=100 + m[f"grocery_and_pharmacy_{pcfb}"],
                 ),
                 "transit stations": make_metric(
                     "tab:purple",
                     em=0,
                     ord=1.5,
-                    cred=mobility_credits,
                     raw=100 + m[f"transit_stations_{pcfb}"],
                 ),
             }
 
             # Raw daily mobility metrics are confusing, don't show them.
-            for m in region.metrics["mobility"].values():
+            for m in region.metrics.mobility.values():
                 m.frame.drop(columns=["raw"], inplace=True)
 
     #
@@ -259,108 +255,118 @@ def _compute_world(session, args):
     #
 
     def roll_up_metrics(r):
-        catname_popvals, total_popvals, sub_pop_total = {}, {}, 0
+        totname_popvals, subs_pop = {}, 0
         for key, sub in list(r.subregions.items()):
             roll_up_metrics(sub)
-            if not any(m.emphasis >= 0 for m in sub.metrics["covid"].values()):
-                warnings.warn(f"No COVID metrics: {sub.path()}")
+            if not any(m.emphasis >= 0 for m in sub.metrics.covid.values()):
+                warn(f"No COVID metrics: {sub.debug_path()}")
                 del r.subregions[key]
                 continue
 
-            sub_pop = sub.totals["population"]
-            sub_pop_total += sub_pop
+            sub_pop = sub.metrics.total["population"]
+            if not sub_pop:
+                warn(f"No population: {sub.debug_path()}")
+                del r.subregions[key]
+                continue
 
-            for name, value in sub.totals.items():
-                total_popvals.setdefault(name, []).append((sub_pop, value))
+            subs_pop += sub_pop
+            for name, value in sub.metrics.total.items():
+                totname_popvals.setdefault(name, []).append((sub_pop, value))
 
-            for cat, metrics in sub.metrics.items():
-                for name, metric in metrics.items():
-                    if metric.rollup:
-                        catname, popval = (cat, name), (sub_pop, metric)
-                        catname_popvals.setdefault(catname, []).append(popval)
-
-        pop = r.totals["population"]
-        if pop == 0:
-            pop = r.totals["population"] = sub_pop_total
-        if sub_pop_total > pop * 1.1:
-            warnings.warn(
-                f"Overpopulation: {r.path()} has {pop}p, "
-                f"{sub_pop_total}p in parts"
+        pop = r.metrics.total.setdefault("population", subs_pop)
+        if subs_pop > pop * 1.1:
+            warn(
+                f"Overpopulation: {r.debug_path()} has {pop}p, "
+                f"{subs_pop}p in parts"
             )
-        if sub_pop_total > 0 and sub_pop_total < pop * 0.9:
-            warnings.warn(
-                f"Underpopulation: {r.path()} has {pop}p, "
-                f"{sub_pop_total}p in parts"
+        if subs_pop > 0 and subs_pop < pop * 0.9:
+            warn(
+                f"Underpopulation: {r.debug_path()} has {pop}p, "
+                f"{subs_pop}p in parts"
             )
 
-        for name, popvals in total_popvals.items():
-            total_pop = sum(p for p, v in popvals)
-            if abs(total_pop - pop) > pop * 0.1:
+        for totname, popvals in totname_popvals.items():
+            totname_pop = sum(p for p, v in popvals)
+            if abs(totname_pop - pop) > pop * 0.1:
                 continue  # Don't synthesize if population doesn't match.
 
-            sub_total = sum(val for pop, val in popvals)
-            r.totals[name] = max(r.totals.get(name, 0), sub_total)
+            subs_total = sum(v for p, v in popvals)
+            r.metrics.total[totname] = max(r.metrics.total[totname], subs_total)
 
         week = pandas.Timedelta(weeks=1)
-        for (cat, name), popvals in catname_popvals.items():
-            metric_pop = sum(p for p, v in popvals)
-            if abs(metric_pop - pop) > pop * 0.1:
-                continue  # Don't synthesize if population doesn't match.
+        for cat in ["covid", "hospital", "map", "mobility", "vaccine"]:
+            name_popvals = {}
+            for sub in r.subregions.values():
+                sub_pop = sub.metrics.total["population"]
+                for name, metric in getattr(sub.metrics, cat).items():
+                    name_popvals.setdefault(name, []).append((sub_pop, metric))
 
-            ends = list(sorted(v.frame.index[-1] for p, v in popvals))
-            end = ends[len(ends) // 2]  # Use the median end date.
+            cat_metrics = getattr(r.metrics, cat)
+            for name, popvals in name_popvals.items():
+                metric_pop = sum(p for p, v in popvals)
+                if abs(metric_pop - pop) > pop * 0.1:
+                    continue  # Don't synthesize if population doesn't match.
 
-            old_metric = r.metrics[cat].get(name)
-            if old_metric and old_metric.frame.index[-1] > end - week:
-                continue  # Higher level has reasonably fresh data already
+                ends = list(sorted(v.frame.index[-1] for p, v in popvals))
+                end = ends[len(ends) // 2]  # Use the median end date.
 
-            popvals.sort(reverse=True, key=lambda pv: pv[0])  # Highest first.
-            first_pop, first_val = popvals[0]  # Most populated entry.
-            frame = first_pop * first_val.frame.loc[:end]
-            for next_pop, next_val in popvals[1:]:
-                next_frame = next_pop * next_val.frame.loc[:end]
-                frame = frame.add(next_frame, fill_value=0)
+                old_metric = cat_metrics.get(name)
+                if old_metric and old_metric.frame.index[-1] > end - week:
+                    continue  # Higher level has reasonably fresh data already.
 
-            r.metrics[cat][name] = replace(
-                first_val,
-                frame=frame / metric_pop,
-                credits=dict(c for p, v in popvals for c in v.credits.items()),
-            )
+                # Use metric metadata from the most populated subregion
+                popvals.sort(reverse=True, key=lambda pv: pv[0])
+                first_pop, first_val = popvals[0]
+                frame = first_pop * first_val.frame.loc[:end]
 
-        # Remove metrics which have no (or very little) valid data
-        for cat in r.metrics.values():
-            for name, m in list(cat.items()):
+                # Merge population-weighted data from other subregions
+                for next_pop, next_val in popvals[1:]:
+                    next_frame = next_pop * next_val.frame.loc[:end]
+                    frame = frame.add(next_frame, fill_value=0)
+
+                cat_metrics[name] = replace(first_val, frame=frame / metric_pop)
+
+        # Remove metrics which have no (or very little) valid data.
+        for cat_metrics in [
+            r.metrics.covid,
+            r.metrics.hospital,
+            r.metrics.map,
+            r.metrics.mobility,
+            r.metrics.variant,
+            r.metrics.vaccine,
+            r.metrics.wastewater,
+        ]:
+            for name, m in list(cat_metrics.items()):
                 if m.frame.value.count() < 2:
-                    del cat[name]
+                    del cat_metrics[name]
 
-        # Clean up some categories if we didn't get any "headline" data
-        for cat in ("vaccine", "serology", "mobility"):
-            if not any(m.emphasis > 0 for m in r.metrics[cat].values()):
-                r.metrics[cat].clear()
+        # Clean up some categories if we didn't get any "headline" data.
+        for category in r.metrics.vaccine, r.metrics.mobility:
+            if not any(m.emphasis > 0 for m in category.values()):
+                category.clear()
 
     logging.info("Rolling up metrics...")
     roll_up_metrics(atlas.world)
 
-    atlas.world.metrics.pop("mobility")  # World mobility rollup is weird.
+    # World mobility rollup is weird.
+    atlas.world.metrics.mobility.clear()
 
     #
     # Interpolate synchronized weekly map metrics from time series metrics.
     #
 
     # Sync map metric weekly data points to this end date.
-    latest = max(
-        m.frame.index[-1] for m in atlas.world.metrics["covid"].values()
-    )
+    latest = max(m.frame.index[-1] for m in atlas.world.metrics.covid.values())
 
     def add_map_metric(region, c_name, m_name, mul, col, i_col, d_col):
-        m = region.metrics["covid"].get(c_name)
+        m = region.metrics.covid.get(c_name)
         if m is not None:
             first = m.frame.index[0].astimezone(latest.tz)
             weeks = (latest - first) // pandas.Timedelta(days=7)
             dates = pandas.date_range(end=latest, periods=weeks, freq="7D")
             value = mul * numpy.interp(dates, m.frame.index, m.frame.value)
             if (~numpy.isnan(value)).any():
-                region.metrics["map"][m_name] = replace(
+                region.metrics.map[m_name] = replace(
                     m,
                     frame=pandas.DataFrame({"value": value}, index=dates),
                     color=col,
@@ -372,7 +378,7 @@ def _compute_world(session, args):
         for sub in region.subregions.values():
             make_map_metrics(sub)
 
-        mul = region.totals["population"] / 50  # 100K => 2K, 10Mp => 200K
+        mul = region.metrics.total["population"] / 50  # 100K => 2K, 10M => 200K
         add_map_metric(
             region,
             "COVID positives / day / 100Kp",
@@ -405,14 +411,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, argument_parser]
     )
-    parser.add_argument("--print_credits", action="store_true")
     parser.add_argument("--print_data", action="store_true")
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
     world = get_world(session=session, args=args)
-    print(
-        world.debug_tree(
-            with_credits=args.print_credits, with_data=args.print_data
-        )
-    )
+    print(world.debug_tree(with_data=args.print_data))
