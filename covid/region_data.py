@@ -36,6 +36,7 @@ class PolicyChange:
 class Metrics:
     total: collections.Counter = field(default_factory=collections.Counter)
     policy: List[PolicyChange] = field(default_factory=list)
+
     covid: Dict[str, Metric] = field(default_factory=dict)
     hospital: Dict[str, Metric] = field(default_factory=dict)
     map: Dict[str, Metric] = field(default_factory=dict)
