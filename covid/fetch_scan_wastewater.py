@@ -19,7 +19,8 @@ def get_wastewater(session):
     )
 
     key_cols = [
-        "Plant",
+        "City",
+        "State_Abbr",
         "Site_Name",
         "Collection_Date",
     ]
@@ -49,11 +50,11 @@ if __name__ == "__main__":
     df.info(verbose=True, show_counts=True)
     print()
 
-    for site, rows in df.groupby(level=["Plant", "Site_Name"]):
+    for site, rows in df.groupby(level=["City", "State_Abbr", "Site_Name"]):
         timestamps = set()
-        print(f"=== {site[0]} / {site[1]} ===")
+        print(f"=== {site[0]}, {site[1]} / {site[2]} ===")
         for row in rows.itertuples():
-            plant, site, timestamp = row.Index
+            city, state, site, timestamp = row.Index
             print(
                 f"{row.Sample_ID} {timestamp.strftime('%Y-%m-%d')} "
                 f"N={row.SC2_N_gc_g_dry_weight:<10.1f} "

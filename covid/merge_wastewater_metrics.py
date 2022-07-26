@@ -8,40 +8,31 @@ import matplotlib.cm
 import covid.fetch_scan_wastewater
 from covid.region_data import make_metric
 
-PLANT_FIPS = {
-    "Ann Arbor, MI": 26161,
-    "Big Creek, Roswell, GA": 5049,
-    "Coeur d'Alene, ID": 16055,
-    "College Park, GA": 13121,
-    "Contra Costa County, CA": 6013,
-    "Davis, CA": 6113,
-    "Eastern, Orange County, FL": 12095,
-    "Garland, TX": 48113,
-    "Half Moon Bay, CA": 6081,
-    "Jackson, MI": 26075,
-    "Johns Creek, Roswell, GA": 5049,
-    "Little River, Roswell, GA": 5049,
-    "Los Angeles County, CA": 6037,
-    "Louisville, KY": 21111,
-    "North, Parker, CO": 8035,
-    "Northwest, Orange County, FL": 12095,
-    "Novato, CA": 6041,
-    "Oakland, CA": 6001,
-    "Ontario, CA": 6071,
-    "Orange County, FL": 12095,
-    "Parker, CO": 8035,
-    "Paso Robles, CA": 6079,
-    "Petaluma, CA": 6097,
-    "Roswell, GA": 5049,
-    "San Mateo, CA": 6081,
-    "Santa Cruz County, CA": 6087,
-    "Santa Cruz, CA": 6087,
-    "South, Orange County, FL": 12095,
-    "South, Parker, CO": 8035,
-    "Southeast San Francisco, CA": 6075,
-    "Sunnyvale, TX": 48113,
-    "University of California, Davis, CA": 6113,
-    "West Contra Costa County, CA": 6013,
+STATECITY_FIPS = {
+    ("CA", "Carson"): 6037,
+    ("CA", "Richmond"): 6013,
+    ("CA", "Davis"): 6113,
+    ("CA", "Half Moon Bay"): 6081,
+    ("CA", "Martinez"): 6013,
+    ("CA", "Novato"): 6041,
+    ("CA", "Oakland"): 6001,
+    ("CA", "Ontario"): 6071,
+    ("CA", "Paso Robles"): 6079,
+    ("CA", "Petaluma"): 6097,
+    ("CA", "San Francisco"): 6075,
+    ("CA", "San Mateo"): 6081,
+    ("CA", "Santa Cruz"): 6087,
+    ("CO", "Parker"): 8035,
+    ("FL", "Orlando"): 12095,
+    ("GA", "College Park"): 13121,
+    ("GA", "Roswell"): 5049,
+    ("ID", "Coeur D Alene"): 16055,
+    ("KY", "Louisville"): 21111,
+    ("MI", "Ann Arbor"): 26161,
+    ("MI", "Jackson"): 26075,
+    ("TX", "Garland"): 48113,
+    ("TX", "Sunnyvale"): 48113,
+
 }
 
 
@@ -50,20 +41,21 @@ def add_metrics(session, atlas):
     df = covid.fetch_scan_wastewater.get_wastewater(session)
 
     dups = df.index.duplicated(keep=False)
-    for plant, site, timestamp in df.index[dups]:
+    for city, state, site, timestamp in df.index[dups]:
         warn(
             "Duplicate SCAN wastewater data: "
-            f"{plant} ({site}) {timestamp.strftime('%Y-%m-%d')}"
+            f"{city}, {state} ({site}) {timestamp.strftime('%Y-%m-%d')}"
         )
 
     df = df[~dups]
-    for plant_i, ((plant, site), rows) in enumerate(
-        df.groupby(level=["Plant", "Site_Name"], sort=False, as_index=False)
+    index_cols = ["City", "State_Abbr", "Site_Name"]
+    for plant_i, ((city, state, site), rows) in enumerate(
+        df.groupby(level=index_cols, sort=False, as_index=False)
     ):
-        rows.reset_index(["Plant", "Site_Name"], drop=True, inplace=True)
-        fips = PLANT_FIPS.get(plant.split("-")[0].strip())
+        rows.reset_index(index_cols, drop=True, inplace=True)
+        fips = STATECITY_FIPS.get((state, city))
         if not fips:
-            warn(f"Unknown SCAN wastewater plant: {plant}")
+            warn(f"Unknown SCAN wastewater city: {city}, {state}")
             continue
 
         region = atlas.by_fips.get(fips)
