@@ -57,8 +57,9 @@ def make_region_html(region, args):
     with doc.body:
         tags.attr(id="map_key_target", tabindex="-1")
         with tags.h1():
-            for part in region.path[:-1]:
-                tags.a(part, href=doc_link(urls.region_page(region)))
+            for i in range(len(region.path) - 1):
+                url = urls.region_page(region.path[:i + 1])
+                tags.a(region.path[i], href=doc_link(url))
                 util.text(" » ")
 
             util.text(region.name)
