@@ -32,7 +32,6 @@ STATECITY_FIPS = {
     ("MI", "Jackson"): 26075,
     ("TX", "Garland"): 48113,
     ("TX", "Sunnyvale"): 48113,
-
 }
 
 

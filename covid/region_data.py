@@ -1,8 +1,8 @@
 """Basic data structures for COVID-relevant metrics."""
 
 import collections
-import re
 import dataclasses
+import re
 from dataclasses import field
 from typing import Dict
 from typing import List
