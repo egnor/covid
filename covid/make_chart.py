@@ -1,6 +1,7 @@
 """Functions that generate trend charts from region metrics."""
 
 import pathlib
+import textwrap
 
 import matplotlib
 import matplotlib.dates
@@ -9,7 +10,6 @@ import matplotlib.pyplot
 import matplotlib.ticker
 import numpy
 import pandas
-import textwrap
 
 from covid import urls
 
@@ -56,8 +56,7 @@ def _write_chart_image(region, site_dir):
 
     height_stacks = [p(None, region) for p in plotters]
     fig = matplotlib.pyplot.figure(
-        figsize=(10, sum(sum(stack) for stack in height_stacks)),
-        dpi=200
+        figsize=(10, sum(sum(stack) for stack in height_stacks)), dpi=200
     )
 
     subplots = fig.subplots(
@@ -71,7 +70,10 @@ def _write_chart_image(region, site_dir):
     top = True
     for plotter, stack in zip(plotters, height_stacks):
         if stack:
-            axes_stack, subplots = subplots[:len(stack)], subplots[len(stack):]
+            axes_stack, subplots = (
+                subplots[: len(stack)],
+                subplots[len(stack) :],
+            )
             plotter(axes_stack, region)
             for axes in axes_stack:
                 _plot_policy_changes(axes, region.metrics.policy, detailed=top)
@@ -155,7 +157,7 @@ def _plot_wastewater(stack, region):
             continue
 
         axes = stack[i]
-        title = f"Wastewater:\n{site}"
+        title = f"{site} wastewater"
         _setup_xaxis(axes, title=title, wrapchars=25, titlesize=35)
         _setup_yaxis(axes, title="COVID RNA", ylim=(0, ylim), tick=(500, 100))
         _plot_metrics(axes, mets)
@@ -229,12 +231,17 @@ def _plot_metrics(axes, metrics, detailed=True):
         alpha = 1.0 if m.emphasis >= 0 else 0.8
         zorder = 2.0 - m.order / 100 - m.emphasis / 10
 
-        if detailed and ("raw" in m.frame.columns):
-            limit = m.frame.raw.quantile(0.99) * 2
-            masked = m.frame.raw.mask(m.frame.raw.gt(limit))
+        deltas = (m.frame.notna().any(1)).index.to_series().diff()
+        gaps = deltas[deltas > pandas.Timedelta(days=15)]
+        breaks = pandas.DataFrame(index=gaps.index - gaps / 2)
+        frame = pandas.concat([m.frame, breaks])
+        frame.sort_index(inplace=True)
 
+        if detailed and ("raw" in frame.columns) and frame.raw.any():
+            limit = frame.raw.quantile(0.99) * 2
+            masked = frame.raw.mask(frame.raw.gt(limit))
             axes.plot(
-                m.frame.index,
+                frame.index,
                 masked,
                 color=m.color,
                 alpha=alpha * 0.5,
@@ -243,20 +250,20 @@ def _plot_metrics(axes, metrics, detailed=True):
                 ls=style,
             )
 
-        if "value" in m.frame.columns and m.frame.value.any():
-            last_date = m.frame.value.last_valid_index()
+        if ("value" in frame.columns) and frame.value.any():
+            last_date = frame.value.last_valid_index()
             blot_size = (width * 2) ** 2
             axes.scatter(
                 [last_date],
-                [m.frame.value.loc[last_date]],
+                [frame.value.loc[last_date]],
                 color=m.color,
                 alpha=alpha,
                 zorder=zorder + 0.002,
                 s=blot_size,
             )
             artists = axes.plot(
-                m.frame.index,
-                m.frame.value,
+                frame.index,
+                frame.value,
                 label=name,
                 color=m.color,
                 alpha=alpha,
@@ -342,7 +349,7 @@ def _setup_xaxis(axes, title=None, wrapchars=15, titlesize=45):
 
     text = "\n".join(
         line
-        for para in (title or '').splitlines()
+        for para in (title or "").splitlines()
         for line in textwrap.wrap(para, width=wrapchars, break_on_hyphens=False)
     )
 

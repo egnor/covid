@@ -85,6 +85,7 @@ class Region:
             out += f"\n    {name} ({url})"
 
         for cat, metrics in dataclasses.asdict(r.metrics).items():
+            # TODO: Fix this for wastewater, which has a sub-dict
             if isinstance(metrics, dict):
                 for name, m in metrics.items():
                     if isinstance(m, dict):

@@ -50,6 +50,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Duplicate SCAN wastewater data: Davis, .* 2021-08-12"
     r"|Duplicate SCAN wastewater data: Oakland, .* 2022-03-17"
     r"|Duplicate SCAN wastewater data: University of California, .* 2021-11-02"
+    r"|Missing Biobot wastewater FIPS: 780[123]0 .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
     r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"
     r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
@@ -313,6 +314,9 @@ def _compute_world(session, args):
                 old_metric = cat_metrics.get(name)
                 if old_metric and old_metric.frame.index[-1] > end - week:
                     continue  # Higher level has reasonably fresh data already.
+
+                num = len(popvals)
+                logging.debug(f"Rollup: {r.debug_path()}: {num}x {cat}[{name}]")
 
                 # Use metric metadata from the most populated subregion
                 popvals.sort(reverse=True, key=lambda pv: pv[0])

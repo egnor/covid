@@ -120,7 +120,12 @@ if __name__ == "__main__":
         )
 
         for (target, lab, gene, units), target_rows in site_rows.groupby(
-            level=["pcr_target", "lab_id", "pcr_gene_target", "pcr_target_units"]
+            level=[
+                "pcr_target",
+                "lab_id",
+                "pcr_gene_target",
+                "pcr_target_units",
+            ]
         ):
             print(f"{site} {target}({gene}) {lab} ({units})")
             for date, date_rows in target_rows.groupby(
@@ -132,8 +137,8 @@ if __name__ == "__main__":
                         f"  {date.strftime('%Y-%m-%d')} ({row.sample_id}):"
                         + (
                             f" {row.pcr_target_avg_conc:3.1f}"
-                            if "log10" in units else
-                            f" {row.pcr_target_avg_conc / 1e3:5.0f}K"
+                            if "log10" in units
+                            else f" {row.pcr_target_avg_conc / 1e3:5.0f}K"
                         )
                         + (
                             f" {row.flow_rate:5.1f}mgd"
@@ -175,7 +180,8 @@ if __name__ == "__main__":
                             else ""
                         )
                         + (
-                            f" {abbrev(row.hum_frac_target_mic)}=" + (
+                            f" {abbrev(row.hum_frac_target_mic)}="
+                            + (
                                 f"{row.hum_frac_mic_conc:.1f}"
                                 if "log10" in units
                                 else f"{row.hum_frac_mic_conc / 1e6:.0f}M"
@@ -201,6 +207,5 @@ if __name__ == "__main__":
                     print("  ^^^ Redundant samples!")
                     print(date_rows.iloc[0].compare(date_rows.iloc[1]))
                     print()
-
 
             print()

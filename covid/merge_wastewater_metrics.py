@@ -1,14 +1,15 @@
 """Functions to merge wastewater sampling metrics into a RegionAtlas"""
 
 import logging
+import re
 from warnings import warn
 
 import matplotlib.cm
 import numpy
-import re
 
-import covid.fetch_scan_wastewater
+import covid.fetch_biobot_wastewater
 import covid.fetch_calsuwers_wastewater
+import covid.fetch_scan_wastewater
 from covid.region_data import make_metric
 
 STATECITY_FIPS = {
@@ -52,14 +53,13 @@ PLANT_RENAME = {
         r"Joint Water Pollution Control Plant": "LA County JWPCP",
         r"Margaret H Chandler WWRF, San Bernardino": "San Bernardino City",
         r"Regional Water Recycling Plant No.1 (RP-1)": "Inland Empire RP-1",
+        r"San Diego EW Blom Point Loma WWTP": "San Diego City",
         r"San Jose Santa Clara": "San Jose",
         r"Sunnyvale Santa Clara": "Sunnyvale",
         r"Sewer Authority Mid-Coastside": "Half Moon Bay SAM",
         r"Southeast San Francisco": "SFPUC Southeast",
         r"West County Wastewater District": "West County",
-
         r"\bcity of ": "",
-
         r" center\b": "",
         r" control\b": "",
         r" district\b": "",
@@ -104,50 +104,6 @@ def plant_name(name):
 
 def add_metrics(session, atlas):
     #
-    # Cal-SuWers (California Department of Public Health)
-    #
-
-    logging.info("Loading and merging Cal-SuWers wastewater data...")
-    df = covid.fetch_calsuwers_wastewater.get_wastewater(session)
-    df = df[~df.index.duplicated()]  # Redundant samples are common!?
-
-    for wwtp, wwtp_rows in df.groupby(level="wwtp_name", sort=False):
-        wwtp_rows.reset_index("wwtp_name", drop=True, inplace=True)
-        wwtp_first = wwtp_rows.iloc[0]
-        name = plant_name(wwtp_first['FACILITY NAME'])
-
-        fips = wwtp_first.county_names.split(",")[0].strip()
-        fips = int(STATECITY_FIPS.get(("CA", fips), fips))
-        region = atlas.by_fips.get(fips)
-        if not region:
-            warn(f"Unknown Cal-SuWers wastewater county: {fips}")
-            continue
-
-        region.credits.update(covid.fetch_calsuwers_wastewater.credits())
-
-        series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
-        for (target, lab, units), rows in wwtp_rows.groupby(
-            level=series_cols, sort=False
-        ):
-            samples = rows.pcr_target_avg_conc
-            if units[:6] == "log10 ":
-                samples = numpy.power(10.0, samples)
-                units = units[6:]
-            for rx, sub in UNITS_RENAME.items():
-                units = rx.sub(sub, units)
-            
-            ww_metrics = region.metrics.wastewater.setdefault(name, {})
-            source = f"{target} {lab}" if target != "sars-cov-2" else lab
-            title = f"{source} K{units}"
-            color_i = (4 + 2 * len(ww_metrics)) % 19
-            ww_metrics[title] = make_metric(
-                c=matplotlib.cm.tab20b.colors[color_i],
-                em=1,
-                ord=1.0,
-                raw=samples.groupby("sample_collect_date").mean() * 1e-3,
-            )
-
-    #
     # SCAN (Stanford and Verily)
     #
 
@@ -191,6 +147,73 @@ def add_metrics(session, atlas):
             em=0,
             ord=1.0,
             raw=rows.HV_69_70_Del_gc_g_dry_weight * 1e-3,
+        )
+
+    #
+    # Cal-SuWers (California Department of Public Health)
+    #
+
+    logging.info("Loading and merging Cal-SuWers wastewater data...")
+    df = covid.fetch_calsuwers_wastewater.get_wastewater(session)
+    df = df[~df.index.duplicated()]  # Redundant samples are common!?
+
+    for wwtp, wwtp_rows in df.groupby(level="wwtp_name", sort=False):
+        wwtp_rows.reset_index("wwtp_name", drop=True, inplace=True)
+        wwtp_first = wwtp_rows.iloc[0]
+        name = plant_name(wwtp_first["FACILITY NAME"])
+
+        fips = wwtp_first.county_names.split(",")[0].strip()
+        fips = int(STATECITY_FIPS.get(("CA", fips), fips))
+        region = atlas.by_fips.get(fips)
+        if not region:
+            warn(f"Unknown Cal-SuWers wastewater county: {fips}")
+            continue
+
+        region.credits.update(covid.fetch_calsuwers_wastewater.credits())
+
+        series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
+        for (target, lab, units), rows in wwtp_rows.groupby(
+            level=series_cols, sort=False
+        ):
+            samples = rows.pcr_target_avg_conc
+            if units[:6] == "log10 ":
+                samples = numpy.power(10.0, samples)
+                units = units[6:]
+            for rx, sub in UNITS_RENAME.items():
+                units = rx.sub(sub, units)
+
+            ww_metrics = region.metrics.wastewater.setdefault(name, {})
+            source = f"{target} {lab}" if target != "sars-cov-2" else lab
+            title = f"{source} K{units}"
+            color_i = (4 + 2 * len(ww_metrics)) % 19
+            ww_metrics[title] = make_metric(
+                c=matplotlib.cm.tab20b.colors[color_i],
+                em=1,
+                ord=1.0,
+                raw=samples.groupby("sample_collect_date").mean() * 1e-3,
+            )
+
+    #
+    # Biobot Analytics
+    #
+
+    logging.info("Loading and merging Biobot wastewater data...")
+    df = covid.fetch_biobot_wastewater.get_wastewater(session)
+    for fips, rows in df.groupby(level="fipscode", sort=False, as_index=False):
+        first = rows.iloc[0]
+        rows.reset_index("fipscode", drop=True, inplace=True)
+        region = atlas.by_fips.get(fips)
+        if not region:
+            warn(f"Missing Biobot wastewater FIPS: {fips} ({first['name']})")
+            continue
+
+        region.credits.update(covid.fetch_biobot_wastewater.credits())
+        ww_metrics = region.metrics.wastewater.setdefault("Biobot", {})
+        ww_metrics[f"Kcp/L wet"] = make_metric(
+            c=matplotlib.cm.tab20b.colors[(4 + 2 * len(ww_metrics)) % 19],
+            em=1,
+            ord=1.0,
+            v=rows.effective_concentration_rolling_average,
         )
 
 
