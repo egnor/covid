@@ -14,7 +14,7 @@ def get_wastewater(session):
     response.raise_for_status()
     df = pandas.read_csv(
         io.StringIO(response.text),
-        parse_dates=["Date", "Collection_Date"],
+        parse_dates=["Collection_Date"],
         date_parser=lambda v: pandas.to_datetime(v, utc=True),
     )
 
