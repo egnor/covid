@@ -115,36 +115,37 @@ def add_metrics(session, atlas):
         wwtp_rows.reset_index("wwtp_name", drop=True, inplace=True)
         wwtp_first = wwtp_rows.iloc[0]
         name = plant_name(wwtp_first['FACILITY NAME'])
-        for fips in wwtp_first.county_names.split(","):
-            fips = int(STATECITY_FIPS.get(("CA", fips), fips))
-            region = atlas.by_fips.get(fips)
-            if not region:
-                warn(f"Unknown Cal-SuWers wastewater county: {fips}")
-                continue
 
-            region.credits.update(covid.fetch_calsuwers_wastewater.credits())
+        fips = wwtp_first.county_names.split(",")[0].strip()
+        fips = int(STATECITY_FIPS.get(("CA", fips), fips))
+        region = atlas.by_fips.get(fips)
+        if not region:
+            warn(f"Unknown Cal-SuWers wastewater county: {fips}")
+            continue
 
-            series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
-            for (target, lab, units), rows in wwtp_rows.groupby(
-                level=series_cols, sort=False
-            ):
-                samples = rows.pcr_target_avg_conc
-                if units[:6] == "log10 ":
-                    samples = numpy.power(10.0, samples)
-                    units = units[6:]
-                for rx, sub in UNITS_RENAME.items():
-                    units = rx.sub(sub, units)
-                
-                ww_metrics = region.metrics.wastewater.setdefault(name, {})
-                source = f"{target} {lab}" if target != "sars-cov-2" else lab
-                title = f"{source} K{units}"
-                color_i = (4 + 2 * len(ww_metrics)) % 19
-                ww_metrics[title] = make_metric(
-                    c=matplotlib.cm.tab20b.colors[color_i],
-                    em=1,
-                    ord=1.0,
-                    raw=samples.groupby("sample_collect_date").mean() * 1e-3,
-                )
+        region.credits.update(covid.fetch_calsuwers_wastewater.credits())
+
+        series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
+        for (target, lab, units), rows in wwtp_rows.groupby(
+            level=series_cols, sort=False
+        ):
+            samples = rows.pcr_target_avg_conc
+            if units[:6] == "log10 ":
+                samples = numpy.power(10.0, samples)
+                units = units[6:]
+            for rx, sub in UNITS_RENAME.items():
+                units = rx.sub(sub, units)
+            
+            ww_metrics = region.metrics.wastewater.setdefault(name, {})
+            source = f"{target} {lab}" if target != "sars-cov-2" else lab
+            title = f"{source} K{units}"
+            color_i = (4 + 2 * len(ww_metrics)) % 19
+            ww_metrics[title] = make_metric(
+                c=matplotlib.cm.tab20b.colors[color_i],
+                em=1,
+                ord=1.0,
+                raw=samples.groupby("sample_collect_date").mean() * 1e-3,
+            )
 
     #
     # SCAN (Stanford and Verily)
