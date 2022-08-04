@@ -42,7 +42,7 @@ def get_mobility(session):
 
 def credits():
     return {
-        "https://www.google.com/covid19/mobility/": "Google Community Mobility Reports"
+        "https://google.com/covid19/mobility/": "Google Community Mobility Reports"
     }
 
 

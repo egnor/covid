@@ -66,7 +66,7 @@ def get_wastewater(session):
 
 def credits():
     return {
-        "https://www.cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/CalSuWers-Dashboard.aspx": "Cal-SuWers Network",
+        "https://cdph.ca.gov/Programs/CID/DCDC/Pages/COVID-19/CalSuWers-Dashboard.aspx": "Cal-SuWers Network",
     }
 
 

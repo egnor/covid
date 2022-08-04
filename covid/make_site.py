@@ -156,7 +156,9 @@ def make_region_html(region, args):
                 make_subregion_html(doc_url, s)
 
         with tags.p("Sources: ", cls="credits"):
-            for i, (url, text) in enumerate(sorted(region.credits.items())):
+            for i, (text, url) in enumerate(
+                sorted((v, k) for k, v in region.credits.items())
+            ):
                 util.text(", ") if i > 0 else None
                 tags.a(text, href=url)
 
