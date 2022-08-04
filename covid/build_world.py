@@ -334,7 +334,7 @@ def _compute_world(session, args):
             r.metrics.mobility,
             r.metrics.variant,
             r.metrics.vaccine,
-            r.metrics.wastewater,
+            *r.metrics.wastewater.values(),
         ]:
             for name, m in list(cat_metrics.items()):
                 if m.frame.value.count() < 2:

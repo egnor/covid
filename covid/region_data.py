@@ -42,7 +42,7 @@ class Metrics:
     mobility: Dict[str, Metric] = field(default_factory=dict)
     vaccine: Dict[str, Metric] = field(default_factory=dict)
     variant: Dict[str, Metric] = field(default_factory=dict)
-    wastewater: Dict[str, Metric] = field(default_factory=dict)
+    wastewater: Dict[str, Dict[str, Metric]] = field(default_factory=dict)
 
 
 @dataclasses.dataclass(eq=False)

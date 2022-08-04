@@ -9,6 +9,7 @@ import matplotlib.pyplot
 import matplotlib.ticker
 import numpy
 import pandas
+import textwrap
 
 from covid import urls
 
@@ -53,6 +54,36 @@ def _write_chart_image(region, site_dir):
         _plot_mobility,
     ]
 
+    height_stacks = [p(None, region) for p in plotters]
+    fig = matplotlib.pyplot.figure(
+        figsize=(10, sum(sum(stack) for stack in height_stacks)),
+        dpi=200
+    )
+
+    subplots = fig.subplots(
+        nrows=sum(len(stack) for stack in height_stacks),
+        ncols=1,
+        sharex=True,
+        squeeze=False,
+        gridspec_kw=dict(height_ratios=[h for s in height_stacks for h in s]),
+    )[:, 0]
+
+    top = True
+    for plotter, stack in zip(plotters, height_stacks):
+        if stack:
+            axes_stack, subplots = subplots[:len(stack)], subplots[len(stack):]
+            plotter(axes_stack, region)
+            for axes in axes_stack:
+                _plot_policy_changes(axes, region.metrics.policy, detailed=top)
+                _add_plot_legend(axes)
+                top = False
+
+    fig.align_ylabels()
+    fig.tight_layout(pad=0, h_pad=1)
+    fig.savefig(urls.file(site_dir, urls.chart_image(region)))
+    matplotlib.pyplot.close(fig)  # Reclaim memory.
+    return
+
     plotters, heights = zip(
         *[(p, h) for p in plotters for h in (p(None, region),) if h > 0]
     )
@@ -77,7 +108,7 @@ def _write_chart_image(region, site_dir):
     matplotlib.pyplot.close(fig)  # Reclaim memory.
 
 
-def _plot_covid(axes, region):
+def _plot_covid(stack, region):
     metrics = region.metrics.covid
     max_value = max(
         (m.frame.value.max() for m in metrics.values() if m.emphasis > 0),
@@ -85,15 +116,15 @@ def _plot_covid(axes, region):
     )
 
     ylim = min(1000, max(200, (max_value // 20 + 2) * 20))
-    if not axes:
-        return ylim / 75 if metrics else 0
+    if stack is None:
+        return [ylim / 75] if metrics else []
 
-    _setup_xaxis(axes, title=f"{region.path[-1]} COVID")
-    _setup_yaxis(axes, title="cases per capita", ylim=(0, ylim))
-    _plot_metrics(axes, metrics)
+    _setup_xaxis(stack[0], title=f"{region.path[-1]} COVID")
+    _setup_yaxis(stack[0], title="cases per capita", ylim=(0, ylim))
+    _plot_metrics(stack[0], metrics)
 
 
-def _plot_hospital(axes, region):
+def _plot_hospital(stack, region):
     metrics = region.metrics.hospital
     max_value = max(
         (
@@ -106,33 +137,39 @@ def _plot_hospital(axes, region):
     )
 
     ylim = min(1000, max(240, (max_value // 20 + 2) * 20))
-    if not axes:
-        return ylim / 120 if metrics else 0
+    if stack is None:
+        return [ylim / 120] if metrics else []
 
-    _setup_xaxis(axes, title="Hospitals")
-    _setup_yaxis(axes, title="patients per cap", ylim=(0, ylim), tick=(40, 20))
-    _plot_metrics(axes, metrics)
-
-
-def _plot_wastewater(axes, region):
-    metrics = region.metrics.wastewater
-    if not axes:
-        return 2 if metrics else 0
-
-    _setup_xaxis(axes, title="Wastewater")
-    _setup_yaxis(
-        axes, title="RNA per gram solids", ylim=(0, 1500), tick=(200, 100)
-    )
-    _plot_metrics(axes, metrics)
+    _setup_xaxis(stack[0], title="Hospitals")
+    _setup_yaxis(stack[0], title="per cap", ylim=(0, ylim), tick=(40, 20))
+    _plot_metrics(stack[0], metrics)
 
 
-def _plot_variant(axes, region):
+def _plot_wastewater(stack, region):
+    heights = []
+    for i, (site, mets) in enumerate(region.metrics.wastewater.items()):
+        max_value = max((m.frame.value.max() for m in mets.values()), default=0)
+        ylim = min(3000, max(1500, (max_value // 100 + 2) * 100))
+        heights.append(ylim / 1000)
+        if stack is None:
+            continue
+
+        axes = stack[i]
+        title = f"Wastewater:\n{site}"
+        _setup_xaxis(axes, title=title, wrapchars=25, titlesize=35)
+        _setup_yaxis(axes, title="COVID RNA", ylim=(0, ylim), tick=(500, 100))
+        _plot_metrics(axes, mets)
+
+    return heights
+
+
+def _plot_variant(stack, region):
     metrics = region.metrics.variant
-    if not axes:
-        return 2 if metrics else 0
+    if stack is None:
+        return [2] if metrics else []
 
-    _setup_xaxis(axes, title="Variants")
-    _setup_yaxis(axes, title="% sequenced samples")
+    _setup_xaxis(stack[0], title="Variants")
+    _setup_yaxis(stack[0], title="% sequenced samples")
 
     # Label top variants by frequency, weighting recent frequency heavily
     freq_name = [
@@ -150,36 +187,36 @@ def _plot_variant(axes, region):
         next = prev.add(v.frame.value, fill_value=0)
         assert next.index.equals(prev.index)
 
-        artist = axes.fill_between(
+        artist = stack[0].fill_between(
             x=next.index, y1=prev, y2=next, color=v.color, label=name
         )
         if name in top_variants:
-            _add_to_legend(axes, artist, order=-i)
+            _add_to_legend(stack[0], artist, order=-i)
         prev = next
 
-    _add_plot_legend(axes)
+    # _add_plot_legend(stack[0])
 
 
-def _plot_vaccine(axes, region):
+def _plot_vaccine(stack, region):
     metrics = region.metrics.vaccine
-    if not axes:
-        return 2 if metrics else 0
+    if stack is None:
+        return [2] if metrics else []
 
-    _setup_xaxis(axes, title="Vaccination")
-    _setup_yaxis(axes, title="% of pop (cumulative)")
-    axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics)
+    _setup_xaxis(stack[0], title="Vaccination")
+    _setup_yaxis(stack[0], title="% of pop (cumulative)")
+    stack[0].axhline(100, c="black", lw=1)  # 100% line.
+    _plot_metrics(stack[0], metrics)
 
 
-def _plot_mobility(axes, region):
+def _plot_mobility(stack, region):
     metrics = region.metrics.mobility
-    if not axes:
-        return 2 if metrics else 0
+    if stack is None:
+        return [2] if metrics else []
 
-    _setup_xaxis(axes, title="Mobility")
-    _setup_yaxis(axes, title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10))
-    axes.axhline(100, c="black", lw=1)  # Identity line.
-    _plot_metrics(axes, metrics)
+    _setup_xaxis(stack[0], title="Mobility")
+    _setup_yaxis(stack[0], title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10))
+    stack[0].axhline(100, c="black", lw=1)  # Identity line.
+    _plot_metrics(stack[0], metrics)
 
 
 def _plot_metrics(axes, metrics, detailed=True):
@@ -283,7 +320,7 @@ def _plot_policy_changes(axes, changes, detailed):
         )
 
 
-def _setup_xaxis(axes, title=None, titlesize=45):
+def _setup_xaxis(axes, title=None, wrapchars=15, titlesize=45):
     """Sets common X axis and plot style."""
 
     xmin = plot_start_date
@@ -303,11 +340,17 @@ def _setup_xaxis(axes, title=None, titlesize=45):
     for label in axes.get_xticklabels():
         label.set_horizontalalignment("left")
 
+    text = "\n".join(
+        line
+        for para in (title or '').splitlines()
+        for line in textwrap.wrap(para, width=wrapchars, break_on_hyphens=False)
+    )
+
     if title:
         axes.text(
             0.5,
             0.5,
-            "\n".join(title.split()),
+            text,
             transform=axes.transAxes,
             fontsize=titlesize,
             fontweight="bold",

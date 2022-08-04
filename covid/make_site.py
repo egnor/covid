@@ -179,7 +179,7 @@ def make_subregion_html(doc_url, region):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C for multiprocess
     parser = argparse.ArgumentParser(
         parents=[cache_policy.argument_parser, build_world.argument_parser]
     )
