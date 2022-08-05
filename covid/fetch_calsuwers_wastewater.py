@@ -95,25 +95,31 @@ if __name__ == "__main__":
     df.info(verbose=True, show_counts=True)
     print()
 
+    print("### Labs ###")
+    for lab in sorted(df.index.unique(level="lab_id")):
+        print(f"{lab:<4}")
+    print()
+
     for site, site_rows in df.groupby(level="wwtp_name"):
-        row = site_rows.iloc[-1]
+        site_row = site_rows.iloc[-1]
         print(
-            f"=== [{row.county_names}] {site} "
+            f"=== [{site_row.county_names}] {site} "
             + (
-                f"{row.sample_location} ({row.sample_location_specify}) "
-                if row.sample_location != "wwtp"
+                f"{site_row.sample_location} "
+                f"({site_row.sample_location_specify}) "
+                if site_row.sample_location != "wwtp"
                 else ""
             )
             + (
-                f"({row.institution_type}: "
-                if row.institution_type != "not institution specific"
+                f"({site_row.institution_type}: "
+                if site_row.institution_type != "not institution specific"
                 else "("
             )
-            + f"{row['FACILITY NAME']}) {row.population_served}p "
-            f"cap={row.capacity_mgd}mgd "
+            + f"{site_row['FACILITY NAME']}) {site_row.population_served}p "
+            f"cap={site_row.capacity_mgd}mgd "
             + (
-                f"{row.sewage_travel_time:.0f}h "
-                if pandas.notna(row.sewage_travel_time)
+                f"{site_row.sewage_travel_time:.0f}h "
+                if pandas.notna(site_row.sewage_travel_time)
                 else ""
             )
             + " ==="
@@ -131,10 +137,11 @@ if __name__ == "__main__":
             for date, date_rows in target_rows.groupby(
                 level="sample_collect_date"
             ):
-                for row in date_rows.itertuples():
+                for (row_i, row) in enumerate(date_rows.itertuples()):
                     notna_true = lambda value: pandas.notna(value) and value
                     print(
-                        f"  {date.strftime('%Y-%m-%d')} ({row.sample_id}):"
+                        f"{'*' if row_i else ' '} "
+                        f"{date.strftime('%Y-%m-%d')} ({row.sample_id}):"
                         + (
                             f" {row.pcr_target_avg_conc:3.1f}"
                             if "log10" in units
@@ -142,6 +149,7 @@ if __name__ == "__main__":
                         )
                         + (
                             f" {row.flow_rate:5.1f}mgd"
+                            f" {row.flow_rate * 1e6 / row.population_served:3.0f}g/p"
                             if pandas.notna(row.flow_rate)
                             else ""
                         )
@@ -202,10 +210,5 @@ if __name__ == "__main__":
                             else ""
                         )
                     )
-
-                if len(date_rows) > 1:
-                    print("  ^^^ Redundant samples!")
-                    print(date_rows.iloc[0].compare(date_rows.iloc[1]))
-                    print()
 
             print()

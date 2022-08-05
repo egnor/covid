@@ -140,7 +140,8 @@ def make_metric(c, em, ord, v=None, raw=None, cum=None):
         (nonzero_is,) = (raw.values > 0).nonzero()  # Skip first nonzero.
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
         first_i = max(0, min(first_i, len(raw) - 14))
-        smooth = raw.iloc[first_i:].clip(lower=0.0).rolling(7).mean()
+        clipped = raw.iloc[first_i:].clip(lower=0.0)
+        smooth = clipped.rolling(7, center=True).mean()
         df = pandas.DataFrame({"raw": raw, "value": smooth})
     else:
         raise ValueError(f"No data for metric")

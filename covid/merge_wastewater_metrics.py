@@ -182,6 +182,13 @@ def add_metrics(session, atlas):
             for rx, sub in UNITS_RENAME.items():
                 units = rx.sub(sub, units)
 
+            if lab == "CAL2":
+                samples = 0.01 * samples
+                units = units.replace("/", "/c", 1)
+            elif lab == "CAL3":
+                samples = 0.1 * samples
+                units = units.replace("/", "/d", 1)
+
             ww_metrics = region.metrics.wastewater.setdefault(name, {})
             source = f"{target} {lab}" if target != "sars-cov-2" else lab
             title = f"{source} K{units}"
