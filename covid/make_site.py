@@ -141,7 +141,8 @@ def make_region_html(region, args):
 
                 def pos(r):
                     m = r.metrics.covid.get("COVID positives / day / 100Kp")
-                    return m.frame.value.iloc[-1] * pop(r) if m else 0
+                    last = m and m.frame.value.last_valid_index()
+                    return m.frame.value.loc[last] * pop(r) if last else 0
 
                 tags.h2("Top 5 by population")
                 for s in list(sorted(subs, key=pop, reverse=True))[:5]:
