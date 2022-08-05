@@ -55,6 +55,7 @@ PLANT_RENAME = {
         r"Regional Water Recycling Plant No.1 (RP-1)": "Inland Empire RP-1",
         r"San Diego EW Blom Point Loma WWTP": "San Diego City",
         r"San Jose Santa Clara": "San Jose",
+        r"Silicon Valley": "Redwood City SVCW",
         r"Sunnyvale Santa Clara": "Sunnyvale",
         r"Sewer Authority Mid-Coastside": "Half Moon Bay SAM",
         r"Southeast San Francisco": "SFPUC Southeast",
