@@ -40,6 +40,19 @@ STATECITY_FIPS = {
     ("TX", "Sunnyvale"): 48113,
 }
 
+# Via communication from the Cal-SuWers team
+CALSUWERS_LABS = {
+    "A": "Luminultra",
+    "B": "Luminultra",
+    "Biobot001": "Biobot",
+    "CAL1": "SCCWRP",
+    "CAL2": "LACSD",
+    "CAL3": "Zymo Research",
+    "CAL4": "UC Berkeley",
+    "CAL5EURFNS": "Eurofins / HCVT",
+    "VLT": "Verily / SCAN / HCVT",
+}
+
 PLANT_RENAME = {
     re.compile(rx, flags=re.I): sub
     for rx, sub in {
@@ -136,14 +149,14 @@ def add_metrics(session, atlas):
         region.credits.update(covid.fetch_scan_wastewater.credits())
         site = plant_name(site)
         ww_metrics = region.metrics.wastewater.setdefault(site, {})
-        ww_metrics[f"SCAN Kcp/g dry"] = make_metric(
+        ww_metrics[f"Kcp/g dry (WastewaterSCAN)"] = make_metric(
             c=matplotlib.cm.tab20b.colors[(4 + 2 * len(ww_metrics)) % 19],
             em=1,
             ord=1.0,
             raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
         )
 
-        ww_metrics[f"SCAN BA.4/5 Kcp/g dry"] = make_metric(
+        ww_metrics[f"Kcp/g dry BA.4/5 (WastewaterSCAN)"] = make_metric(
             c=matplotlib.cm.tab20b.colors[(3 + 2 * len(ww_metrics)) % 19],
             em=0,
             ord=1.0,
@@ -191,8 +204,8 @@ def add_metrics(session, atlas):
                 units = units.replace("/", "/d", 1)
 
             ww_metrics = region.metrics.wastewater.setdefault(name, {})
-            source = f"{target} {lab}" if target != "sars-cov-2" else lab
-            title = f"{source} K{units}"
+            title = f"K{units} ({CALSUWERS_LABS.get(lab, lab)})"
+            title = f"{target} {title}" if target != "sars-cov-2" else title
             color_i = (4 + 2 * len(ww_metrics)) % 19
             ww_metrics[title] = make_metric(
                 c=matplotlib.cm.tab20b.colors[color_i],
