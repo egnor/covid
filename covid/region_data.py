@@ -11,6 +11,7 @@ from typing import Tuple
 
 import pandas
 import pandas.api.types
+import scipy.stats
 
 
 @dataclasses.dataclass(frozen=True)
@@ -189,7 +190,9 @@ def make_metric(c, em, ord, v=None, raw=None, cum=None):
         first_i = nonzero_is[0] + 1 if len(nonzero_is) else len(raw)
         first_i = max(0, min(first_i, len(raw) - 14))
         clipped = raw.iloc[first_i:].clip(lower=0.0)
-        smooth = clipped.rolling(7, center=True).mean()
+        smooth = clipped.rolling(7, center=True).apply(
+            lambda x: scipy.stats.trim_mean(x, 1.0 / 7.0)
+        )
         df = pandas.DataFrame({"raw": raw, "value": smooth})
     else:
         raise ValueError(f"No data for metric")
