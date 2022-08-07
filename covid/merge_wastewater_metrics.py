@@ -53,7 +53,7 @@ CALSUWERS_LABS = {
     "VLT": "Verily / SCAN / HCVT",
 }
 
-PLANT_RENAME = {
+SITE_RENAME = {
     re.compile(rx, flags=re.I): sub
     for rx, sub in {
         r"East Bay Municipal Utility District": "EBMUD",
@@ -110,13 +110,19 @@ UNITS_RENAME = {
 }
 
 
-def plant_name(name):
-    for rx, sub in PLANT_RENAME.items():
+def _site_name(name):
+    for rx, sub in SITE_RENAME.items():
         name = rx.sub(sub, name)
     return name
 
 
+def _color(index):
+    return matplotlib.cm.tab20b.colors[(4 + 2 * index) % 19]
+
+
 def add_metrics(session, atlas):
+    matplotlib.cm.tab20b.colors
+
     #
     # SCAN (Stanford and Verily)
     #
@@ -147,17 +153,16 @@ def add_metrics(session, atlas):
             continue
 
         region.credits.update(covid.fetch_scan_wastewater.credits())
-        site = plant_name(site)
-        ww_metrics = region.metrics.wastewater.setdefault(site, {})
+        ww_metrics = region.metrics.wastewater.setdefault(_site_name(site), {})
         ww_metrics[f"Kcp/g dry (WastewaterSCAN)"] = make_metric(
-            c=matplotlib.cm.tab20b.colors[(4 + 2 * len(ww_metrics)) % 19],
+            c=_color(len(ww_metrics)),
             em=1,
             ord=1.0,
             raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
         )
 
         ww_metrics[f"Kcp/g dry BA.4/5 (WastewaterSCAN)"] = make_metric(
-            c=matplotlib.cm.tab20b.colors[(3 + 2 * len(ww_metrics)) % 19],
+            c=_color(len(ww_metrics)),
             em=0,
             ord=1.0,
             raw=rows.HV_69_70_Del_gc_g_dry_weight * 1e-3,
@@ -174,7 +179,6 @@ def add_metrics(session, atlas):
     for wwtp, wwtp_rows in df.groupby(level="wwtp_name", sort=False):
         wwtp_rows.reset_index("wwtp_name", drop=True, inplace=True)
         wwtp_first = wwtp_rows.iloc[0]
-        name = plant_name(wwtp_first["FACILITY NAME"])
 
         fips = wwtp_first.county_names.split(",")[0].strip()
         fips = int(STATECITY_FIPS.get(("CA", fips), fips))
@@ -183,7 +187,9 @@ def add_metrics(session, atlas):
             warn(f"Unknown Cal-SuWers wastewater county: {fips}")
             continue
 
+        site = _site_name(wwtp_first["FACILITY NAME"])
         region.credits.update(covid.fetch_calsuwers_wastewater.credits())
+        ww_metrics = region.metrics.wastewater.setdefault(site, {})
 
         series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
         for (target, lab, units), rows in wwtp_rows.groupby(
@@ -203,12 +209,10 @@ def add_metrics(session, atlas):
                 samples = 0.1 * samples
                 units = units.replace("/", "/d", 1)
 
-            ww_metrics = region.metrics.wastewater.setdefault(name, {})
             title = f"K{units} ({CALSUWERS_LABS.get(lab, lab)})"
             title = f"{target} {title}" if target != "sars-cov-2" else title
-            color_i = (4 + 2 * len(ww_metrics)) % 19
             ww_metrics[title] = make_metric(
-                c=matplotlib.cm.tab20b.colors[color_i],
+                c=_color(len(ww_metrics)),
                 em=1,
                 ord=1.0,
                 raw=samples.groupby("sample_collect_date").mean() * 1e-3,
@@ -231,7 +235,7 @@ def add_metrics(session, atlas):
         region.credits.update(covid.fetch_biobot_wastewater.credits())
         ww_metrics = region.metrics.wastewater.setdefault("Biobot", {})
         ww_metrics[f"Kcp/L wet"] = make_metric(
-            c=matplotlib.cm.tab20b.colors[(4 + 2 * len(ww_metrics)) % 19],
+            c=_color(len(ww_metrics)),
             em=1,
             ord=1.0,
             v=rows.effective_concentration_rolling_average,

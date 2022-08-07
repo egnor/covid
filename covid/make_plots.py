@@ -1,24 +1,17 @@
-"""Functions that generate trend charts from region metrics."""
+"""Functions to generate chart images for region pages."""
 
 import pathlib
-import textwrap
 
 import matplotlib
-import matplotlib.dates
 import matplotlib.lines
 import matplotlib.pyplot
-import matplotlib.ticker
 import numpy
 import pandas
 
+from covid import plot_metrics
 from covid import urls
 
 matplotlib.use("module://mplcairo.base")  # For decent emoji rendering.
-
-matplotlib.rcParams.update({"figure.max_open_warning": 0})
-
-plot_start_date = pandas.Timestamp(2020, 3, 1)
-plot_end_date = pandas.Timestamp.now().ceil("d") + pandas.Timedelta(days=7)
 
 
 def write_images(region, site_dir):
@@ -31,9 +24,9 @@ def _write_thumb_image(region, site_dir):
     p = (1 + 5**0.5) / 2  # Nice pleasing aspect ratio.
     fig = matplotlib.pyplot.figure(figsize=(8, 8 / p), dpi=50)
     thumb_axes = fig.add_subplot()
-    _setup_xaxis(thumb_axes)
+    plot_metrics.setup_xaxis(thumb_axes)
     thumb_axes.set_ylim(0, 300)
-    _plot_metrics(thumb_axes, region.metrics.covid, detailed=False)
+    plot_metrics.plot_metrics(thumb_axes, region.metrics.covid, detailed=False)
     thumb_axes.set_xlabel(None)
     thumb_axes.set_ylabel(None)
     thumb_axes.tick_params(
@@ -49,8 +42,8 @@ def _write_chart_image(region, site_dir):
         _plot_covid,
         _plot_hospital,
         *[
-             lambda axes, region, s=site: _plot_wastewater(axes, region, s)
-             for site in region.metrics.wastewater.keys()
+            lambda axes, region, s=site: _plot_wastewater(axes, region, s)
+            for site in region.metrics.wastewater.keys()
         ],
         _plot_variant,
         _plot_vaccine,
@@ -74,7 +67,7 @@ def _write_chart_image(region, site_dir):
     for i, (axes, plotter) in enumerate(zip(subplots[:, 0], plotters)):
         plotter(axes, region)
         _plot_policy_changes(axes, region.metrics.policy, detailed=(i == 0))
-        _add_plot_legend(axes)
+        plot_metrics.plot_legend(axes)
 
     fig.align_ylabels()
     fig.tight_layout(pad=0, h_pad=1)
@@ -93,9 +86,9 @@ def _plot_covid(axes, region):
     if axes is None:
         return ylim / 75 if metrics else 0
 
-    _setup_xaxis(axes, title=f"{region.path[-1]} COVID")
-    _setup_yaxis(axes, title="cases per capita", ylim=(0, ylim))
-    _plot_metrics(axes, metrics)
+    plot_metrics.setup_xaxis(axes, title=f"{region.path[-1]} COVID")
+    plot_metrics.setup_yaxis(axes, title="cases per capita", ylim=(0, ylim))
+    plot_metrics.plot_metrics(axes, metrics)
 
 
 def _plot_hospital(axes, region):
@@ -114,9 +107,11 @@ def _plot_hospital(axes, region):
     if axes is None:
         return ylim / 120 if metrics else 0
 
-    _setup_xaxis(axes, title="Hospitals")
-    _setup_yaxis(axes, title="per cap", ylim=(0, ylim), tick=(40, 20))
-    _plot_metrics(axes, metrics)
+    plot_metrics.setup_xaxis(axes, title="Hospitals")
+    plot_metrics.setup_yaxis(
+        axes, title="per cap", ylim=(0, ylim), tick=(40, 20)
+    )
+    plot_metrics.plot_metrics(axes, metrics)
 
 
 def _plot_wastewater(axes, region, site):
@@ -127,9 +122,11 @@ def _plot_wastewater(axes, region, site):
         return ylim / 1000
 
     title = f"{site} wastewater"
-    _setup_xaxis(axes, title=title, wrapchars=25, titlesize=35)
-    _setup_yaxis(axes, title="COVID RNA", ylim=(0, ylim), tick=(500, 100))
-    _plot_metrics(axes, metrics)
+    plot_metrics.setup_xaxis(axes, title=title, wrapchars=25, titlesize=35)
+    plot_metrics.setup_yaxis(
+        axes, title="COVID RNA", ylim=(0, ylim), tick=(500, 100)
+    )
+    plot_metrics.plot_metrics(axes, metrics)
 
 
 def _plot_variant(axes, region):
@@ -137,8 +134,8 @@ def _plot_variant(axes, region):
     if axes is None:
         return 2 if metrics else 0
 
-    _setup_xaxis(axes, title="Variants")
-    _setup_yaxis(axes, title="% sequenced samples")
+    plot_metrics.setup_xaxis(axes, title="Variants")
+    plot_metrics.setup_yaxis(axes, title="% sequenced samples")
 
     # Label top variants by frequency, weighting recent frequency heavily
     freq_name = [
@@ -160,7 +157,7 @@ def _plot_variant(axes, region):
             x=next.index, y1=prev, y2=next, color=v.color, label=name
         )
         if name in top_variants:
-            _add_to_legend(axes, artist, order=-i)
+            plot_metrics.add_to_legend(axes, artist, order=-i)
         prev = next
 
 
@@ -169,10 +166,10 @@ def _plot_vaccine(axes, region):
     if axes is None:
         return 2 if metrics else 0
 
-    _setup_xaxis(axes, title="Vaccination")
-    _setup_yaxis(axes, title="% of pop (cumulative)")
+    plot_metrics.setup_xaxis(axes, title="Vaccination")
+    plot_metrics.setup_yaxis(axes, title="% of pop (cumulative)")
     axes.axhline(100, c="black", lw=1)  # 100% line.
-    _plot_metrics(axes, metrics)
+    plot_metrics.plot_metrics(axes, metrics)
 
 
 def _plot_mobility(axes, region):
@@ -180,63 +177,12 @@ def _plot_mobility(axes, region):
     if axes is None:
         return 2 if metrics else 0
 
-    _setup_xaxis(axes, title="Mobility")
-    _setup_yaxis(axes, title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10))
+    plot_metrics.setup_xaxis(axes, title="Mobility")
+    plot_metrics.setup_yaxis(
+        axes, title="% vs Jan 2020", ylim=(0, 150), tick=(50, 10)
+    )
     axes.axhline(100, c="black", lw=1)  # Identity line.
-    _plot_metrics(axes, metrics)
-
-
-def _plot_metrics(axes, metrics, detailed=True):
-    for name, m in sorted(metrics.items(), key=lambda nm: nm[1].order):
-        if m.emphasis < 1 and not detailed:
-            continue
-
-        width = 4 if m.emphasis >= 1 else 2
-        style = "-" if m.emphasis >= 0 else "--"
-        alpha = 1.0 if m.emphasis >= 0 else 0.8
-        zorder = 2.0 - m.order / 100 - m.emphasis / 10
-
-        deltas = (m.frame.notna().any(1)).index.to_series().diff()
-        gaps = deltas[deltas > pandas.Timedelta(days=15)]
-        breaks = pandas.DataFrame(index=gaps.index - gaps / 2)
-        frame = pandas.concat([m.frame, breaks])
-        frame.sort_index(inplace=True)
-
-        if detailed and ("raw" in frame.columns) and frame.raw.any():
-            limit = frame.raw.quantile(0.99) * 2
-            masked = frame.raw.mask(frame.raw.gt(limit))
-            axes.plot(
-                frame.index,
-                masked,
-                color=m.color,
-                alpha=alpha * 0.5,
-                zorder=zorder + 0.001,
-                lw=0.5,
-                ls=style,
-            )
-
-        if ("value" in frame.columns) and frame.value.any():
-            last_date = frame.value.last_valid_index()
-            blot_size = (width * 2) ** 2
-            axes.scatter(
-                [last_date],
-                [frame.value.loc[last_date]],
-                color=m.color,
-                alpha=alpha,
-                zorder=zorder + 0.002,
-                s=blot_size,
-            )
-            artists = axes.plot(
-                frame.index,
-                frame.value,
-                label=name,
-                color=m.color,
-                alpha=alpha,
-                zorder=zorder,
-                lw=width,
-                ls=style,
-            )
-            _add_to_legend(axes, *artists)
+    plot_metrics.plot_metrics(axes, metrics)
 
 
 def _plot_policy_changes(axes, changes, detailed):
@@ -273,7 +219,7 @@ def _plot_policy_changes(axes, changes, detailed):
                 alpha=0.7,
                 label=t + " changes",
             )
-            _add_to_legend(axes, artist)
+            plot_metrics.add_to_legend(axes, artist)
 
     if detailed and date_changes:
         top = axes.secondary_xaxis("top")
@@ -290,75 +236,3 @@ def _plot_policy_changes(axes, changes, detailed):
             linespacing=1.1,
             font=pathlib.Path(__file__).parent / "NotoColorEmoji.ttf",
         )
-
-
-def _setup_xaxis(axes, title=None, wrapchars=15, titlesize=45):
-    """Sets common X axis and plot style."""
-
-    xmin = plot_start_date
-    xmax = plot_end_date
-    axes.set_xlim(xmin, xmax)
-    axes.grid(color="black", alpha=0.1)
-
-    week_locator = matplotlib.dates.WeekdayLocator(matplotlib.dates.SU)
-    month_locator = matplotlib.dates.MonthLocator()
-    month_formatter = matplotlib.dates.ConciseDateFormatter(month_locator)
-    month_formatter.offset_formats[1] = ""  # Don't bother with year '2020'.
-    month_formatter.zero_formats[1] = "'%y"  # Abbreviate years.
-
-    axes.xaxis.set_minor_locator(week_locator)
-    axes.xaxis.set_major_locator(month_locator)
-    axes.xaxis.set_major_formatter(month_formatter)
-    axes.xaxis.set_tick_params(labelbottom=True)
-    for label in axes.get_xticklabels():
-        label.set_horizontalalignment("left")
-
-    text = "\n".join(
-        line
-        for para in (title or "").splitlines()
-        for line in textwrap.wrap(para, width=wrapchars, break_on_hyphens=False)
-    )
-
-    if title:
-        axes.text(
-            0.5,
-            0.5,
-            text,
-            transform=axes.transAxes,
-            fontsize=titlesize,
-            fontweight="bold",
-            alpha=0.2,
-            ha="center",
-            va="center",
-        )
-
-
-def _setup_yaxis(axes, title=None, ylim=(0, 100), tick=(20, 10)):
-    axes.set_ylim(*ylim)
-    axes.set_ylabel(title)
-    axes.yaxis.set_label_position("right")
-    axes.yaxis.tick_right()
-    axes.yaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    axes.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(tick[0]))
-    axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(tick[1]))
-
-
-def _add_to_legend(axes, *artists, order=0):
-    """Returns our user defined legend artist list attached to plot axes."""
-
-    order_artists = axes.__dict__.setdefault("covid_legend_artists", {})
-    order_artists.setdefault(order, []).extend(artists)
-
-
-def _add_plot_legend(axes):
-    """Adds a standard plot legend using the legend_artists(axes) list."""
-
-    order_artists = axes.__dict__.get("covid_legend_artists", {})
-    axes.legend(
-        loc="upper left",
-        handles=[
-            artist
-            for order, artists in sorted(order_artists.items())
-            for artist in artists
-        ],
-    )

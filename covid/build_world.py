@@ -331,7 +331,7 @@ def _compute_world(session, args):
                 cat_metrics[name] = replace(first_val, frame=frame / metric_pop)
 
         # Remove metrics which have no (or very little) valid data.
-        for cat_metrics in [
+        for metrics in [
             r.metrics.covid,
             r.metrics.hospital,
             r.metrics.map,
@@ -340,9 +340,9 @@ def _compute_world(session, args):
             r.metrics.vaccine,
             *r.metrics.wastewater.values(),
         ]:
-            for name, m in list(cat_metrics.items()):
+            for name, m in list(metrics.items()):
                 if m.frame.value.count() < 2:
-                    del cat_metrics[name]
+                    del metrics[name]
 
         # Clean up some categories if we didn't get any "headline" data.
         for category in r.metrics.vaccine, r.metrics.mobility:

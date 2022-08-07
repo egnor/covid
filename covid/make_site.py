@@ -13,8 +13,8 @@ from dominate import util
 from covid import build_world
 from covid import cache_policy
 from covid import logging_policy  # noqa
-from covid import make_chart
 from covid import make_map
+from covid import make_plots
 from covid import style
 from covid import urls
 
@@ -25,7 +25,7 @@ def make_region_page(region, args):
     map_note = ""
     try:
         make_region_html(region, args)
-        make_chart.write_images(region, args.site_dir)
+        make_plots.write_images(region, args.site_dir)
         if urls.has_map(region):
             make_map.write_video(region, args.site_dir)
             map_note = " (+map video)"

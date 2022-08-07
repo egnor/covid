@@ -35,7 +35,6 @@ class PolicyChange:
 class Metrics:
     total: collections.Counter = field(default_factory=collections.Counter)
     policy: List[PolicyChange] = field(default_factory=list)
-
     covid: Dict[str, Metric] = field(default_factory=dict)
     hospital: Dict[str, Metric] = field(default_factory=dict)
     map: Dict[str, Metric] = field(default_factory=dict)
@@ -66,10 +65,23 @@ class Region:
             or rx.fullmatch(r.debug_path().replace(" ", "_"))
         )
 
+    def subregion(r, k, name=None):
+        """Finds or creates a subregion with a path key and optional name."""
+
+        assert isinstance(k, str)
+        sub = r.subregions.get(k)
+        if not sub:
+            sub = r.subregions[k] = Region(name=name or k, path=r.path + [k])
+        return sub
+
     def debug_path(r):
+        """Returns a string like 'US/California/Santa Clara'."""
+
         return "/".join(r.path)
 
     def debug_line(r):
+        """Returns a one-line summary of the region data."""
+
         metrics_dict = dataclasses.asdict(r.metrics)
         return (
             f'{r.metrics.total["population"] or -1:9.0f}p <'
@@ -79,8 +91,9 @@ class Region:
         )
 
     def debug_block(r, with_data=False):
-        out = r.debug_line()
+        """Returns a paragraph description of the region data."""
 
+        out = r.debug_line()
         for url, name in r.credits.items():
             out += f"\n    {name} ({url})"
 
