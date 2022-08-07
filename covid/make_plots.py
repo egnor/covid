@@ -54,25 +54,12 @@ def _write_chart_image(region, site_dir):
         *[(p, h) for p in plotters for h in (p(None, region),) if h > 0]
     )
 
-    fig = matplotlib.pyplot.figure(figsize=(10, sum(heights)), dpi=200)
-
-    subplots = fig.subplots(
-        nrows=len(heights),
-        ncols=1,
-        sharex=True,
-        squeeze=False,
-        gridspec_kw=dict(height_ratios=heights),
-    )
-
-    for i, (axes, plotter) in enumerate(zip(subplots[:, 0], plotters)):
-        plotter(axes, region)
-        _plot_policy_changes(axes, region.metrics.policy, detailed=(i == 0))
-        plot_metrics.plot_legend(axes)
-
-    fig.align_ylabels()
-    fig.tight_layout(pad=0, h_pad=1)
-    fig.savefig(urls.file(site_dir, urls.chart_image(region)))
-    matplotlib.pyplot.close(fig)  # Reclaim memory.
+    filename = urls.file(site_dir, urls.chart_image(region))
+    with plot_metrics.subplots_context(heights, filename=filename) as subplots:
+        for i, (axes, plotter) in enumerate(zip(subplots, plotters)):
+            plotter(axes, region)
+            _plot_policy_changes(axes, region.metrics.policy, detailed=(i == 0))
+            plot_metrics.plot_legend(axes)
 
 
 def _plot_covid(axes, region):

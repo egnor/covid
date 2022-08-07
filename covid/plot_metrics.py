@@ -1,9 +1,12 @@
 """Functions to help generate trend charts from region metrics."""
 
+import contextlib
+import logging
 import textwrap
 
 import matplotlib
 import matplotlib.dates
+import matplotlib.pyplot
 import matplotlib.ticker
 import pandas
 
@@ -11,6 +14,26 @@ matplotlib.rcParams.update({"figure.max_open_warning": 0})
 
 _plot_start_date = pandas.Timestamp(2020, 3, 1)
 _plot_end_date = pandas.Timestamp.now().ceil("d") + pandas.Timedelta(days=7)
+
+
+@contextlib.contextmanager
+def subplots_context(heights, filename):
+    fig = matplotlib.pyplot.figure(figsize=(10, sum(heights)), dpi=200)
+    subs = fig.subplots(
+        nrows=len(heights),
+        ncols=1,
+        sharex=True,
+        squeeze=False,
+        gridspec_kw=dict(height_ratios=heights)
+    )
+
+    yield subs[:, 0]
+
+    logging.debug(f"Writing: {filename}")
+    fig.align_ylabels()
+    fig.tight_layout(pad=0, h_pad=1)
+    fig.savefig(filename)
+    matplotlib.pyplot.close(fig)  # Reclaim memory
 
 
 def setup_xaxis(axes, title=None, wrapchars=15, titlesize=45):

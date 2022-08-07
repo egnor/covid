@@ -1,6 +1,8 @@
 """Generate specialized plot of Cal-SuWers data"""
 
+import contextlib
 import dataclasses
+from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot
@@ -11,6 +13,7 @@ import covid.fetch_calsuwers_wastewater
 import covid.merge_covid_metrics
 import covid.plot_metrics
 import covid.region_data
+import covid.urls
 
 
 @dataclasses.dataclass(frozen=True, order=True)
@@ -131,34 +134,27 @@ def get_lab_site_metrics(session):
     return out
 
 
-def write_plots(lab_site_metrics):
+
+def make_plot(axes, lab, site, metrics):
+    covid.plot_metrics.setup_yaxis(axes, ylim=(0, 500))
+    covid.plot_metrics.setup_xaxis(
+        axes,
+        title=f"{lab.name}\n{site.name} ({site.pop:,}p)",
+        titlesize=30,
+        wrapchars=30,
+    )
+
+    covid.plot_metrics.plot_metrics(axes, metrics)
+    covid.plot_metrics.plot_legend(axes)
+
+
+def write_plots(site_dir, lab_site_metrics):
     for lab, site_metrics in lab_site_metrics.items():
         rows = len(site_metrics)
-        fig = matplotlib.pyplot.figure(figsize=(10, 5 * rows), dpi=200)
-        subplots = fig.subplots(nrows=rows, ncols=1, sharex=True, squeeze=False)
-
-        for plot_i, (site, metrics) in enumerate(site_metrics.items()):
-            axes = subplots[plot_i, 0]
-            covid.plot_metrics.setup_yaxis(axes, ylim=(0, 500))
-            covid.plot_metrics.setup_xaxis(
-                axes,
-                title=f"{lab.name}\n{site.name} ({site.pop:,}p)",
-                titlesize=30,
-                wrapchars=30,
-            )
-
-            covid.plot_metrics.plot_metrics(axes, metrics)
-            covid.plot_metrics.plot_legend(axes)
-
-        filename = urls.file(
-            "wastewater_out", f"wastewater_{lab.id.lower()}.png"
-        )
-        print(f"Writing: {filename}")
-
-        fig.align_ylabels()
-        fig.tight_layout(pad=0, h_pad=1)
-        fig.savefig(filename)
-        matplotlib.pyplot.close(fig)
+        filename = covid.urls.file(site_dir, f"lab_{lab.id.lower()}.png")
+        with covid.plot_metrics.subplots_context([5] * rows, filename) as subs:
+            for axes, (site, metrics) in zip(subs, site_metrics.items()):
+                make_plot(axes, lab, site, metrics)
 
     print()
 
@@ -182,4 +178,4 @@ if __name__ == "__main__":
                 print(f"    {metric.debug_line()} {name}")
             print()
 
-    write_plots(lab_site_metrics)
+    write_plots(Path("wastewater_out"), lab_site_metrics)
