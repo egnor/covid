@@ -2,11 +2,14 @@
 
 import dataclasses
 
+import matplotlib
+import matplotlib.pyplot
 import numpy
 
 import covid.build_atlas
 import covid.fetch_calsuwers_wastewater
 import covid.merge_covid_metrics
+import covid.plot_metrics
 import covid.region_data
 
 
@@ -48,7 +51,9 @@ def get_lab_site_metrics(session):
         region = atlas.by_fips[fips]
 
         covid_key = "COVID positives / day / 100Kp"
-        covid_metric = region.metrics.covid[covid_key]
+        covid_metric = dataclasses.replace(
+            region.metrics.covid[covid_key], color="tab:gray"
+        )
 
         for (target, lab_id), lab_rows in wwtp_rows.groupby(
             level=["pcr_target", "lab_id"]
@@ -87,7 +92,7 @@ def get_lab_site_metrics(session):
                 flow = rows.flow_rate.groupby("sample_collect_date").mean()
                 metrics["flow L/p/day"] = covid.region_data.make_metric(
                     c="tab:blue",
-                    em=0,
+                    em=-1,
                     ord=1.0,
                     raw=flow * 4.54609e6 / site.pop,
                 )
@@ -95,7 +100,7 @@ def get_lab_site_metrics(session):
                 tss = rows.tss.groupby("sample_collect_date").mean()
                 metrics["tss mg/L"] = covid.region_data.make_metric(
                     c="tab:brown",
-                    em=0,
+                    em=-1,
                     ord=1.0,
                     raw=tss,
                 )
@@ -113,7 +118,7 @@ def get_lab_site_metrics(session):
                     title = f"{hum_target} {hum_units}"
                     metrics[title] = covid.region_data.make_metric(
                         c="tab:purple",
-                        em=0,
+                        em=-1,
                         ord=1.0,
                         raw=hum,
                     )
@@ -124,6 +129,38 @@ def get_lab_site_metrics(session):
                 
 
     return out
+
+
+def write_plots(lab_site_metrics):
+    for lab, site_metrics in lab_site_metrics.items():
+        rows = len(site_metrics)
+        fig = matplotlib.pyplot.figure(figsize=(10, 5 * rows), dpi=200)
+        subplots = fig.subplots(nrows=rows, ncols=1, sharex=True, squeeze=False)
+
+        for plot_i, (site, metrics) in enumerate(site_metrics.items()):
+            axes = subplots[plot_i, 0]
+            covid.plot_metrics.setup_yaxis(axes, ylim=(0, 500))
+            covid.plot_metrics.setup_xaxis(
+                axes,
+                title=f"{lab.name}\n{site.name} ({site.pop:,}p)",
+                titlesize=30,
+                wrapchars=30,
+            )
+
+            covid.plot_metrics.plot_metrics(axes, metrics)
+            covid.plot_metrics.plot_legend(axes)
+
+        filename = urls.file(
+            "wastewater_out", f"wastewater_{lab.id.lower()}.png"
+        )
+        print(f"Writing: {filename}")
+
+        fig.align_ylabels()
+        fig.tight_layout(pad=0, h_pad=1)
+        fig.savefig(filename)
+        matplotlib.pyplot.close(fig)
+
+    print()
 
 
 if __name__ == "__main__":
@@ -144,3 +181,5 @@ if __name__ == "__main__":
             for name, metric in sorted(metrics.items()):
                 print(f"    {metric.debug_line()} {name}")
             print()
+
+    write_plots(lab_site_metrics)
