@@ -8,9 +8,8 @@ import matplotlib
 import matplotlib.pyplot
 import numpy
 
-import covid.build_atlas
+import covid.build_world
 import covid.fetch_calsuwers_wastewater
-import covid.merge_covid_metrics
 import covid.plot_metrics
 import covid.region_data
 import covid.urls
@@ -31,8 +30,7 @@ class SiteId:
 
 def get_lab_site_metrics(session):
     out = {}
-    atlas = covid.build_atlas.get_atlas(session)
-    covid.merge_covid_metrics.add_metrics(session, atlas)
+    atlas = covid.build_world.combined_atlas(session, only=["covid"])
 
     wet_L_div = 3000
     dry_g_div = 3000
@@ -149,11 +147,21 @@ def make_plot(axes, lab, site, metrics):
 
 
 def write_plots(site_dir, lab_site_metrics):
+    site_lab_metrics = {}
+
     for lab, site_metrics in lab_site_metrics.items():
         rows = len(site_metrics)
         filename = covid.urls.file(site_dir, f"lab_{lab.id.lower()}.png")
         with covid.plot_metrics.subplots_context([5] * rows, filename) as subs:
             for axes, (site, metrics) in zip(subs, site_metrics.items()):
+                site_lab_metrics.setdefault(site, {})[lab] = metrics
+                make_plot(axes, lab, site, metrics)
+
+    for site, lab_metrics in site_lab_metrics.items():
+        rows = len(lab_metrics)
+        filename = covid.urls.file(site_dir, f"site_{site.id.lower()}.png")
+        with covid.plot_metrics.subplots_context([5] * rows, filename) as subs:
+            for axes, (lab, metrics) in zip(subs, lab_metrics.items()):
                 make_plot(axes, lab, site, metrics)
 
     print()

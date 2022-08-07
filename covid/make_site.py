@@ -183,9 +183,8 @@ def make_subregion_html(doc_url, region):
 
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C for multiprocess
-    parser = argparse.ArgumentParser(
-        parents=[cache_policy.argument_parser, build_world.argument_parser]
-    )
+    parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser.add_argument("--only", nargs="*")
     parser.add_argument("--processes", type=int)
     parser.add_argument("--chunk_size", type=int)
     parser.add_argument(
@@ -195,8 +194,8 @@ def main():
     args = parser.parse_args()
     make_map.setup(args)
 
-    world = build_world.get_world(
-        session=cache_policy.new_session(args), args=args
+    atlas = build_world.combined_atlas(
+        session=cache_policy.new_session(args), only=args.only
     )
 
     def get_regions(r):
@@ -204,7 +203,7 @@ def main():
             yield r
         yield from (a for s in r.subregions.values() for a in get_regions(s))
 
-    all_regions = list(get_regions(world))
+    all_regions = list(get_regions(atlas.world))
 
     print(f"Generating {len(all_regions)} pages in {args.site_dir}...")
     style.write_style_files(args.site_dir)
