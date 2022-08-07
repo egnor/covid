@@ -22,7 +22,6 @@ STATECITY_FIPS = {
     ("CA", "Novato"): 6041,
     ("CA", "Oakland"): 6001,
     ("CA", "Ontario"): 6071,
-    ("CA", "Orange County"): 6059,
     ("CA", "Paso Robles"): 6079,
     ("CA", "Petaluma"): 6097,
     ("CA", "San Francisco"): 6075,
@@ -38,19 +37,6 @@ STATECITY_FIPS = {
     ("MI", "Jackson"): 26075,
     ("TX", "Garland"): 48113,
     ("TX", "Sunnyvale"): 48113,
-}
-
-# Via communication from the Cal-SuWers team
-CALSUWERS_LABS = {
-    "A": "Luminultra",
-    "B": "Luminultra",
-    "Biobot001": "Biobot",
-    "CAL1": "SCCWRP",
-    "CAL2": "LACSD",
-    "CAL3": "Zymo Research",
-    "CAL4": "UC Berkeley",
-    "CAL5EURFNS": "Eurofins / HCVT",
-    "VLT": "Verily / SCAN / HCVT",
 }
 
 SITE_RENAME = {
@@ -174,14 +160,12 @@ def add_metrics(session, atlas):
 
     logging.info("Loading and merging Cal-SuWers wastewater data...")
     df = covid.fetch_calsuwers_wastewater.get_wastewater(session)
-    df = df[~df.index.duplicated()]  # Redundant samples are common!?
-
     for wwtp, wwtp_rows in df.groupby(level="wwtp_name", sort=False):
         wwtp_rows.reset_index("wwtp_name", drop=True, inplace=True)
         wwtp_first = wwtp_rows.iloc[0]
 
         fips = wwtp_first.county_names.split(",")[0].strip()
-        fips = int(STATECITY_FIPS.get(("CA", fips), fips))
+        fips = int(covid.fetch_calsuwers_wastewater.FIPS_FIX.get(fips, fips))
         region = atlas.by_fips.get(fips)
         if not region:
             warn(f"Unknown Cal-SuWers wastewater county: {fips}")
@@ -209,7 +193,8 @@ def add_metrics(session, atlas):
                 samples = 0.1 * samples
                 units = units.replace("/", "/d", 1)
 
-            title = f"K{units} ({CALSUWERS_LABS.get(lab, lab)})"
+            lab = covid.fetch_calsuwers_wastewater.LAB_NAMES.get(lab, lab)
+            title = f"K{units} ({lab})"
             title = f"{target} {title}" if target != "sars-cov-2" else title
             ww_metrics[title] = make_metric(
                 c=_color(len(ww_metrics)),

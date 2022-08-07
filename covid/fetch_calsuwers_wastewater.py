@@ -5,8 +5,28 @@ import re
 
 import pandas
 
-# DATA_URL = "https://data.ca.gov/dataset/b8c6ee3b-539d-4d62-8fa2-c7cd17c16656/resource/16bb2698-c243-4b66-a6e8-4861ee66f8bf/download/master-covid-public.csv"
 DATA_URL = "https://data.ca.gov/datastore/dump/16bb2698-c243-4b66-a6e8-4861ee66f8bf?format=csv"
+
+# Lab codes via communication from the Cal-SuWers team
+LAB_NAMES = {
+    "A": "Luminultra",
+    "B": "Luminultra",
+    "Biobot001": "Biobot",
+    "CAL1": "SCCWRP",
+    "CAL2": "LACSD",
+    "CAL3": "Zymo Research",
+    "CAL4": "UC Berkeley",
+    "CAL5EURFNS": "Eurofins / HCVT",
+    "DWRL": "CDPH DWRL",
+    "GTM": "GT Molecular",
+    "VLT": "Verily / SCAN / HCVT",
+}
+
+# Some rows incorrectly use names instead of FIPS codes
+FIPS_FIX = {
+    "Los Angeles": 6037,
+    "Orange County": 6059,
+}
 
 
 def get_wastewater(session):
@@ -96,9 +116,21 @@ if __name__ == "__main__":
     print()
 
     print("### Labs ###")
-    for lab in sorted(df.index.unique(level="lab_id")):
-        print(f"{lab:<4}")
-    print()
+    lab_site_targets = {}
+    for site, site_rows in df.groupby(level="wwtp_name"):
+        for (target, lab, gene, units), target_rows in site_rows.groupby(
+            ["pcr_target", "lab_id", "pcr_gene_target", "pcr_target_units"]
+        ):
+            targets = lab_site_targets.setdefault(lab, {}).setdefault(site, [])
+            targets.append(f"{target}({gene}) {units}")
+
+    for lab, site_targets in sorted(lab_site_targets.items()):
+        print(f"{lab:<4} ({LAB_NAMES[lab]})")
+        for site, targets in sorted(site_targets.items()):
+            print(f"  {site}")
+            for target in targets:
+                print(f"    {target}")
+        print()
 
     for site, site_rows in df.groupby(level="wwtp_name"):
         site_row = site_rows.iloc[-1]
