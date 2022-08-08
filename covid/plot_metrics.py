@@ -24,7 +24,7 @@ def subplots_context(heights, filename):
         ncols=1,
         sharex=True,
         squeeze=False,
-        gridspec_kw=dict(height_ratios=heights)
+        gridspec_kw=dict(height_ratios=heights),
     )
 
     yield subs[:, 0]

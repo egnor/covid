@@ -1,11 +1,8 @@
 """Generate specialized plot of Cal-SuWers data"""
 
-import contextlib
 import dataclasses
 from pathlib import Path
 
-import matplotlib
-import matplotlib.pyplot
 import numpy
 
 import covid.build_world
@@ -62,14 +59,14 @@ def get_lab_site_metrics(session):
             assert target == "sars-cov-2"
             lab = LabId(
                 id=lab_id,
-                name=covid.fetch_calsuwers_wastewater.LAB_NAMES[lab_id]
+                name=covid.fetch_calsuwers_wastewater.LAB_NAMES[lab_id],
             )
 
             metrics = out.setdefault(lab, {}).setdefault(site, {})
             metrics[covid_key] = covid_metric
 
-            for (gene, units), rows in lab_rows.groupby(
-                level=["pcr_gene_target", "pcr_target_units"]
+            for gene_i, ((gene, units), rows) in enumerate(
+                lab_rows.groupby(level=["pcr_gene_target", "pcr_target_units"])
             ):
                 samples = rows.pcr_target_avg_conc
                 if units[:6] == "log10 ":
@@ -84,53 +81,51 @@ def get_lab_site_metrics(session):
 
                 title = f"{target}({gene}) {units}"
                 metrics[title] = covid.region_data.make_metric(
-                    c="tab:green",
+                    c=["tab:red", "tab:orange"][gene_i % 2],
                     em=1,
                     ord=1.0,
                     raw=samples.groupby("sample_collect_date").mean(),
                 )
 
-                flow = rows.flow_rate.groupby("sample_collect_date").mean()
-                metrics["flow L/p/day"] = covid.region_data.make_metric(
-                    c="tab:blue",
+            flow = lab_rows.flow_rate.groupby("sample_collect_date").mean()
+            metrics["flow L/p/day"] = covid.region_data.make_metric(
+                c="tab:blue",
+                em=-1,
+                ord=1.0,
+                raw=flow * 4.54609e6 / site.pop,
+            )
+
+            tss = lab_rows.tss.groupby("sample_collect_date").mean()
+            metrics["tss mg/L"] = covid.region_data.make_metric(
+                c="tab:brown",
+                em=-1,
+                ord=1.0,
+                raw=tss,
+            )
+
+            hum = lab_rows.hum_frac_mic_conc
+            hum = hum.groupby("sample_collect_date").mean()
+            if hum.count() > 1:
+                hum_target = lab_rows.iloc[0].hum_frac_target_mic
+                hum_units = lab_rows.iloc[0].hum_frac_mic_unit
+                if hum_target.lower() == "pepper mild mottle virus":
+                    hum_target = "PMMoV"
+                    hum = hum / pmmov_div
+                    hum_units = f"{hum_units}/{pmmov_div:.0f}"
+
+                title = f"{hum_target} {hum_units}"
+                metrics[title] = covid.region_data.make_metric(
+                    c="tab:pink",
                     em=-1,
                     ord=1.0,
-                    raw=flow * 4.54609e6 / site.pop,
+                    raw=hum,
                 )
-
-                tss = rows.tss.groupby("sample_collect_date").mean()
-                metrics["tss mg/L"] = covid.region_data.make_metric(
-                    c="tab:brown",
-                    em=-1,
-                    ord=1.0,
-                    raw=tss,
-                )
-
-                hum = rows.hum_frac_mic_conc
-                hum = hum.groupby("sample_collect_date").mean()
-                if hum.count() > 1:
-                    hum_target = rows.iloc[0].hum_frac_target_mic
-                    hum_units = rows.iloc[0].hum_frac_mic_unit
-                    if hum_target.lower() == "pepper mild mottle virus":
-                        hum_target = "PMMoV"
-                        hum = hum / pmmov_div
-                        hum_units = f"{hum_units}/{pmmov_div:.0f}"
-
-                    title = f"{hum_target} {hum_units}"
-                    metrics[title] = covid.region_data.make_metric(
-                        c="tab:purple",
-                        em=-1,
-                        ord=1.0,
-                        raw=hum,
-                    )
 
             for name, metric in list(metrics.items()):
                 if metric.frame.value.count() < 2:
                     del metrics[name]
-                
 
     return out
-
 
 
 def make_plot(axes, lab, site, metrics):
@@ -148,10 +143,10 @@ def make_plot(axes, lab, site, metrics):
 
 def write_plots(site_dir, lab_site_metrics):
     site_lab_metrics = {}
-
     for lab, site_metrics in lab_site_metrics.items():
         rows = len(site_metrics)
         filename = covid.urls.file(site_dir, f"lab_{lab.id.lower()}.png")
+        print(f"Making: {filename} ({rows} plots)")
         with covid.plot_metrics.subplots_context([5] * rows, filename) as subs:
             for axes, (site, metrics) in zip(subs, site_metrics.items()):
                 site_lab_metrics.setdefault(site, {})[lab] = metrics
@@ -160,6 +155,7 @@ def write_plots(site_dir, lab_site_metrics):
     for site, lab_metrics in site_lab_metrics.items():
         rows = len(lab_metrics)
         filename = covid.urls.file(site_dir, f"site_{site.id.lower()}.png")
+        print(f"Making: {filename} ({rows} plots)")
         with covid.plot_metrics.subplots_context([5] * rows, filename) as subs:
             for axes, (lab, metrics) in zip(subs, lab_metrics.items()):
                 make_plot(axes, lab, site, metrics)

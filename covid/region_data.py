@@ -26,9 +26,13 @@ class Metric:
     def debug_line(self):
         last_date = self.frame.value.last_valid_index()
         return (
-            f"{self.frame.value.count():3d}d =>{last_date.strftime('%Y-%m-%d')}"
-            f" last={self.frame.value.loc[last_date]:<5.1f}"
-        ) if self.frame is not None else "[None]"
+            (
+                f"{self.frame.value.count():3d}d =>{last_date.strftime('%Y-%m-%d')}"
+                f" last={self.frame.value.loc[last_date]:<5.1f}"
+            )
+            if self.frame is not None
+            else "[None]"
+        )
 
     def debug_block(self, with_data=False):
         if with_data and self.frame is not None:

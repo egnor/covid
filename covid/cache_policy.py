@@ -19,7 +19,7 @@ argument_group = argument_parser.add_argument_group("data caching")
 argument_group.add_argument("--debug", action="store_true")
 argument_group.add_argument("--debug_http", action="store_true")
 argument_group.add_argument(
-    "--cache_time", type=pandas.Timedelta, default=pandas.Timedelta(hours=6)
+    "--cache_time", type=pandas.Timedelta, default=pandas.Timedelta(hours=18)
 )
 argument_group.add_argument(
     "--cache_dir",

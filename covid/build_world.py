@@ -26,7 +26,6 @@ from covid.logging_policy import collecting_warnings
 from covid.region_data import PolicyChange
 from covid.region_data import make_metric
 
-
 KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
     r"|Bad deaths: World/AU .*"
