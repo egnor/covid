@@ -17,6 +17,7 @@ STATECITY_FIPS = {
     ("CA", "Richmond"): 6013,
     ("CA", "Davis"): 6113,
     ("CA", "Half Moon Bay"): 6081,
+    ("CA", "Lompoc"): 6083,
     ("CA", "Los Angeles"): 6037,
     ("CA", "Martinez"): 6013,
     ("CA", "Novato"): 6041,
