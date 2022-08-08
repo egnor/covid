@@ -184,7 +184,7 @@ def make_subregion_html(doc_url, region):
 def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C for multiprocess
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument("--only", nargs="*")
+    parser.add_argument("--only", nargs="*", default=[])
     parser.add_argument("--processes", type=int)
     parser.add_argument("--chunk_size", type=int)
     parser.add_argument(
