@@ -24,14 +24,15 @@ class Metric:
     decrease_color: Optional[str] = None
 
     def debug_line(self):
+        if self.frame is None:
+            return "[None]"
         last_date = self.frame.value.last_valid_index()
+        if last_date is None:
+            return "[Empty]"
         return (
-            (
-                f"{self.frame.value.count():3d}d =>{last_date.strftime('%Y-%m-%d')}"
-                f" last={self.frame.value.loc[last_date]:<5.1f}"
-            )
-            if self.frame is not None
-            else "[None]"
+            f"{self.frame.value.count():3d}d"
+            f" =>{last_date.strftime('%Y-%m-%d')}"
+            f" last={self.frame.value.loc[last_date]:<5.1f}"
         )
 
     def debug_block(self, with_data=False):

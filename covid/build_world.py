@@ -391,7 +391,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
-    parser.add_argument("--only", nargs="*")
+    parser.add_argument("--only", nargs="*", default=[])
     parser.add_argument("--print_data", action="store_true")
 
     args = parser.parse_args()
