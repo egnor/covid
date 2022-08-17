@@ -29,6 +29,7 @@ STATECITY_FIPS = {
     ("CA", "San Francisco"): 6075,
     ("CA", "San Mateo"): 6081,
     ("CA", "Santa Cruz"): 6087,
+    ("CA", "Santa Rosa"): 6097,
     ("CO", "Parker"): 8035,
     ("FL", "Orlando"): 12095,
     ("GA", "College Park"): 13121,
