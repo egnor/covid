@@ -13,6 +13,8 @@ import covid.fetch_scan_wastewater
 from covid.region_data import make_metric
 
 STATECITY_FIPS = {
+    ("AL", "Bessemer"): 1073,
+    ("AL", "Birmingham"): 1073,
     ("CA", "Carson"): 6037,
     ("CA", "Richmond"): 6013,
     ("CA", "Davis"): 6113,
@@ -33,9 +35,11 @@ STATECITY_FIPS = {
     ("CO", "Parker"): 8035,
     ("FL", "Orlando"): 12095,
     ("GA", "College Park"): 13121,
+    ("GA", "Columbus"): 13215,
     ("GA", "Roswell"): 5049,
     ("ID", "Coeur D Alene"): 16055,
     ("IL", "Glen Ellyn"): 17043,
+    ("IN", "Bloomington"): 18105,
     ("KS", "Lawrence"): 20045,
     ("KS", "Salina"): 5125,
     ("KY", "Louisville"): 21111,
