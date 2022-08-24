@@ -47,6 +47,7 @@ STATECITY_FIPS = {
     ("MI", "Jackson"): 26075,
     ("NJ", "Newark"): 34013,
     ("PA", "Harrisburg"): 42043,
+    ("SC", "Greenville"): 45045,
     ("TX", "Garland"): 48113,
     ("TX", "Sunnyvale"): 48113,
 }
