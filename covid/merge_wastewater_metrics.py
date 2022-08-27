@@ -15,6 +15,7 @@ from covid.region_data import make_metric
 STATECITY_FIPS = {
     ("AL", "Bessemer"): 1073,
     ("AL", "Birmingham"): 1073,
+    ("AL", "Fultondale"): 1073,
     ("CA", "Carson"): 6037,
     ("CA", "Richmond"): 6013,
     ("CA", "Davis"): 6113,
@@ -30,6 +31,7 @@ STATECITY_FIPS = {
     ("CA", "San Diego"): 6073,
     ("CA", "San Francisco"): 6075,
     ("CA", "San Mateo"): 6081,
+    ("CA", "San Rafael"): 6041,
     ("CA", "Santa Cruz"): 6087,
     ("CA", "Santa Rosa"): 6097,
     ("CO", "Parker"): 8035,
@@ -45,6 +47,7 @@ STATECITY_FIPS = {
     ("KY", "Louisville"): 21111,
     ("MI", "Ann Arbor"): 26161,
     ("MI", "Jackson"): 26075,
+    ("NC", "Winston-Salem"): 37067,
     ("NJ", "Newark"): 34013,
     ("PA", "Harrisburg"): 42043,
     ("SC", "Greenville"): 45045,
