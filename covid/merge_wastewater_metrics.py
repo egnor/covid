@@ -49,6 +49,7 @@ STATECITY_FIPS = {
     ("KY", "Louisville"): 21111,
     ("MI", "Ann Arbor"): 26161,
     ("MI", "Jackson"): 26075,
+    ("MN", "Mankato"): 37013,
     ("NC", "Winston-Salem"): 37067,
     ("NJ", "Newark"): 34013,
     ("PA", "Harrisburg"): 42043,
