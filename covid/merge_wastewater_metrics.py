@@ -30,6 +30,7 @@ STATECITY_FIPS = {
     ("CA", "Ontario"): 6071,
     ("CA", "Paso Robles"): 6079,
     ("CA", "Petaluma"): 6097,
+    ("CA", "Playa Del Rey"): 6037,
     ("CA", "San Diego"): 6073,
     ("CA", "San Francisco"): 6075,
     ("CA", "San Mateo"): 6081,
