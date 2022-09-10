@@ -48,6 +48,7 @@ STATECITY_FIPS = {
     ("KS", "Lawrence"): 20045,
     ("KS", "Salina"): 5125,
     ("KY", "Louisville"): 21111,
+    ("ME", "Portland"): 23005,
     ("MI", "Ann Arbor"): 26161,
     ("MI", "Jackson"): 26075,
     ("MN", "Mankato"): 37013,
