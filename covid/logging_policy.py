@@ -1,16 +1,9 @@
-import argparse
 import contextlib
 import logging
 import re
 import sys
 import traceback
 import warnings
-
-argument_parser = argparse.ArgumentParser(add_help=False)
-argument_group = argument_parser.add_argument_group("logging")
-argument_group.add_argument("--quiet", action="store_true")
-argument_group.add_argument("--debug", action="store_true")
-argument_group.add_argument("--debug_http", action="store_true")
 
 
 @contextlib.contextmanager
