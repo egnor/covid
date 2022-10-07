@@ -20,21 +20,24 @@ STATECITY_FIPS = {
     ("CA", "Carson"): 6037,
     ("CA", "Richmond"): 6013,
     ("CA", "Davis"): 6113,
+    ("CA", "Fairfield"): 6095,  # Solano County
     ("CA", "Half Moon Bay"): 6081,
     ("CA", "Hollister"): 6069,
     ("CA", "Indio"): 6065,
     ("CA", "Lancaster"): 6037,
     ("CA", "Lompoc"): 6083,
-    ("CA", "Los Angeles"): 6037,
+    ("CA", "Los Angeles"): 6037,  # Los Angeles County
     ("CA", "Martinez"): 6013,
+    ("CA", "Napa"): 6055,  # Napa County
     ("CA", "Novato"): 6041,
-    ("CA", "Oakland"): 6001,
+    ("CA", "Oakland"): 6001,  # Alameda County
     ("CA", "Ontario"): 6071,
     ("CA", "Paso Robles"): 6079,
-    ("CA", "Petaluma"): 6097,
+    ("CA", "Petaluma"): 6097,  # Sonoma County
     ("CA", "Playa Del Rey"): 6037,
     ("CA", "San Diego"): 6073,
     ("CA", "San Francisco"): 6075,
+    ("CA", "San Leandro"): 6001,
     ("CA", "San Mateo"): 6081,
     ("CA", "San Rafael"): 6041,
     ("CA", "Santa Cruz"): 6087,
@@ -66,6 +69,7 @@ STATECITY_FIPS = {
     ("SC", "Greenville"): 45045,
     ("TX", "Garland"): 48113,
     ("TX", "Sunnyvale"): 48113,
+    ("MI", "Warren"): 26099,  # Macomb County
 }
 
 SITE_RENAME = {
