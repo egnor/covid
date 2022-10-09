@@ -32,6 +32,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad OWID vax: World/ET .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
+    r"|Duplicate covariant \(World/US/Puerto Rico\): .*"
     r"|Duplicate SCAN wastewater data: Davis, .* 2021-08-12"
     r"|Duplicate SCAN wastewater data: Oakland, .* 2022-03-17"
     r"|Duplicate SCAN wastewater data: University of California, .* 2021-11-02"
