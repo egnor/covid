@@ -14,16 +14,12 @@ def get_wastewater(session):
     response.raise_for_status()
     df = pandas.read_csv(
         io.StringIO(response.text),
-        parse_dates=["Date", "Collection_Date"],
+        parse_dates=["Collection_Date"],
         date_parser=lambda v: pandas.to_datetime(v, utc=True),
     )
 
-    key_cols = [
-        "Plant",
-        "Site_Name",
-        "Collection_Date",
-    ]
-
+    key_cols = ["Site_Name", "County_FIPS", "Collection_Date"]
+    df.County_FIPS.fillna('', inplace=True)
     df.set_index(key_cols, drop=True, inplace=True, verify_integrity=False)
     return df.sort_index()
 
@@ -49,7 +45,7 @@ if __name__ == "__main__":
     df.info(verbose=True, show_counts=True)
     print()
 
-    for site, rows in df.groupby(level=["Plant", "Site_Name"]):
+    for site, rows in df.groupby(level=["County_FIPS", "Site_Name"]):
         timestamps = set()
         print(f"=== {site[0]} / {site[1]} ===")
         for row in rows.itertuples():
