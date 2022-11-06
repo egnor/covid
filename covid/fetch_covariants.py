@@ -14,9 +14,10 @@ COUNTRY_JSON_FILES = [
 VARIANT_NAMES = {
     "21K": "21K (Omicron BA.1)",
     "21L": "21L (Omicron BA.2)",
-    "22A": "21A (Omicron BA.4)",
-    "22B": "21B (Omicron BA.5)",
-    "22C": "21C (Omicron BA.2.12.1)",
+    "22A": "22A (Omicron BA.4)",
+    "22B": "22B (Omicron BA.5)",
+    "22C": "22C (Omicron BA.2.12.1)",
+    "22D": "22D (Omicron BA.2.75)",
 }
 
 

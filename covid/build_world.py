@@ -26,36 +26,24 @@ from covid.logging_policy import collecting_warnings
 from covid.region_data import PolicyChange
 from covid.region_data import make_metric
 
-# Reusable command line arguments for data collection.
-argument_parser = argparse.ArgumentParser(add_help=False)
-arg_group = argument_parser.add_argument_group("data gathering")
-arg_group.add_argument("--no_california_blueprint", action="store_true")
-arg_group.add_argument("--no_covid_metrics", action="store_true")
-arg_group.add_argument("--no_google_mobility", action="store_true")
-arg_group.add_argument("--no_hospital_metrics", action="store_true")
-arg_group.add_argument("--no_maps", action="store_true")
-arg_group.add_argument("--no_mortality_metrics", action="store_true")
-arg_group.add_argument("--no_state_policy", action="store_true")
-arg_group.add_argument("--no_vaccine_metrics", action="store_true")
-arg_group.add_argument("--no_variant_metrics", action="store_true")
-arg_group.add_argument("--no_wastewater_metrics", action="store_true")
-
-
 KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
     r"|Bad deaths: World/AU .*"
     r"|Bad OWID vax: World/ET .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
+    r"|Duplicate covariant \(World/US/Puerto Rico\): .*"
     r"|Duplicate SCAN wastewater data: Davis, .* 2021-08-12"
     r"|Duplicate SCAN wastewater data: Oakland, .* 2022-03-17"
     r"|Duplicate SCAN wastewater data: University of California, .* 2021-11-02"
+    r"|Missing Biobot wastewater FIPS: 780[123]0 .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
     r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"
     r"|Missing HHS hospital FIPS: (2|66|69|78)\d\d\d .*"
     r"|Missing OWID vax country: (GG|JE|NU|NR|PN|TK|TM|TV)"
-    r"|No COVID metrics: World/(EH|MD|NG|PL|RO|SK).*"
-    r"|No COVID metrics: World/GB/(Guernsey|Jersey)"
+    r"|No COVID metrics: World/(EH|MD|NG|NR|PL|RO|SK|TV).*"
+    r"|No COVID metrics: World/GB/(Guernsey|Jersey|Pitcairn Islands)"
+    r"|No COVID metrics: World/NZ/Niue"
     r"|No COVID metrics: World/US/Alaska/Yakutat plus Hoonah-Angoon"
     r"|Underpopulation: World/(DK|FR|NZ) .*"
     r"|Unknown CDC sero state: CR[0-9] .*"
@@ -73,63 +61,57 @@ KNOWN_WARNINGS_REGEX = re.compile(
 )
 
 
-def get_world(session, args):
-    """Returns data organized into a tree rooted at a World region.
-    Warnings are captured and printed, then raise a ValueError exception."""
+def combined_atlas(session, only):
+    """Returns an Atlas with filled data, checking warnings."""
 
-    cache_path = cache_policy.cached_path(session, _world_cache_key(args))
+    only = set(only)
+    cache_path = cache_policy.cached_path(session, _atlas_cache_key(only))
     if cache_path.exists():
-        logging.info(f"Loading cached world: {cache_path}")
+        logging.info(f"Loading cached atlas: {cache_path}")
         with cache_path.open(mode="rb") as cache_file:
             return pickle.load(cache_file)
 
     with collecting_warnings(allow_regex=KNOWN_WARNINGS_REGEX) as warnings:
-        world = _compute_world(session, args)
+        atlas = _combined_atlas(session, only)
         if warnings:
             raise ValueError(f"{len(warnings)} warnings found combining data")
 
-    logging.info(f"Saving cached world: {cache_path}")
+    logging.info(f"Saving cached atlas: {cache_path}")
     with cache_policy.temp_to_rename(cache_path, mode="wb") as cache_file:
-        pickle.dump(world, cache_file)
-    return world
+        pickle.dump(atlas, cache_file)
+    return atlas
 
 
-def _world_cache_key(args):
-    # Only include args understood by this module.
-    ks = list(sorted(vars(argument_parser.parse_args([])).keys()))
-    return "https://plague.wtf/world" + "".join(
-        f":{k}={getattr(args, k)}" for k in ks
-    )
+def _atlas_cache_key(only):
+    return ":".join(["https://plague.wtf/atlas", *sorted(only)])
 
 
-def _compute_world(session, args):
-    """Assembles a World region from data, allowing warnings."""
+def _combined_atlas(session, only):
+    """Assembles an atlas from data, allowing warnings."""
 
     atlas = build_atlas.get_atlas(session)
+    merge_covid_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_covid_metrics:
-        merge_covid_metrics.add_metrics(session=session, atlas=atlas)
-
-    if not args.no_hospital_metrics:
+    if not only or "hospital" in only:
         merge_hospital_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_mortality_metrics:
+    if not only or "mortality" in only:
         merge_mortality_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_vaccine_metrics:
+    if not only or "vaccine" in only:
         merge_vaccine_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_variant_metrics:
+    if not only or "variant" in only:
         merge_variant_metrics.add_metrics(session=session, atlas=atlas)
 
-    if not args.no_wastewater_metrics:
+    if not only or "wastewater" in only:
         merge_wastewater_metrics.add_metrics(session=session, atlas=atlas)
 
     #
     # Add policy changes for US states from the state policy database.
     #
 
-    if not args.no_state_policy:
+    if not only or "policy" in only:
         logging.info("Loading and merging state policy database...")
         state_policy = fetch_state_policy.get_events(session=session)
         for f, events in state_policy.groupby(level="state_fips", sort=False):
@@ -150,7 +132,6 @@ def _compute_world(session, args):
                     )
                 )
 
-    if not args.no_california_blueprint:
         logging.info("Loading and merging California blueprint data chart...")
         cal_counties = fetch_california_blueprint.get_counties(session=session)
         for county in cal_counties.values():
@@ -174,16 +155,16 @@ def _compute_world(session, args):
                     )
                 )
 
-    for r in atlas.by_jhu_id.values():
-        r.metrics.policy.sort(
-            key=lambda p: (p.date.date(), -abs(p.score), p.score)
-        )
+        for r in atlas.by_jhu_id.values():
+            r.metrics.policy.sort(
+                key=lambda p: (p.date.date(), -abs(p.score), p.score)
+            )
 
     #
     # Add mobility data where it's available.
     #
 
-    if not args.no_google_mobility:
+    if not only or "mobility" in only:
         gcols = [
             "country_region_code",
             "sub_region_1",
@@ -314,6 +295,9 @@ def _compute_world(session, args):
                 if old_metric and old_metric.frame.index[-1] > end - week:
                     continue  # Higher level has reasonably fresh data already.
 
+                num = len(popvals)
+                logging.debug(f"Rollup: {r.debug_path()}: {num}x {cat}[{name}]")
+
                 # Use metric metadata from the most populated subregion
                 popvals.sort(reverse=True, key=lambda pv: pv[0])
                 first_pop, first_val = popvals[0]
@@ -327,18 +311,18 @@ def _compute_world(session, args):
                 cat_metrics[name] = replace(first_val, frame=frame / metric_pop)
 
         # Remove metrics which have no (or very little) valid data.
-        for cat_metrics in [
+        for metrics in [
             r.metrics.covid,
             r.metrics.hospital,
             r.metrics.map,
             r.metrics.mobility,
             r.metrics.variant,
             r.metrics.vaccine,
-            r.metrics.wastewater,
+            *r.metrics.wastewater.values(),
         ]:
-            for name, m in list(cat_metrics.items()):
+            for name, m in list(metrics.items()):
                 if m.frame.value.count() < 2:
-                    del cat_metrics[name]
+                    del metrics[name]
 
         # Clean up some categories if we didn't get any "headline" data.
         for category in r.metrics.vaccine, r.metrics.mobility:
@@ -399,21 +383,20 @@ def _compute_world(session, args):
             None,
         )
 
-    if not args.no_maps:
+    if not only or "maps" in only:
         make_map_metrics(atlas.world)
 
-    return atlas.world
+    return atlas
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        parents=[cache_policy.argument_parser, argument_parser]
-    )
+    parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser.add_argument("--only", nargs="*", default=[])
     parser.add_argument("--print_data", action="store_true")
 
     args = parser.parse_args()
     session = cache_policy.new_session(args)
-    world = get_world(session=session, args=args)
-    print(world.debug_tree(with_data=args.print_data))
+    atlas = combined_atlas(session=session, only=args.only)
+    print(atlas.world.debug_tree(with_data=args.print_data))

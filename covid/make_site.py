@@ -13,8 +13,8 @@ from dominate import util
 from covid import build_world
 from covid import cache_policy
 from covid import logging_policy  # noqa
-from covid import make_chart
 from covid import make_map
+from covid import make_plots
 from covid import style
 from covid import urls
 
@@ -25,7 +25,7 @@ def make_region_page(region, args):
     map_note = ""
     try:
         make_region_html(region, args)
-        make_chart.write_images(region, args.site_dir)
+        make_plots.write_images(region, args.site_dir)
         if urls.has_map(region):
             make_map.write_video(region, args.site_dir)
             map_note = " (+map video)"
@@ -57,8 +57,9 @@ def make_region_html(region, args):
     with doc.body:
         tags.attr(id="map_key_target", tabindex="-1")
         with tags.h1():
-            for part in region.path[:-1]:
-                tags.a(part, href=doc_link(urls.region_page(region)))
+            for i in range(len(region.path) - 1):
+                url = urls.region_page(region.path[: i + 1])
+                tags.a(region.path[i], href=doc_link(url))
                 util.text(" » ")
 
             util.text(region.name)
@@ -140,7 +141,8 @@ def make_region_html(region, args):
 
                 def pos(r):
                     m = r.metrics.covid.get("COVID positives / day / 100Kp")
-                    return m.frame.value.iloc[-1] * pop(r) if m else 0
+                    last = m and m.frame.value.last_valid_index()
+                    return m.frame.value.loc[last] * pop(r) if last else 0
 
                 tags.h2("Top 5 by population")
                 for s in list(sorted(subs, key=pop, reverse=True))[:5]:
@@ -155,7 +157,9 @@ def make_region_html(region, args):
                 make_subregion_html(doc_url, s)
 
         with tags.p("Sources: ", cls="credits"):
-            for i, (url, text) in enumerate(sorted(region.credits.items())):
+            for i, (text, url) in enumerate(
+                sorted((v, k) for k, v in region.credits.items())
+            ):
                 util.text(", ") if i > 0 else None
                 tags.a(text, href=url)
 
@@ -178,10 +182,9 @@ def make_subregion_html(doc_url, region):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C behavior
-    parser = argparse.ArgumentParser(
-        parents=[cache_policy.argument_parser, build_world.argument_parser]
-    )
+    signal.signal(signal.SIGINT, signal.SIG_DFL)  # sane ^C for multiprocess
+    parser = argparse.ArgumentParser(parents=[cache_policy.argument_parser])
+    parser.add_argument("--only", nargs="*", default=[])
     parser.add_argument("--processes", type=int)
     parser.add_argument("--chunk_size", type=int)
     parser.add_argument(
@@ -191,8 +194,8 @@ def main():
     args = parser.parse_args()
     make_map.setup(args)
 
-    world = build_world.get_world(
-        session=cache_policy.new_session(args), args=args
+    atlas = build_world.combined_atlas(
+        session=cache_policy.new_session(args), only=args.only
     )
 
     def get_regions(r):
@@ -200,7 +203,7 @@ def main():
             yield r
         yield from (a for s in r.subregions.values() for a in get_regions(s))
 
-    all_regions = list(get_regions(world))
+    all_regions = list(get_regions(atlas.world))
 
     print(f"Generating {len(all_regions)} pages in {args.site_dir}...")
     style.write_style_files(args.site_dir)

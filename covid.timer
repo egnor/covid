@@ -1,0 +1,8 @@
+[Unit]
+Description=Schedules the script to update plague.wtf
+
+[Timer]
+OnCalendar=*-*-* 21:30:00
+
+[Install]
+WantedBy=multi-user.target

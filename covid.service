@@ -1,0 +1,11 @@
+[Unit]
+Description=Runs the script to update plague.wtf
+OnFailure=status_email@%n.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/egnor/covid_release
+ExecStart=direnv exec . python covid/make_site.py --site_dir /home/egnor/www-plague
+
+[Install]
+WantedBy=covid.timer

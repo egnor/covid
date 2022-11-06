@@ -47,9 +47,9 @@ if __name__ == "__main__":
 
     for site, rows in df.groupby(level=["County_FIPS", "Site_Name"]):
         timestamps = set()
-        print(f"=== {site[0]} / {site[1]} ===")
+        print(f"=== {site[0]}, {site[1]} / {site[2]} ===")
         for row in rows.itertuples():
-            plant, site, timestamp = row.Index
+            city, state, site, timestamp = row.Index
             print(
                 f"{row.Sample_ID} {timestamp.strftime('%Y-%m-%d')} "
                 f"N={row.SC2_N_gc_g_dry_weight:<10.1f} "

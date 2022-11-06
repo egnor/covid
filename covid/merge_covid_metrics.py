@@ -52,13 +52,6 @@ def add_metrics(session, atlas):
             cum=df.Deaths * 1e7 / pop,
         )
 
-        region.metrics.covid["cum positives / 100p"] = make_metric(
-            c="tab:cyan",
-            em=0,
-            ord=1.6,
-            v=df.Confirmed * 100 / pop,
-        )
-
 
 if __name__ == "__main__":
     import argparse

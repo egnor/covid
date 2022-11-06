@@ -9,18 +9,6 @@ from covid.region_data import Region
 from covid.region_data import RegionAtlas
 
 
-def _get_sub(parent, key, name=None):
-    """Get or add a subregion by key, setting names with defaults."""
-
-    key = str(key)
-    region = parent.subregions.get(key)
-    if not region:
-        region = parent.subregions[key] = Region(
-            name=name or key, path=parent.path + [key]
-        )
-    return region
-
-
 def get_atlas(session):
     """Returns an RegionAtlas populated with places."""
 
@@ -37,31 +25,31 @@ def get_atlas(session):
         except LookupError:
             iso2 = p.iso2
 
-        region = _get_sub(atlas.world, iso2, p.Country_Region)
+        region = atlas.world.subregion(iso2, p.Country_Region)
         region.iso_code = iso2
 
         if p.Province_State:
-            region = _get_sub(region, p.Province_State)
+            region = region.subregion(p.Province_State)
             if p.iso2 != iso2:
                 region.iso_code = p.iso2  # Must be for a territory
 
         if p.FIPS in (36005, 36047, 36061, 36081, 36085):
-            region = _get_sub(region, "NYC", "New York City")
+            region = region.subregion("NYC", "New York City")
         elif p.FIPS in (49003, 49005, 49033):
-            region = _get_sub(region, "Bear River", "Bear River Area")
+            region = region.subregion("Bear River", "Bear River Area")
         elif p.FIPS in (49023, 49027, 49039, 49041, 49031, 49055):
-            region = _get_sub(region, "Central Utah", "Central Utah Area")
+            region = region.subregion("Central Utah", "Central Utah Area")
         elif p.FIPS in (49007, 49015, 49019):
-            region = _get_sub(region, "Southeast Utah", "Southeast Utah Area")
+            region = region.subregion("Southeast Utah", "Southeast Utah Area")
         elif p.FIPS in (49001, 49017, 49021, 49025, 49053):
-            region = _get_sub(region, "Southwest Utah", "Southwest Utah Area")
+            region = region.subregion("Southwest Utah", "Southwest Utah Area")
         elif p.FIPS in (49009, 49013, 49047):
-            region = _get_sub(region, "TriCounty", "TriCounty Area")
+            region = region.subregion("TriCounty", "TriCounty Area")
         elif p.FIPS in (49057, 49029):
-            region = _get_sub(region, "Weber-Morgan", "Weber-Morgan Area")
+            region = region.subregion("Weber-Morgan", "Weber-Morgan Area")
 
         if p.Admin2:
-            region = _get_sub(region, p.Admin2)
+            region = region.subregion(p.Admin2)
 
         if p.FIPS:
             region.fips_code = int(p.FIPS)
