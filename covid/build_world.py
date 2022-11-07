@@ -329,6 +329,11 @@ def _combined_atlas(session, only):
             if not any(m.emphasis > 0 for m in category.values()):
                 category.clear()
 
+        # Remove wastewater sites with no data.
+        for name, ww in list(r.metrics.wastewater.items()):
+            if not ww:
+                del r.metrics.wastewater[name]
+
     logging.info("Rolling up metrics...")
     roll_up_metrics(atlas.world)
 

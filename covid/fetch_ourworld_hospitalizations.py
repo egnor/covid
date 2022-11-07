@@ -13,7 +13,7 @@ def _get_table(session, prefix, mult):
     response = session.get(HOSPITAL_CSV_URL)
     response.raise_for_status()
     df = pandas.read_csv(io.StringIO(response.text))
-    df.date = pandas.to_datetime(df.date, utc=True)
+    df.date = pandas.to_datetime(df.date, utc=True, dayfirst=True)
     df = df[
         df.indicator.str.startswith(prefix + " ")
         & ~df.indicator.str.endswith(" per million")

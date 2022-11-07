@@ -10,29 +10,56 @@ import covid.fetch_ourworld_hospitalizations
 from covid.region_data import make_metric
 
 
+def owid_region(atlas, owid_code):
+    if owid_code == "OWID_ENG":
+        iso3, sub = "GBR", "England"
+    elif owid_code == "OWID_SCT":
+        iso3, sub = "GBR", "Scotland"
+    elif owid_code == "OWID_WLS":
+        iso3, sub = "GBR", "Wales"
+    elif owid_code == "OWID_NIR":
+        iso3, sub = "GBR", "Northern Ireland"
+    else:
+        iso3, sub = owid_code, None
+
+    cc = pycountry.countries.get(alpha_3=iso3)
+    if cc is None:
+        warn(f"Unknown OWID country code: {iso3}")
+        return None
+
+    region = atlas.by_iso2.get(cc.alpha_2)
+    if region is None:
+        warn(f"Missing OWID country: {cc.alpha_2}")
+        return None
+
+    if sub:
+        region = region.subregions.get(sub)
+        if region is None:
+            warn(f"Missing OWID subregion: {region.debug_path()}/{sub}")
+            return None
+
+    pop = region.metrics.total["population"]
+    if not (pop > 0):
+        warn(f"No population: {region.debug_path()} (pop={pop})")
+        return None
+
+    return region
+
+
+
 def add_metrics(session, atlas):
     logging.info("Loading and merging ourworldindata hospitalization data...")
     covid.fetch_ourworld_hospitalizations.get_occupancy(session)
     adm_df = covid.fetch_ourworld_hospitalizations.get_admissions(session)
     for iso3, v in adm_df.groupby(level="iso_code", as_index=False):
         v.reset_index("iso_code", drop=True, inplace=True)
-        cc = pycountry.countries.get(alpha_3=iso3)
-        if cc is None:
-            warn(f"Unknown OWID admissions country code: {iso3}")
-            continue
-
-        region = atlas.by_iso2.get(cc.alpha_2)
+        region = owid_region(atlas, iso3)
         if region is None:
-            warn(f"Missing OWID admissions country: {cc.alpha_2}")
-            continue
-
-        pop = region.metrics.total["population"]
-        if not (pop > 0):
-            warn(f"No population: {region.debug_path()} (pop={pop})")
             continue
 
         region.credits.update(covid.fetch_ourworld_hospitalizations.credits())
 
+        pop = region.metrics.total["population"]
         metrics = region.metrics.hospital
         metrics["COVID admits / day / 1Mp"] = make_metric(
             c="black",
@@ -51,22 +78,11 @@ def add_metrics(session, atlas):
     occ_df = covid.fetch_ourworld_hospitalizations.get_occupancy(session)
     for iso3, v in occ_df.groupby(level="iso_code", as_index=False):
         v.reset_index("iso_code", drop=True, inplace=True)
-
-        cc = pycountry.countries.get(alpha_3=iso3)
-        if cc is None:
-            warn(f"Unknown OWID occupancy country code: {iso3}")
-            continue
-
-        region = atlas.by_iso2.get(cc.alpha_2)
+        region = owid_region(atlas, iso3)
         if region is None:
-            warn(f"Missing OWID admissions country: {cc.alpha_2}")
             continue
 
         pop = region.metrics.total["population"]
-        if not (pop > 0):
-            warn(f"No population: {region.debug_path()} (pop={pop})")
-            continue
-
         metrics = region.metrics.hospital
         metrics["COVID use / 100Kp"] = make_metric(
             c="tab:gray",
