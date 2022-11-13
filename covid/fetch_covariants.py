@@ -18,6 +18,7 @@ VARIANT_NAMES = {
     "22B": "22B (Omicron BA.5)",
     "22C": "22C (Omicron BA.2.12.1)",
     "22D": "22D (Omicron BA.2.75)",
+    "22E": "22E (Omicron BQ.1)",
 }
 
 
