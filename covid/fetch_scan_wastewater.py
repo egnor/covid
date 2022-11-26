@@ -4,7 +4,7 @@ import io
 
 import pandas
 
-DATA_URL = "https://publichealth.verily.com/api/data?format=csv"
+DATA_URL = "https://publichealth.verily.com/api/csv"
 
 
 def get_wastewater(session):
