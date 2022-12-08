@@ -33,9 +33,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
     r"|Duplicate covariant \(World/RS\): .*"
     r"|Duplicate covariant \(World/US/Puerto Rico\): .*"
-    r"|Duplicate SCAN wastewater data: Davis, .* 2021-08-12"
-    r"|Duplicate SCAN wastewater data: Oakland, .* 2022-03-17"
-    r"|Duplicate SCAN wastewater data: University of California, .* 2021-11-02"
+    r"|Duplicate SCAN wastewater data: Merced .* 2021-11-07"
     r"|Missing Biobot wastewater FIPS: 780[123]0 .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
     r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"

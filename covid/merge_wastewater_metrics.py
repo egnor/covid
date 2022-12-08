@@ -18,6 +18,7 @@ FIX_FIPS = {
   "Davis": 6113,  # Yolo (CA)
   "Fairfield-Suisun Sewer District": 6095,  # Solano (CA)
   "Southeast San Francisco": 6075,  # San Francisco (CA)
+  "Turlock Regional Water Quality Control Facility": 6099,
   "UC Davis": 6113,  # Yolo (CA)
 }
 
@@ -109,7 +110,7 @@ def add_metrics(session, atlas):
     for site, fips, timestamp in df.index[dups]:
         warn(
             "Duplicate SCAN wastewater data: "
-            f"({site}) {timestamp.strftime('%Y-%m-%d')}"
+            f"{site} {timestamp.strftime('%Y-%m-%d')}"
         )
 
     df = df[~dups]
