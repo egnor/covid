@@ -20,6 +20,7 @@ FIX_FIPS = {
   "Southeast San Francisco": 6075,  # San Francisco (CA)
   "Turlock Regional Water Quality Control Facility": 6099,
   "UC Davis": 6113,  # Yolo (CA)
+  "Woodland Water Pollution Control Facility": 6113,  # Yolo (CA)
 }
 
 SITE_RENAME = {
