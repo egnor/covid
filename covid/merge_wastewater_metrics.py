@@ -17,6 +17,7 @@ FIX_FIPS = {
   "City of San Leandro Water Pollution Control Plant": 6001,  # Alameda (CA)
   "Davis": 6113,  # Yolo (CA)
   "Fairfield-Suisun Sewer District": 6095,  # Solano (CA)
+  "Passaic Valley Sewerage Commission": 34017,   # Hudson (NJ)
   "Southeast San Francisco": 6075,  # San Francisco (CA)
   "Turlock Regional Water Quality Control Facility": 6099,
   "UC Davis": 6113,  # Yolo (CA)
