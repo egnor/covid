@@ -28,6 +28,7 @@ from covid.region_data import make_metric
 
 KNOWN_WARNINGS_REGEX = re.compile(
     r"|Bad CDC vax: World/US/Georgia/Chattahoochee .*"
+    r"|Bad CDC vax: World/US/Arizona/Santa Cruz .*"
     r"|Bad deaths: World/AU .*"
     r"|Bad OWID vax: World/ET .*"
     r"|Cannot parse header or footer so it will be ignored"  # xlsx parser
