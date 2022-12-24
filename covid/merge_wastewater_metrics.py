@@ -14,14 +14,13 @@ from covid.region_data import make_metric
 
 # Bad FIPS values for SCAN (and other?) sites
 FIX_FIPS = {
-  "City of San Leandro Water Pollution Control Plant": 6001,  # Alameda (CA)
-  "Davis": 6113,  # Yolo (CA)
-  "Fairfield-Suisun Sewer District": 6095,  # Solano (CA)
-  "Passaic Valley Sewerage Commission": 34017,   # Hudson (NJ)
-  "Southeast San Francisco": 6075,  # San Francisco (CA)
-  "Turlock Regional Water Quality Control Facility": 6099,
-  "UC Davis": 6113,  # Yolo (CA)
-  "Woodland Water Pollution Control Facility": 6113,  # Yolo (CA)
+  "City of San Leandro Water Pollution Control Plant": "06001",  # Alameda (CA)
+  "Davis": "06113",  # Yolo (CA)
+  "Fairfield-Suisun Sewer District": "06095",  # Solano (CA)
+  "Southeast San Francisco": "06075",  # San Francisco (CA)
+  "Turlock Regional Water Quality Control Facility": "06099",  # Stanislaus (CA)
+  "UC Davis": "06113",  # Yolo (CA)
+  "Woodland Water Pollution Control Facility": "06113",  # Yolo (CA)
 }
 
 SITE_RENAME = {
@@ -125,36 +124,38 @@ def add_metrics(session, atlas):
         )
     ):
         rows.reset_index(["County_FIPS", "Site_Name"], drop=True, inplace=True)
-        try:
-            fips = int(FIX_FIPS.get(site, fips))
-        except ValueError:
-            warn(f"Bad FIPS ({fips}) for SCAN wastewater plant: {site}")
-            continue
 
+        fips = FIX_FIPS.get(site, fips)
         if not fips:
             warn(f"No FIPS for SCAN wastewater plant: {site}")
             continue
 
-        region = atlas.by_fips.get(fips)
-        if not region:
-            warn(f"Unknown SCAN wastewater FIPS: {repr(fips)} ({site})")
+        try:
+            fipses = [int(f) for f in fips.split(",")]
+        except ValueError:
+            warn(f"Bad FIPS ({fips}) for SCAN wastewater plant: {site}")
             continue
 
-        region.credits.update(covid.fetch_scan_wastewater.credits())
-        ww_metrics = region.metrics.wastewater.setdefault(_site_name(site), {})
-        ww_metrics[f"Kcp/g dry (WastewaterSCAN)"] = make_metric(
-            c=_color(len(ww_metrics)),
-            em=1,
-            ord=1.0,
-            raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
-        )
+        for fips in fipses:
+            region = atlas.by_fips.get(fips)
+            if not region:
+                warn(f"Unknown SCAN wastewater FIPS: {repr(fips)} ({site})")
+                continue
 
-        ww_metrics[f"Kcp/g dry BA.4/5 (WastewaterSCAN)"] = make_metric(
-            c=_color(len(ww_metrics)),
-            em=0,
-            ord=1.0,
-            raw=rows.HV_69_70_Del_gc_g_dry_weight * 1e-3,
-        )
+            region.credits.update(covid.fetch_scan_wastewater.credits())
+            wwm = region.metrics.wastewater.setdefault(_site_name(site), {})
+            wwm[f"Kcp/g dry (WastewaterSCAN)"] = make_metric(
+                c=_color(len(wwm)),
+                em=1,
+                ord=1.0,
+                raw=rows.SC2_S_gc_g_dry_weight * 1e-3,
+            )
+            wwm[f"Kcp/g dry BA.4/5 (WastewaterSCAN)"] = make_metric(
+                c=_color(len(wwm)),
+                em=0,
+                ord=1.0,
+                raw=rows.HV_69_70_Del_gc_g_dry_weight * 1e-3,
+            )
 
     #
     # Cal-SuWers (California Department of Public Health)
@@ -175,7 +176,7 @@ def add_metrics(session, atlas):
 
         site = _site_name(wwtp_first["FACILITY NAME"])
         region.credits.update(covid.fetch_calsuwers_wastewater.credits())
-        ww_metrics = region.metrics.wastewater.setdefault(site, {})
+        wwm = region.metrics.wastewater.setdefault(site, {})
 
         series_cols = ["pcr_target", "lab_id", "pcr_target_units"]
         for (target, lab, units), rows in wwtp_rows.groupby(
@@ -198,8 +199,8 @@ def add_metrics(session, atlas):
             lab = covid.fetch_calsuwers_wastewater.LAB_NAMES.get(lab, lab)
             title = f"K{units} ({lab})"
             title = f"{target} {title}" if target != "sars-cov-2" else title
-            ww_metrics[title] = make_metric(
-                c=_color(len(ww_metrics)),
+            wwm[title] = make_metric(
+                c=_color(len(wwm)),
                 em=1,
                 ord=1.0,
                 raw=samples.groupby("sample_collect_date").mean() * 1e-3,
@@ -220,9 +221,9 @@ def add_metrics(session, atlas):
             continue
 
         region.credits.update(covid.fetch_biobot_wastewater.credits())
-        ww_metrics = region.metrics.wastewater.setdefault("Biobot", {})
-        ww_metrics[f"Kcp/L wet"] = make_metric(
-            c=_color(len(ww_metrics)),
+        wwm = region.metrics.wastewater.setdefault("Biobot", {})
+        wwm[f"Kcp/L wet"] = make_metric(
+            c=_color(len(wwm)),
             em=1,
             ord=1.0,
             v=rows.effective_concentration_rolling_average,
