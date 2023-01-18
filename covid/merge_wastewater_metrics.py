@@ -19,6 +19,7 @@ FIX_FIPS = {
   "Davis": "06113",  # Yolo (CA)
   "Fairfield-Suisun Sewer District": "06095",  # Solano (CA)
   "Gilroy": "06085",  # Santa Clara (CA)
+  "Oceanside": "06075",  # San Francisco (CA)
   "Palo Alto": "06085",  # Santa Clara (CA)
   "Sacramento": "06067",  # Sacramento (CA)
   "San Francisco": "06075",  # San Francisco (CA)
