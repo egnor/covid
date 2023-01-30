@@ -41,6 +41,7 @@ KNOWN_WARNINGS_REGEX = re.compile(
     r"|Duplicate SCAN wastewater data: Palo Alto .* 2021-02-14"
     r"|Duplicate SCAN wastewater data: Palo Alto .* 2021-04-27"
     r"|Duplicate SCAN wastewater data: Sacramento .* 2021-06-14"
+    r"|Duplicate SCAN wastewater data: SantaClara_GilMrg .* 2022-01-12"
     r"|Missing Biobot wastewater FIPS: 780[123]0 .*"
     r"|Missing CDC vax FIPS: (66|78)\d\d\d"
     r"|Missing Economist mortality country: (KP|NR|NU|PN|TK|TM|TV)"
