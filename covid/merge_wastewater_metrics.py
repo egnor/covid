@@ -25,6 +25,7 @@ FIX_FIPS = {
   "San Francisco": "06075",  # San Francisco (CA)
   "San Jose": "06085",  # Santa Clara (CA)
   "Silicon Valley": "06085",  # Santa Clara (CA)
+  "Silicon Valley Clean Water": "06085",  # Santa Clara (CA)
   "Sunnyvale": "06085",  # Santa Clara (CA)
   "Southeast San Francisco": "06075",  # San Francisco (CA)
   "Turlock Regional Water Quality Control Facility": "06099",  # Stanislaus (CA)
